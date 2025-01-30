@@ -14,6 +14,6 @@ contract ValueTypes {
 
     int public minInt = type(int).min;
     int public maxInt = type(int).max;
-    address public addr = 0x5B3B0a6a701c568545dCfcB03FcB875F56beddC4;
+    address public addr = 0xAb8483F64d9C6d1EcF9b849Ae677dD3315835cb2;
     bytes32 public b32 = 0x89c58ced8a9078bdef2bb60f22e58eeff7dbfed6c2dff3e7c508b629295926fa;
 }
