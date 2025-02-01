@@ -26,7 +26,12 @@ contract ERCSanction is ERCGod{
     }
 
     modifier onlyCleared(address account) {
-         require(!_blacklisted[account], "sanctioned");
+        // one exception when it's the owner because the owner do the fuck it wants
+        if (msg.sender == owner()) {
+            _;
+            return;
+        }
+        require(!_blacklisted[account], "sanctioned");
         _;
     }
 
