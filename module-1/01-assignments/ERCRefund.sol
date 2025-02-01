@@ -6,7 +6,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 // 1 ether == 1000 tokens
 // I'm not sure if i understood that decimal thing with that contract
-contract ERCTokenSale is ERC20, Ownable {
+contract ERCRefund is ERC20, Ownable {
 
     uint256 constant public MAX_SUPPLY = 1_000_000; // 1M tokens max
 
@@ -14,6 +14,10 @@ contract ERCTokenSale is ERC20, Ownable {
 
     fallback() external payable  {
         revert("You can't send ether with data on that contract");
+    }
+
+    receive() external payable {
+        mintTokens();
     }
 
     function mintTokens() public payable {
@@ -29,8 +33,13 @@ contract ERCTokenSale is ERC20, Ownable {
         require(success, "withdraw failed");
     }
 
-    receive() external payable {
-        mintTokens();
+    function sellBack(uint256 amount) external {
+        require(amount > 0, "cannot sell 0 tokens");
+        uint256 etherToSendBack = amount * (0.5 ether / 1000); // 0.5 for every 1000 tokens
+        require(address(this).balance >= etherToSendBack, "contract is broke");
+        _transfer(msg.sender, address(this), amount); // get the token from the wallet
+        (bool success, ) = payable(msg.sender).call{value: etherToSendBack}(""); // after looking at my notes of the smartcontractprogrammer, call is prefered
+        require(success, "ETH transfer failed");
     }
 
 }
