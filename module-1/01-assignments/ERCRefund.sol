@@ -5,12 +5,15 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 // 1 ether == 1000 tokens
-// I'm not sure if i understood that decimal thing with that contract
 contract ERCRefund is ERC20, Ownable {
 
-    uint256 constant public MAX_SUPPLY = 1_000_000; // 1M tokens max
+    // MAX_SUPPLY = 1_000_000 was too small because it's not accounting for the decimals
+    // My brain didn't accounted for the fungability of tokens... not i understand
+    uint256 constant public MAX_SUPPLY = 1_000_000 * 1e18; // scale to 18 decimal
+    uint256 constant public TOKEN_PER_ETH = 1000 * 1e18; // 18 decimals too
 
-    constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) Ownable(msg.sender) {} 
+    constructor() ERC20("Refund", "RFD") Ownable(msg.sender) 
+    {} 
 
     fallback() external payable  {
         revert("You can't send ether with data on that contract");
@@ -20,12 +23,23 @@ contract ERCRefund is ERC20, Ownable {
         mintTokens();
     }
 
+    // debug
+    event Mint(address indexed sender, uint256 ethSent, uint256 tokensMinted, uint256 totalSupplyBefore);
+
     function mintTokens() public payable {
-        require(msg.value % 1 ether == 0, "send a multiple of 1 ETH");
-        require(totalSupply() <= MAX_SUPPLY, "cannot mint more tokens");
-        uint256 minter = 1000 * (msg.value / 1 ether);
-        require(totalSupply() + minter <= MAX_SUPPLY, "cannot mint more excess tokens");
-        _mint(owner(), 1000 * (msg.value / 1 ether));
+        // require(msg.value % 1 ether == 0, "send a multiple of 1 ETH");
+        require(msg.value > 0, "Must send ETH to mint tokens"); // whatever amount
+        // I understood why now
+        // - without 1 ether it would be a really big number
+        // - meaning that if you sent 1 wei you would have your 1000 tokens with 18 decimals!!
+        // - we want 1 ether == 1000 tokens, taking in account the 18 decimals 
+        // - we must do the multiplicaiton first to avoid rounding errors in integer division
+        uint256 tokensToMint = (TOKEN_PER_ETH * msg.value) / 1 ether;
+        require(totalSupply() + tokensToMint <= MAX_SUPPLY, "Purchase would exceed max token supply");
+        emit Mint(msg.sender, msg.value, tokensToMint, totalSupply());
+        _mint(msg.sender, tokensToMint);
+        // and so normally after sending 1 ether, you will have a balance of `1000000000000000000000`
+        // which is 1000.000000000000000000 aka with 18 decimals
     }
 
     function withdraw() external onlyOwner {
@@ -33,13 +47,18 @@ contract ERCRefund is ERC20, Ownable {
         require(success, "withdraw failed");
     }
 
+    event Selling(address indexed sender, uint256 amount, uint256 ethSet, uint256 totalSupplyBefore);
+
+    // the amount will be with decimals
     function sellBack(uint256 amount) external {
         require(amount > 0, "cannot sell 0 tokens");
-        uint256 etherToSendBack = amount * (0.5 ether / 1000); // 0.5 for every 1000 tokens
+        // Similar thing as for mintTokens
+        uint256 etherToSendBack = (amount * 0.5 ether) / 1000 ether; // 0.5 for every 1000 tokens
         require(address(this).balance >= etherToSendBack, "contract is broke");
         _transfer(msg.sender, address(this), amount); // get the token from the wallet
         (bool success, ) = payable(msg.sender).call{value: etherToSendBack}(""); // after looking at my notes of the smartcontractprogrammer, call is prefered
         require(success, "ETH transfer failed");
+        emit Selling(msg.sender, amount, etherToSendBack, totalSupply());
     }
 
 }
