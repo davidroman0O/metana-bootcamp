@@ -37,7 +37,7 @@ contract ERCRefund is ERC20, Ownable {
         uint256 tokensToMint = (TOKEN_PER_ETH * msg.value) / 1 ether;
         require(totalSupply() + tokensToMint <= MAX_SUPPLY, "Purchase would exceed max token supply");
         emit Mint(msg.sender, msg.value, tokensToMint, totalSupply());
-        _mint(msg.sender, tokensToMint);
+        super._mint(msg.sender, tokensToMint);
         // and so normally after sending 1 ether, you will have a balance of `1000000000000000000000`
         // which is 1000.000000000000000000 aka with 18 decimals
     }
@@ -55,7 +55,7 @@ contract ERCRefund is ERC20, Ownable {
         // Similar thing as for mintTokens
         uint256 etherToSendBack = (amount * 0.5 ether) / 1000 ether; // 0.5 for every 1000 tokens
         require(address(this).balance >= etherToSendBack, "contract is broke");
-        _transfer(msg.sender, address(this), amount); // get the token from the wallet
+       super._transfer(msg.sender, address(this), amount); // get the token from the wallet
         (bool success, ) = payable(msg.sender).call{value: etherToSendBack}(""); // after looking at my notes of the smartcontractprogrammer, call is prefered
         require(success, "ETH transfer failed");
         emit Selling(msg.sender, amount, etherToSendBack, totalSupply());

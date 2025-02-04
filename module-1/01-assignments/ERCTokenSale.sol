@@ -21,7 +21,7 @@ contract ERCTokenSale is ERC20, Ownable {
         require(totalSupply() <= MAX_SUPPLY, "cannot mint more tokens");
         uint256 minter = 1000 * (msg.value / 1 ether);
         require(totalSupply() + minter <= MAX_SUPPLY, "cannot mint more excess tokens");
-        _mint(owner(), 1000 * (msg.value / 1 ether));
+        super._mint(owner(), 1000 * (msg.value / 1 ether));
     }
 
     function withdraw() external onlyOwner {
