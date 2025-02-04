@@ -7,7 +7,7 @@ import { ERCGod } from "./ERCGod.sol"; // mean that you have to create the other
 contract ERCSanction is ERCGod {
 
     constructor()
-        ERCGod(msg.sender, "Sanction", "SANC")
+        ERCGod("Sanction", "SANC")
     {}
 
     event Sanctioned(address indexed account);
