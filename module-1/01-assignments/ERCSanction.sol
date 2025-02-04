@@ -4,10 +4,10 @@ pragma solidity ^0.8.22;
 import { ERCGod } from "./ERCGod.sol"; // mean that you have to create the other contract ERCGod.sol in the same directory
 
 // Found in the ERC20.sol that _update is used by `transfer` and `transferFrom` 
-contract ERCSanction is ERCGod{
+contract ERCSanction is ERCGod {
 
-    constructor(address initialOwner, string memory name_, string memory symbol_)
-        ERCGod(initialOwner, name_, symbol_)
+    constructor()
+        ERCGod(msg.sender, "Sanction", "SANC")
     {}
 
     event Sanctioned(address indexed account);
@@ -35,14 +35,8 @@ contract ERCSanction is ERCGod{
         _;
     }
 
-    // Transfer while preventing the sender and receiver if one is sanctioned
-    function transfer(address to, uint256 value) public override onlyCleared(msg.sender) onlyCleared(to) returns (bool)  {
-        return super.transfer(to, value);
-    }
-
-    // Transfer while preventing the sender and receiver if one is sanctioned
-    function transferFrom(address from, address to, uint256 value) public override onlyCleared(from) onlyCleared(to) returns (bool) {
-        return super.transferFrom(from, to, value);
+    function _update(address from, address to, uint256 value) internal override onlyCleared(msg.sender) onlyCleared(to) {
+        super._update(from, to, value);
     }
 
 }
