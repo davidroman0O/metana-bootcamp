@@ -3,9 +3,8 @@ pragma solidity ^0.8.22;
 
 import { ERC721 } from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
+// Online already https://opensea.io/collection/echoforms
 contract FacesNFT is ERC721 {
-
-    uint256 constant MAX_SUPPLY = 10;
 
     constructor() ERC721("Echoforms", "ECHO") {
         for (uint16 i = 1; i < 11; i++) {
