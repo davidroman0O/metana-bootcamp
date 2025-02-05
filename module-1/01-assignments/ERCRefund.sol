@@ -2,10 +2,10 @@
 pragma solidity ^0.8.22;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
 
 // 1 ether == 1000 tokens
-contract ERCRefund is ERC20, Ownable {
+contract ERCRefund is ERC20, Ownable2Step {
 
     // MAX_SUPPLY = 1_000_000 was too small because it's not accounting for the decimals
     // My brain didn't accounted for the fungability of tokens... not i understand
@@ -13,7 +13,9 @@ contract ERCRefund is ERC20, Ownable {
     uint256 constant public TOKEN_PER_ETH = 1000 * 1e18; // 18 decimals too
 
     constructor() ERC20("Refund", "RFD") Ownable(msg.sender) 
-    {} 
+    {
+        _transferOwnership(msg.sender);
+    } 
 
     fallback() external payable  {
         revert("You can't send ether with data on that contract");
