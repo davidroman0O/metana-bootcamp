@@ -26,7 +26,7 @@ contract VisageNFT is ERC721("Visage NFT", "NVSG"), Ownable {
 
     constructor(address deployer) Ownable(deployer) {}
 
-    uint256 private tokenSupply = 0;
+    uint256 private tokenSupply = 1;
     uint256 constant private MAX_SUPPLY = 11; 
 
     function mint(address minter) external {
