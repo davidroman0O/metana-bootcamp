@@ -5,14 +5,22 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-/// Deploy VisageToken contract while giving a wallet address
-/// Deploy VisageNFT contract while giving the same wallet address as before
-/// Deploy VisageExchange contract with the address of both previous contracts
-/// - change wallet
-/// - send 1 ETH to the buy function of the VisageExchange contract
-/// - check your balance with `balanceOf` function of VisageExchange contract
-/// - on VisageToken, `approve` spender VisageExchange address with the value 10000000000000000000 (which is 10 VSG)
-/// - execute the `mint` function on VisageExchange contract to get one NFT while allowing the contract to transfer your 10VSG
+/// Here how to use it:
+/// - Deploy VisageExchange
+/// - call `getAddresses`
+/// - copy the value of `tokenAddress` which is the address
+/// - select the contract "VisageToken"
+/// - paste the address of `tokenAddress` into the input "At Address"
+/// - just click on "At Address" (DO NOT click on "Deploy")
+/// - VisageToken should show up
+/// - change wallet 
+/// - set 1 Ether
+/// - call `buy` on VisageExchange
+/// - call `balance` which gives you `10000000000000000000`
+/// - scroll down to VisageToken
+/// - call `approve` with the amount to `10000000000000000000` and the spender is the address of the contract VisageExchange
+/// - on VisageExchange call `allowance` to see `10000000000000000000`
+/// - finally call `mint` and you have an NFT
 
 contract VisageNFT is ERC721("Visage NFT", "NVSG"), Ownable {
 
@@ -80,9 +88,9 @@ contract VisageExchange is Ownable(msg.sender) {
     VisageToken public immutable token;
     VisageNFT public immutable nft;
 
-    constructor(VisageToken _token, VisageNFT _nft) {
-        token = _token;
-        nft = _nft;
+    constructor() {
+        token = new VisageToken(address(this));
+        nft = new VisageNFT(address(this));
     }
 
     fallback() external payable  {
@@ -93,15 +101,7 @@ contract VisageExchange is Ownable(msg.sender) {
         token.buy{ value: msg.value }(msg.sender);
     }
 
-    function owners() public view returns (address, address, address) {
-        return (
-            owner(),
-            token.owner(),
-            nft.owner()
-        );
-    }
-
-    function allowanceOf() public view returns (uint256) {
+    function allowance() public view returns (uint256) {
         return token.allowance(msg.sender, address(this));
     }
 
@@ -109,7 +109,7 @@ contract VisageExchange is Ownable(msg.sender) {
         token.buy{ value: msg.value }(msg.sender);
     }
 
-    function balanceToken() public view returns (uint256) {
+    function balance() public view returns (uint256) {
         return token.balanceOf(msg.sender);
     }
 
@@ -127,9 +127,8 @@ contract VisageExchange is Ownable(msg.sender) {
         nft.mint(msg.sender);
     }
 
-    function getTokenAddress() external view returns (address) {
-        return address(token);
+    function getAddresses() external view returns (address tokenAddress, address nftAddress) {
+        return (address(token), address(nft));
     }
-
 }
 
