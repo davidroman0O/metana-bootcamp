@@ -15,12 +15,12 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 /// - VisageToken should show up
 /// - change wallet 
 /// - set 1 Ether
-/// - call `buy` on VisageExchange
+/// - call `mintToken` on VisageExchange
 /// - call `balance` which gives you `10000000000000000000`
 /// - scroll down to VisageToken
 /// - call `approve` with the amount to `10000000000000000000` and the spender is the address of the contract VisageExchange
 /// - on VisageExchange call `allowance` to see `10000000000000000000`
-/// - finally call `mint` and you have an NFT
+/// - finally call `mintNFT` and you have an NFT
 
 contract VisageNFT is ERC721("Visage NFT", "NVSG"), Ownable {
 
@@ -55,25 +55,33 @@ contract VisageNFT is ERC721("Visage NFT", "NVSG"), Ownable {
 // - user need to use approve with the address of the exchange contract
 contract VisageToken is ERC20("Visage Token", "VSG"), Ownable {
     
-    // 10 VSG for 1ETH
-    uint256 public constant TOKENS_PER_ETH = 10;
+    // 10 VSG for 1ETH but in wei
+    uint256 public constant TOKENS_PER_ETH = 10 * 1e18;
+    uint256 public constant MAX_SUPPLY = 1_000_000 * 1e18; // wei
 
-    constructor(address deployer) Ownable(deployer) {
-        super._mint(owner(), 1_000_000 * 1e18);
-    }
+    event Mint(address indexed sender, uint256 ethSent, uint256 tokensMinted, uint256 totalSupplyBefore);
+
+    constructor(address deployer) Ownable(deployer) {}
 
     fallback() external payable  {
         revert("You can't send ether with data on that contract");
     }
 
     receive() external payable {
-        buy(msg.sender);
+        mint(msg.sender);
     }
 
-    function buy(address buyer) public payable {
-        require(msg.value > 0, "Send ETH to buy tokens");
-        uint256 tokensToMint = msg.value * TOKENS_PER_ETH;
-        _mint(buyer, tokensToMint);
+    function mint(address buyer) public payable {
+        require(msg.value > 0, "send eth to buy tokens");
+        uint256 tokensToMint = (TOKENS_PER_ETH * msg.value) / 1 ether;
+        require(totalSupply() + tokensToMint <= MAX_SUPPLY, "mint would exceed max token supply");
+        emit Mint(buyer, msg.value, tokensToMint, totalSupply());
+        super._mint(buyer, tokensToMint);
+    }
+
+    function withdraw() external onlyOwner {
+        (bool success, ) = payable(owner()).call{value: address(this).balance}("");
+        require(success, "withdraw failed");
     }
 }
 
@@ -98,15 +106,20 @@ contract VisageExchange is Ownable(msg.sender) {
     }
 
     receive() external payable {
-        token.buy{ value: msg.value }(msg.sender);
+        token.mint{ value: msg.value }(msg.sender);
+    }
+
+    function withdraw() external onlyOwner {
+        token.withdraw();
     }
 
     function allowance() public view returns (uint256) {
         return token.allowance(msg.sender, address(this));
     }
 
-    function buy() public payable {
-        token.buy{ value: msg.value }(msg.sender);
+    // technically we're minting token
+    function mintToken() public payable {
+        token.mint{ value: msg.value }(msg.sender);
     }
 
     function balance() public view returns (uint256) {
@@ -118,7 +131,7 @@ contract VisageExchange is Ownable(msg.sender) {
     }
 
     // must mint using the ERC20 token 
-    function mint() public {
+    function mintNFT() public {
          require(
             token.transferFrom(msg.sender, address(this), 10 * 1e18),
             "Token transfer failed"
