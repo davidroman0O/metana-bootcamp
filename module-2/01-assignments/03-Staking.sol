@@ -89,7 +89,7 @@ contract VisageStaking is Ownable2Step {
 
     uint256 public constant REWARD_RATE = 10 * 1e18; // 10 tokens per 24 hours
     uint256 public constant REWARD_INTERVAL = 24 hours;
-    // uint256 public constant REWARD_INTERVAL = 2 seconds;
+    // uint256 public constant REWARD_INTERVAL = 1 minutes;
 
     //  basically received if `stakeNFT` worked
     function onERC721Received(
@@ -134,13 +134,15 @@ contract VisageStaking is Ownable2Step {
 
     function unstakeNFT(uint256 tokenID) external {
         require(_originalOwners[tokenID] == msg.sender, "only the owner can stake");
-        withdrawReward();
+        if (pendingReward(msg.sender) > 0) {
+            withdrawReward();
+        }
         delete _originalOwners[tokenID];
         delete _stakerNFTs[msg.sender][tokenID];
         _nft.safeTransferFrom(address(this), msg.sender, tokenID);
     }
     
-    function pendingReward(address user) external view returns (uint256) {
+    function pendingReward(address user) public view returns (uint256) {
         uint256 totalReward = 0;
 
         for (uint256 tokenId = 1; tokenId <= 10; tokenId++) {
@@ -148,7 +150,8 @@ contract VisageStaking is Ownable2Step {
 
             if (stakeInfo.whenStaked != 0) {
                 uint256 timeElapsed = block.timestamp - stakeInfo.lastClaim;
-                uint256 reward = (REWARD_RATE * timeElapsed) / REWARD_INTERVAL;
+                uint256 intervalsPassed = timeElapsed / REWARD_INTERVAL;
+                uint256 reward = intervalsPassed * REWARD_RATE;
 
                 totalReward += reward;
             }
@@ -165,10 +168,13 @@ contract VisageStaking is Ownable2Step {
 
             if (stakeInfo.whenStaked != 0) {
                 uint256 timeElapsed = block.timestamp - stakeInfo.lastClaim;
-                uint256 reward = (REWARD_RATE * timeElapsed) / REWARD_INTERVAL;
+                uint256 intervalsPassed = timeElapsed / REWARD_INTERVAL;
 
-                totalReward += reward;
-                stakeInfo.lastClaim = block.timestamp;
+                if (intervalsPassed > 0) {
+                    uint256 reward = intervalsPassed * REWARD_RATE;
+                    totalReward += reward;
+                    stakeInfo.lastClaim += intervalsPassed * REWARD_INTERVAL;
+                }
             }
         }
 
