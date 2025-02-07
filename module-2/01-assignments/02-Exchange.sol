@@ -29,7 +29,7 @@ contract VisageNFT is ERC721("Visage NFT", "NVSG"), Ownable {
     uint256 private tokenSupply = 1;
     uint256 constant private MAX_SUPPLY = 11; 
 
-    function mint(address minter) external {
+    function mint(address minter) external onlyOwner {
         require(tokenSupply < MAX_SUPPLY, "no more NFT to mint");
         super._safeMint(minter, tokenSupply);
         tokenSupply++;
@@ -113,26 +113,27 @@ contract VisageExchange is Ownable(msg.sender) {
         token.withdraw();
     }
 
-    function allowance() public view returns (uint256) {
+    function allowance() external view returns (uint256) {
         return token.allowance(msg.sender, address(this));
     }
 
     // technically we're minting token
-    function mintToken() public payable {
+    function mintToken() external payable {
         token.mint{ value: msg.value }(msg.sender);
     }
 
-    function balance() public view returns (uint256) {
+    function balance() external view returns (uint256) {
         return token.balanceOf(msg.sender);
     }
 
-    function balanceOf(address account) public view returns (uint256) {
+    function balanceOf(address account) external view returns (uint256) {
         return token.balanceOf(account);
     }
 
     // must mint using the ERC20 token 
-    function mintNFT() public {
-         require(
+    function mintNFT() external {
+        // if no allowance it will fail
+        require(
             token.transferFrom(msg.sender, address(this), 10 * 1e18),
             "Token transfer failed"
         );
