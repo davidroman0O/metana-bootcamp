@@ -11,7 +11,7 @@ contract ERCGod is ERC20, Ownable2Step {
         ERC20(name_, symbol_)
         Ownable(msg.sender)
     {
-        _transferOwnership(msg.sender);
+
     }
 
     function mintTokensToAddress(address recipient, uint256 amount)  public virtual onlyOwner {

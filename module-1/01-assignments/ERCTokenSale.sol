@@ -12,7 +12,7 @@ contract ERCTokenSale is ERC20, Ownable2Step {
     uint256 constant public TOKEN_PER_ETH = 1000 * 1e18; // 18 decimals too
 
     constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) Ownable(msg.sender) {
-        _transferOwnership(msg.sender);
+
     } 
 
     fallback() external payable  {

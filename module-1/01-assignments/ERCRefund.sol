@@ -14,7 +14,7 @@ contract ERCRefund is ERC20, Ownable2Step {
 
     constructor() ERC20("Refund", "RFD") Ownable(msg.sender) 
     {
-        _transferOwnership(msg.sender);
+
     } 
 
     fallback() external payable  {
