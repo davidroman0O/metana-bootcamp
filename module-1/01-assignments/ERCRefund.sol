@@ -43,9 +43,22 @@ contract ERCRefund is ERC20, Ownable2Step {
         // - meaning that if you sent 1 wei you would have your 1000 tokens with 18 decimals!!
         // - we want 1 ether == 1000 tokens, taking in account the 18 decimals 
         // - we must do the multiplicaiton first to avoid rounding errors in integer division
-        uint256 tokensToMint = (TOKEN_PER_ETH * msg.value) / 1 ether;
-        emit Mint(msg.sender, msg.value, tokensToMint, totalSupply());
-        _mint(msg.sender, tokensToMint); // _update will manage the cap
+        uint256 tokenAmount = (TOKEN_PER_ETH * msg.value) / 1 ether;
+        uint256 available = balanceOf(address(this));
+
+        // is that what "mint when required means"?
+        if (available >= tokenAmount) {
+            _transfer(address(this), msg.sender, tokenAmount);
+        } else {
+            uint256 mintAmount = tokenAmount;
+            if (available > 0) {
+                _transfer(address(this), msg.sender, available);
+                mintAmount = tokenAmount - available;
+            }
+            _mint(msg.sender, mintAmount);
+        }
+        
+        emit Mint(msg.sender, msg.value, tokenAmount, totalSupply());
         // and so normally after sending 1 ether, you will have a balance of `1000000000000000000000`
         // which is 1000.000000000000000000 aka with 18 decimals
     }
@@ -61,9 +74,9 @@ contract ERCRefund is ERC20, Ownable2Step {
     function sellBack(uint256 amount) external {
         require(amount > 0, "cannot sell 0 tokens");
         // Similar thing as for mintTokens
-        uint256 etherToSendBack = (amount * 0.5 ether) / 1000 ether; // 0.5 for every 1000 tokens
+        uint256 etherToSendBack = (amount * 0.5 ether) / (1000 * 1e18); // 0.5 for every 1000 tokens
         require(address(this).balance >= etherToSendBack, "contract is broke");
-        _transfer(msg.sender, address(this), amount); // get the token from the wallet
+        require(transferFrom(msg.sender, address(this), amount), "Token transfer failed"); // safer than before
         (bool success, ) = payable(msg.sender).call{value: etherToSendBack}(""); // after looking at my notes of the smartcontractprogrammer, call is prefered
         require(success, "ETH transfer failed");
         emit Selling(msg.sender, amount, etherToSendBack, totalSupply());
