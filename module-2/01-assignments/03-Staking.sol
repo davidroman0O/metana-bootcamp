@@ -88,8 +88,8 @@ contract VisageStaking is Ownable2Step {
     mapping(address => mapping(uint256 => Stake)) private _stakerNFTs;
 
     uint256 public constant REWARD_RATE = 10 * 1e18; // 10 tokens per 24 hours
-    uint256 public constant REWARD_INTERVAL = 24 hours;
-    // uint256 public constant REWARD_INTERVAL = 1 minutes;
+    // uint256 public constant REWARD_INTERVAL = 24 hours;
+    uint256 public constant REWARD_INTERVAL = 5 seconds;
 
     //  basically received if `stakeNFT` worked
     function onERC721Received(
@@ -98,11 +98,13 @@ contract VisageStaking is Ownable2Step {
         uint256 tokenId,
         bytes calldata /**/
     ) external returns (bytes4) {
+        require(msg.sender == address(_nft), "only our NFT smart contract can call back");
         require(_stakerNFTs[from][tokenId].whenStaked == 0, "NFT already staked");
+        require(tx.origin == from, "Direct transfer not allowed"); // Prevent bypassing staking function
         _originalOwners[tokenId] = from;
         _stakerNFTs[from][tokenId] = Stake({
             whenStaked: block.timestamp,
-            lastClaim: block.timestamp
+            lastClaim: block.timestamp // for reward computation - basically zeroing
         });
         return this.onERC721Received.selector;
     }
@@ -126,10 +128,14 @@ contract VisageStaking is Ownable2Step {
     receive() external payable {
         revert("You can't just sent money like that");
     }
+
+    event NFTStaked(address indexed staker, uint256 tokenId);
     
     function stakeNFT(uint256 tokenID) external {
         require(_nft.ownerOf(tokenID) == msg.sender, "only the owner can stake");
+        require(_stakerNFTs[msg.sender][tokenID].whenStaked == 0, "NFT already staked");
         _nft.safeTransferFrom(msg.sender, address(this), tokenID);
+        emit NFTStaked(msg.sender, tokenID);
     }
 
     function unstakeNFT(uint256 tokenID) external {
@@ -152,7 +158,7 @@ contract VisageStaking is Ownable2Step {
                 uint256 timeElapsed = block.timestamp - stakeInfo.lastClaim;
                 uint256 intervalsPassed = timeElapsed / REWARD_INTERVAL;
                 uint256 reward = intervalsPassed * REWARD_RATE;
-
+    
                 totalReward += reward;
             }
         }
