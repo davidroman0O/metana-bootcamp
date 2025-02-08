@@ -13,8 +13,6 @@ import "@openzeppelin/contracts/access/Ownable2Step.sol";
 /// Fake the time obviously
 /// Do not force people to withdraw NFT to get token, just let's them get their money
 
-
-
 contract VisageToken is ERC20("Visage Token", "VSG"), Ownable2Step {
     
     uint256 public constant TOKENS_PER_ETH = 10  * 1e18;
@@ -78,34 +76,48 @@ contract VisageNFT is ERC721("Visage NFT", "NVSG"), Ownable2Step {
 
 contract VisageStaking is Ownable2Step {
     
-    mapping(uint256 => address) private _originalOwners;
-
-    struct Stake {
+     struct Stake {
+        address owner;
         uint256 whenStaked;
         uint256 lastClaim;
     }
 
-    mapping(address => mapping(uint256 => Stake)) private _stakerNFTs;
+    // stake info for each tokenID
+    mapping(uint256 => Stake) public stakes;
+
+    // for each staker, track an array of token IDs they have staked
+    mapping(address => uint256[]) private stakedTokens;
+
+    // mapping from tokenID to its index in stakedTokens[owner] array
+    mapping(uint256 => uint256) private tokenIndex;
 
     uint256 public constant REWARD_RATE = 10 * 1e18; // 10 tokens per 24 hours
-    // uint256 public constant REWARD_INTERVAL = 24 hours;
-    uint256 public constant REWARD_INTERVAL = 5 seconds;
+    uint256 public constant REWARD_INTERVAL = 24 hours;
+    // uint256 public constant REWARD_INTERVAL = 5 seconds;
 
     //  basically received if `stakeNFT` worked
     function onERC721Received(
         address /**/,
         address from,
-        uint256 tokenId,
+        uint256 tokenID,
         bytes calldata /**/
     ) external returns (bytes4) {
-        require(msg.sender == address(_nft), "only our NFT smart contract can call back");
-        require(_stakerNFTs[from][tokenId].whenStaked == 0, "NFT already staked");
-        require(tx.origin == from, "Direct transfer not allowed"); // Prevent bypassing staking function
-        _originalOwners[tokenId] = from;
-        _stakerNFTs[from][tokenId] = Stake({
+       require(msg.sender == address(_nft), "only our NFT smart contract can call back");
+        require(stakes[tokenID].whenStaked == 0, "NFT already staked");
+        require(tx.origin == from, "Direct transfer not allowed");
+
+        // Record the stake data for this token
+        stakes[tokenID] = Stake({
+            owner: from,
             whenStaked: block.timestamp,
-            lastClaim: block.timestamp // for reward computation - basically zeroing
+            lastClaim: block.timestamp
         });
+
+        // Track this token in the staker's list
+        stakedTokens[from].push(tokenID);
+        tokenIndex[tokenID] = stakedTokens[from].length - 1;
+
+        emit NFTStaked(from, tokenID);
         return this.onERC721Received.selector;
     }
 
@@ -129,63 +141,78 @@ contract VisageStaking is Ownable2Step {
         revert("You can't just sent money like that");
     }
 
-    event NFTStaked(address indexed staker, uint256 tokenId);
+    event NFTStaked(address indexed staker, uint256 tokenID);
     
     function stakeNFT(uint256 tokenID) external {
         require(_nft.ownerOf(tokenID) == msg.sender, "only the owner can stake");
-        require(_stakerNFTs[msg.sender][tokenID].whenStaked == 0, "NFT already staked");
+        require(stakes[tokenID].whenStaked == 0, "NFT already staked");
+        // This will trigger onERC721Received and record the stake.
         _nft.safeTransferFrom(msg.sender, address(this), tokenID);
-        emit NFTStaked(msg.sender, tokenID);
+    }
+
+    function _removeStakedToken(address user, uint256 tokenID) internal {
+        uint256 lastIndex = stakedTokens[user].length - 1;
+        uint256 index = tokenIndex[tokenID];
+
+        if (index != lastIndex) {
+            uint256 lastTokenID = stakedTokens[user][lastIndex];
+            stakedTokens[user][index] = lastTokenID;
+            tokenIndex[lastTokenID] = index;
+        }
+        stakedTokens[user].pop();
+        delete tokenIndex[tokenID];
+    }
+
+    function _calculateReward(uint256 tokenID) internal view returns (uint256) {
+        Stake storage stakeInfo = stakes[tokenID];
+        if (stakeInfo.whenStaked == 0) {
+            return 0;
+        }
+        uint256 timeElapsed = block.timestamp - stakeInfo.lastClaim;
+        uint256 intervalsPassed = timeElapsed / REWARD_INTERVAL;
+        return intervalsPassed * REWARD_RATE;
     }
 
     function unstakeNFT(uint256 tokenID) external {
-        require(_originalOwners[tokenID] == msg.sender, "only the owner can stake");
-        if (pendingReward(msg.sender) > 0) {
-            withdrawReward();
+         Stake storage stakeInfo = stakes[tokenID];
+        require(stakeInfo.owner == msg.sender, "only the owner can unstake");
+
+        // Claim any pending reward for this NFT
+        uint256 reward = _calculateReward(tokenID);
+        if (reward > 0) {
+            // Reset lastClaim for this NFT to prevent double counting
+            stakeInfo.lastClaim = block.timestamp;
+            _token.mintToken(msg.sender, reward);
         }
-        delete _originalOwners[tokenID];
-        delete _stakerNFTs[msg.sender][tokenID];
+
+        delete stakes[tokenID];
+
+        _removeStakedToken(msg.sender, tokenID); // compiler doesn't like too big functions ¯\(ツ)/¯
+
         _nft.safeTransferFrom(address(this), msg.sender, tokenID);
     }
     
-    function pendingReward(address user) public view returns (uint256) {
-        uint256 totalReward = 0;
-
-        for (uint256 tokenId = 1; tokenId <= 10; tokenId++) {
-            Stake storage stakeInfo = _stakerNFTs[user][tokenId];
-
-            if (stakeInfo.whenStaked != 0) {
-                uint256 timeElapsed = block.timestamp - stakeInfo.lastClaim;
-                uint256 intervalsPassed = timeElapsed / REWARD_INTERVAL;
-                uint256 reward = intervalsPassed * REWARD_RATE;
-    
-                totalReward += reward;
-            }
+     function pendingReward(address user) public view returns (uint256 totalReward) {
+        uint256[] storage tokens = stakedTokens[user];
+        for (uint256 i = 0; i < tokens.length; i++) {
+            totalReward += _calculateReward(tokens[i]);
         }
-
-        return totalReward;
     }
 
-    function withdrawReward() public {
+     function withdrawReward() public {
         uint256 totalReward = 0;
-
-        for (uint256 tokenId = 1; tokenId <= 10; tokenId++) {
-            Stake storage stakeInfo = _stakerNFTs[msg.sender][tokenId];
-
-            if (stakeInfo.whenStaked != 0) {
-                uint256 timeElapsed = block.timestamp - stakeInfo.lastClaim;
-                uint256 intervalsPassed = timeElapsed / REWARD_INTERVAL;
-
-                if (intervalsPassed > 0) {
-                    uint256 reward = intervalsPassed * REWARD_RATE;
-                    totalReward += reward;
-                    stakeInfo.lastClaim += intervalsPassed * REWARD_INTERVAL;
-                }
+        uint256[] storage tokens = stakedTokens[msg.sender];
+        for (uint256 i = 0; i < tokens.length; i++) {
+            uint256 tokenID = tokens[i];
+            uint256 reward = _calculateReward(tokenID);
+            if (reward > 0) {
+                totalReward += reward;
+                // Advance the lastClaim by the number of complete intervals.
+                stakes[tokenID].lastClaim = stakes[tokenID].lastClaim +
+                    ((block.timestamp - stakes[tokenID].lastClaim) / REWARD_INTERVAL) * REWARD_INTERVAL;
             }
         }
-
         require(totalReward > 0, "no rewards to claim");
-
         _token.mintToken(msg.sender, totalReward);
     }
 
