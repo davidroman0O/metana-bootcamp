@@ -208,8 +208,7 @@ contract VisageStaking is Ownable2Step {
             if (reward > 0) {
                 totalReward += reward;
                 // Advance the lastClaim by the number of complete intervals.
-                stakes[tokenID].lastClaim = stakes[tokenID].lastClaim +
-                    ((block.timestamp - stakes[tokenID].lastClaim) / REWARD_INTERVAL) * REWARD_INTERVAL;
+                stakes[tokenID].lastClaim = stakes[tokenID].lastClaim + ((block.timestamp - stakes[tokenID].lastClaim) / REWARD_INTERVAL) * REWARD_INTERVAL;
             }
         }
         require(totalReward > 0, "no rewards to claim");
