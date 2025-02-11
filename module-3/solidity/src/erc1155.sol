@@ -20,6 +20,14 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable {
     function canMint() public view returns (bool) {
         return block.timestamp >= lastMintTime[msg.sender] + COOLDOWN;
     }
+
+     function getRemainingCooldown() public view returns (uint256) {
+        uint256 endTime = lastMintTime[msg.sender] + COOLDOWN;
+        if (block.timestamp >= endTime) {
+            return 0;
+        }
+        return endTime - block.timestamp;
+    }
     
     function freeMint(uint256 id) external {
         require(id < 3, "Free mint only allowed for tokens 0-2");
