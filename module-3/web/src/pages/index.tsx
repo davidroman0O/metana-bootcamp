@@ -5,7 +5,8 @@ import { Header } from '@/components/layout/Header'
 import { NetworkSwitcher } from '@/components/SwitchNetworks'
 import { WalletModal } from '@/components/WalletModal'
 import { useCopyToClipboard } from '@/hooks/use-copy'
-import WagmiIcon from '~icons/fisand-icons/wagmi-icon'
+import { useForge } from '@/hooks/use-forge'
+import { useToken } from "@/hooks/use-token"
 
 function Home() {
   const { address } = useAccount()
@@ -26,6 +27,16 @@ function Home() {
       title: 'Copied success!',
     })
   }, [copy, toast])
+
+
+  const { 
+    tokenAddress,
+    owner,
+  } = useForge();
+
+  const {
+    owner: ownerToken,
+  } = useToken();
 
   // eslint-disable-next-line @eslint-react/no-nested-components
   const Action = () => (
@@ -50,6 +61,13 @@ function Home() {
       <Header
         action={<Action />}
       />
+      <div>
+        Address: [{tokenAddress}]
+        Token Owner: [{ownerToken}]
+      </div>
+      <div>
+        Owner: [{owner}]
+      </div>
     </>
   )
 }

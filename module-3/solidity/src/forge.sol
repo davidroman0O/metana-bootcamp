@@ -12,10 +12,14 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract Forge is Ownable(msg.sender) {
 
     /// @notice The ERC1155 token contract.
-    MyERC1155Token private token;
+    ERC1155Token private token;
     
     constructor() {
-        token = new MyERC1155Token("");
+        token = new ERC1155Token("");
+    }
+
+    function getAddress() external view returns (address) {
+        return address(token);
     }
     
     function forge(uint256 forgedTokenId) external {
@@ -44,7 +48,6 @@ contract Forge is Ownable(msg.sender) {
         token.forgeMint(msg.sender, forgedTokenId, 1);
     }
     
-   
     function trade(uint256 tokenIdToTrade, uint256 desiredBaseTokenId) external {
         require(desiredBaseTokenId < 3, "Can only trade for base tokens (0-2)");
         require(tokenIdToTrade < 7, "Token id to trade must be between 0 and 6");

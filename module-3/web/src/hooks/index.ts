@@ -1,2 +1,2 @@
-export * from './use-contract'
-export * from './use-wagmi'
+export * from './use-forge-contract'
+export * from './use-forge'
