@@ -9,3 +9,8 @@ On one terminal `make anvil` to start a local ethereum. Then on another `make de
 
 You need to add a custom network: Anvil chain (ID 31337), it should use http://127.0.0.1:8545 as the RPC endpoint.
 
+
+# On deploy
+
+What's happening on deploy can be seeing inside of the Makefile of `solidity` folder. It is taking the ABIs and addresses, then it puts them into `.ts` files in the `web` project. It's a poor's man automation.
+
