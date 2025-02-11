@@ -10,26 +10,17 @@ import { useForge } from '@/hooks/use-forge'
 import { useToken } from "@/hooks/use-token"
 import { useToast } from '@/components/ui/use-toast'
 
+
 function Home() {
   const { address } = useAccount()
   const [show, setShow] = useState(false)
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null)
-  const [localCooldown, setLocalCooldown] = useState<number>(0)
-  const lastMintTimeRef = useRef<number | null>(null)
+  // const [localCooldown, setLocalCooldown] = useState<number>(0)
+  // const lastMintTimeRef = useRef<number | null>(null)
 
   const toggleModal = (e: boolean) => {
     setShow(e)
   }
-
-  const [, copy] = useCopyToClipboard()
-  const { toast } = useToast()
-
-  const copyHandler = useCallback(() => {
-    copy('pnpm dlx fisand')
-    toast({
-      title: 'Copied success!',
-    })
-  }, [copy, toast])
 
   const { 
     tokenAddress,
@@ -37,41 +28,63 @@ function Home() {
   } = useForge()
 
   const {
-    owner: ownerToken,
     freeMint,
+    owner: ownerToken,
     canMint,
     cooldownRemaining,
     balances,
-    refreshBalances,
+    initialized,
+    lastMintTime,
+    tokens,
+    remainingMintTime,
+    countdown,
   } = useToken()
 
+  // useEffect(() => {
+  //   const timer = setInterval(() => {
+  //     refresh().then(({
+  //       canMint,
+  //       cooldownRemaining,
+  //       lastMintTime,
+  //     }) => {
+  //       console.log('Refreshed data:', {
+  //         canMint,
+  //         cooldownRemaining,
+  //         lastMintTime,
+  //       });
+  //     })
+  //   }, 1000)
+
+  //   return () => clearInterval(timer)
+  // }, [refresh])
+
   // Local timer to update cooldown every second
-  useEffect(() => {
-    const timer = setInterval(() => {
-      if (lastMintTimeRef.current) {
-        const elapsed = Math.floor((Date.now() - lastMintTimeRef.current) / 1000)
-        const remaining = Math.max(0, 60 - elapsed) // 60 seconds cooldown
-        setLocalCooldown(remaining)
+  // useEffect(() => {
+  //   const timer = setInterval(() => {
+  //     if (lastMintTimeRef.current) {
+  //       const elapsed = Math.floor((Date.now() - lastMintTimeRef.current) / 1000)
+  //       const remaining = Math.max(0, 60 - elapsed) // 60 seconds cooldown
+  //       setLocalCooldown(remaining)
         
-        // When local cooldown ends, refresh blockchain state
-        if (remaining === 0) {
-          refreshBalances()
-          lastMintTimeRef.current = null
-        }
-      }
-    }, 1000)
+  //       // When local cooldown ends, refresh blockchain state
+  //       if (remaining === 0) {
+  //         refreshBalances()
+  //         lastMintTimeRef.current = null
+  //       }
+  //     }
+  //   }, 1000)
 
-    return () => clearInterval(timer)
-  }, [refreshBalances])
+  //   return () => clearInterval(timer)
+  // }, [refreshBalances])
 
-  // Sync blockchain cooldown with local cooldown
-  useEffect(() => {
-    if (cooldownRemaining && cooldownRemaining > 0n) {
-      const remaining = Number(cooldownRemaining)
-      setLocalCooldown(remaining)
-      lastMintTimeRef.current = Date.now() - ((60 - remaining) * 1000)
-    }
-  }, [cooldownRemaining])
+  // // Sync blockchain cooldown with local cooldown
+  // useEffect(() => {
+  //   if (cooldownRemaining && cooldownRemaining > 0n) {
+  //     const remaining = Number(cooldownRemaining)
+  //     setLocalCooldown(remaining)
+  //     lastMintTimeRef.current = Date.now() - ((60 - remaining) * 1000)
+  //   }
+  // }, [cooldownRemaining])
 
   const { 
     isSuccess, 
@@ -89,9 +102,9 @@ function Home() {
     const handleSuccess = async () => {
       console.log('Transaction confirmed! Refreshing data...', txHash)
       try {
-        lastMintTimeRef.current = Date.now() // Start local cooldown
-        setLocalCooldown(60) // Set initial cooldown
-        await refreshBalances()
+        // lastMintTimeRef.current = Date.now() // Start local cooldown
+        // setLocalCooldown(60) // Set initial cooldown
+        // await refreshBalances()
         console.log('Data refreshed successfully')
         setTxHash(null)
       } catch (error) {
@@ -101,7 +114,7 @@ function Home() {
     }
 
     handleSuccess()
-  }, [isSuccess, txHash, refreshBalances])
+  }, [isSuccess, txHash])
 
   // Handle transaction error
   useEffect(() => {
@@ -118,8 +131,8 @@ function Home() {
         return
       }
 
-      if (localCooldown > 0) {
-        console.log('Cooldown still active:', localCooldown)
+      if (countdown > 0) {
+        console.log('Cooldown still active:', countdown)
         return
       }
 
@@ -131,7 +144,7 @@ function Home() {
         console.error('freeMint error:', error)
       }
     },
-    [freeMint, txHash, localCooldown]
+    [freeMint, txHash, countdown]
   )
 
   const Action = () => (
@@ -150,16 +163,10 @@ function Home() {
     </>
   )
 
-  const memoBalances = useMemo(() => {
-    return Object.entries(balances).map(([tokenId, balance]) => ({
-      tokenId: BigInt(tokenId),
-      balance,
-    }))
-  }, [balances])
-
   const getTransactionStatus = () => {
-    if (localCooldown > 0) {
-      return `⏳ Cooldown active: ${localCooldown}s remaining before next mint`
+    if (!initialized) return 'Reading blocks...'
+    if (countdown > 0) {
+      return `⏳ Cooldown active: ${countdown}s remaining before next mint`
     }
     if (!txHash) return 'Ready to mint'
     if (isError) return `❌ Transaction ${txHash} failed`
@@ -171,15 +178,15 @@ function Home() {
   const isButtonDisabled = (tokenId: string) => {
     return balances[tokenId] == BigInt(1) || 
            !!txHash || 
-           !canMint ||
-           localCooldown > 0
+          //  !canMint ||
+           countdown > 0
   }
 
   const getButtonText = (tokenId: string) => {
     if (balances[tokenId] == BigInt(1)) return `Token ${tokenId} (Owned)`
     if (txHash) return `Token ${tokenId} (Pending...)`
-    if (localCooldown > 0) {
-      return `Wait ${localCooldown}s`
+    if (countdown > 0) {
+      return `Wait ${countdown}s`
     }
     return `Mint Token ${tokenId}`
   }
@@ -193,14 +200,14 @@ function Home() {
         <div className="text-md text-center font-medium">
           {getTransactionStatus()}
         </div>
-        {localCooldown > 0 && (
+        {countdown > 0 && (
           <div className="text-sm text-gray-600 mt-2 text-center">
-            Please wait {localCooldown} seconds before minting again
+            Please wait {countdown} seconds before minting again
           </div>
         )}
       </div>
 
-      {address && (
+      {initialized && address && (
         <div className='flex flex-col items-center justify-center gap-4'>
           <div className='flex flex-row items-center justify-center gap-4 m-5'>
             {['0', '1', '2'].map((tokenId) => (
@@ -216,7 +223,7 @@ function Home() {
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-sm">
-            {memoBalances.map(({ tokenId, balance }) => (
+            {tokens.map(({ tokenId, balance }) => (
               <div key={tokenId.toString()} className="flex gap-2">
                 <span className="font-medium">Token {tokenId}:</span>
                 <span>{balance.toString()}</span>
@@ -227,17 +234,23 @@ function Home() {
       )}
 
 
-      <div className="text-xs mt-8 p-4 bg-gray-50 rounded">
-        <div className="font-semibold mb-2">Debug Information</div>
-        <div>txHash: {txHash || 'null'}</div>
-        <div>canMint: {String(canMint)}</div>
-        <div>localCooldown: {localCooldown}</div>
-        <div>cooldownRemaining: {cooldownRemaining?.toString() || 'null'}</div>
-        <div>lastMintTime: {lastMintTimeRef.current ? new Date(lastMintTimeRef.current).toISOString() : 'null'}</div>
-        <div>isLoading: {String(isLoading)}</div>
-        <div>isSuccess: {String(isSuccess)}</div>
-        <div>isError: {String(isError)}</div>
-      </div>
+      {
+        initialized && 
+        <div className="text-xs mt-8 p-4 bg-gray-50 rounded">
+          <div className="font-semibold mb-2">Debug Information</div>
+          <div>txHash: {txHash || 'null'}</div>
+          <div>canMint: {String(canMint)}</div>
+          <div>cooldownRemaining: {cooldownRemaining?.toString() || 'null'}</div>
+          <div>lastMintTime: {lastMintTime}</div>
+          <div>remainingMintTime: {remainingMintTime}</div>
+          {/* <div>mint for real?: { remainingMintTime != 0 ? (remainingMintTime || 0) - Date.now() : 0  }</div> */}
+          <div>countdown {countdown}</div>
+          <div>isLoading: {String(isLoading)}</div>
+          <div>isSuccess: {String(isSuccess)}</div>
+          <div>isError: {String(isError)}</div>
+        </div>
+      }
+
     </>
   )
 }

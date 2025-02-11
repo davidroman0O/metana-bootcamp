@@ -13,7 +13,8 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable {
     mapping(address => uint256) public lastMintTime;
 
     /// Cooldown period (in seconds) between free mints.
-    uint256 public constant COOLDOWN = 1 minutes;
+    // uint256 public constant COOLDOWN = 1 minutes;
+    uint256 public constant COOLDOWN = 5 seconds;
   
     constructor(string memory uri_) Ownable(msg.sender) ERC1155(uri_) {}
 
@@ -31,6 +32,22 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable {
             return 0;
         }
         return endTime - block.timestamp;
+    }
+
+    function getRemainingCooldownOf(address account) public view returns (uint256) {
+        uint256 endTime = lastMintTime[account] + COOLDOWN;
+        if (block.timestamp >= endTime) {
+            return 0;
+        }
+        return endTime - block.timestamp;
+    }
+
+    function getLastMintTimeOf(address account) public view returns (uint256) {
+        return lastMintTime[account];
+    }
+
+    function canMintOf(address account) public view returns (bool) {
+        return block.timestamp >= lastMintTime[account] + COOLDOWN;
     }
     
     function freeMint(uint256 id) external {
