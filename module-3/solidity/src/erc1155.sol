@@ -13,15 +13,23 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable {
     mapping(address => uint256) public lastMintTime;
 
     /// Cooldown period (in seconds) between free mints.
-    uint256 public constant COOLDOWN = 60;
+    uint256 public constant COOLDOWN = 1 minutes;
   
     constructor(string memory uri_) Ownable(msg.sender) ERC1155(uri_) {}
+
+    function canMint() public view returns (bool) {
+        return  block.timestamp >= lastMintTime[msg.sender] + COOLDOWN;
+    }
     
     function freeMint(uint256 id) external {
         require(id < 3, "Free mint only allowed for tokens 0-2");
         require(
             block.timestamp >= lastMintTime[msg.sender] + COOLDOWN,
             "Cooldown active: wait 1 minute between mints"
+        );
+        require(
+            balanceOf(msg.sender, id) == 0,
+            "was already minted"
         );
         lastMintTime[msg.sender] = block.timestamp;
         _mint(msg.sender, id, 1, "");
@@ -31,7 +39,7 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable {
         address to,
         uint256 id,
         uint256 amount
-    ) external {
+    ) external onlyOwner {
         require(owner() == msg.sender, "Only forging contract can mint tokens");
         require(id < 7, "Token id must be between 0 and 6");
         _mint(to, id, amount, "");
