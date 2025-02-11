@@ -21,7 +21,11 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable {
         return block.timestamp >= lastMintTime[msg.sender] + COOLDOWN;
     }
 
-     function getRemainingCooldown() public view returns (uint256) {
+    function getLastMintTime() public view returns (uint256) {
+        return lastMintTime[msg.sender];
+    }
+
+    function getRemainingCooldown() public view returns (uint256) {
         uint256 endTime = lastMintTime[msg.sender] + COOLDOWN;
         if (block.timestamp >= endTime) {
             return 0;
