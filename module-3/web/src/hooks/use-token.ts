@@ -42,7 +42,7 @@ export function useToken(): UseTokenReturn {
   const tokenContract = useTokenContract()
   const { writeContract } = useWriteContract()
 
-  const tokenIds: bigint[] = Array.from({ length: 6 }, (_, i) => BigInt(i))
+  const tokenIds: bigint[] = Array.from({ length: 7 }, (_, i) => BigInt(i))
   const accounts: HexAddress[] = Array(tokenIds.length).fill(address as HexAddress)
 
   const { data, refetch } = useReadContracts({
