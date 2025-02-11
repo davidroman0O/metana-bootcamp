@@ -18,7 +18,7 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable {
     constructor(string memory uri_) Ownable(msg.sender) ERC1155(uri_) {}
 
     function canMint() public view returns (bool) {
-        return  block.timestamp >= lastMintTime[msg.sender] + COOLDOWN;
+        return block.timestamp >= lastMintTime[msg.sender] + COOLDOWN;
     }
     
     function freeMint(uint256 id) external {

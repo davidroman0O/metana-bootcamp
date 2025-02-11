@@ -61,12 +61,11 @@ function Home() {
       <Header
         action={<Action />}
       />
-      <div>
-        Address: [{tokenAddress}]
-        Token Owner: [{ownerToken}]
-      </div>
-      <div>
-        Owner: [{owner}]
+      
+      <div className='flex flex-row items-center justify-center flex-gap-4 m-5'>
+          <Button>Token 0</Button>
+          <Button>Token 1</Button>
+          <Button>Token 2</Button>
       </div>
     </>
   )

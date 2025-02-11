@@ -18,6 +18,7 @@ anvil:
 deploy:
 	@echo "Deploying contracts..."
 	forge build
+	forge compile
 	forge script script/Deploy.s.sol:DeployScript \
 		--rpc-url http://127.0.0.1:8545 \
 		--broadcast \

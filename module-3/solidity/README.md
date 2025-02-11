@@ -64,3 +64,10 @@ $ forge --help
 $ anvil --help
 $ cast --help
 ```
+
+
+# Troubleshooting
+
+```
+forge install foundry-rs/forge-std -no-commit
+```
