@@ -59,8 +59,6 @@ export function useToken(): UseTokenReturn {
     ],
   })
 
-  console.log(" VALUES", tokenContract.address, data)
-
   const [ owner, setOwner ] = useState<HexAddress>("0x");
   const [ canMint, setCanMint ] = useState<boolean>(false);
   const [ cooldownRemaining, setCooldownRemaining ] = useState<number>(0);
@@ -115,15 +113,13 @@ export function useToken(): UseTokenReturn {
     pollingInterval: 1000,
     onBlock: async (data) => { 
       if (block === null || data.timestamp != block?.timestamp) {
-        console.log("new block", data);
+
         setBlock(data);
 
         const refreshedData = await refetch();
         const refreshedCooldown = await refetchCooldown();
         const refreshedLastMintTime = await refetchLastMintTime();
         const refreshedCanMint = await refetchCanMint();
-
-        console.log("refreshed data", refreshedData);
 
         setOwner(refreshedData.data?.[0]?.result?.toString() as HexAddress || "" as HexAddress);
         setCanMint(refreshedCanMint.data as boolean);

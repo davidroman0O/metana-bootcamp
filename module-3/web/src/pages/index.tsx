@@ -235,20 +235,20 @@ function Home() {
 
 
       {
-        initialized && 
-        <div className="text-xs mt-8 p-4 bg-gray-50 rounded">
-          <div className="font-semibold mb-2">Debug Information</div>
-          <div>txHash: {txHash || 'null'}</div>
-          <div>canMint: {String(canMint)}</div>
-          <div>cooldownRemaining: {cooldownRemaining?.toString() || 'null'}</div>
-          <div>lastMintTime: {lastMintTime}</div>
-          <div>remainingMintTime: {remainingMintTime}</div>
-          {/* <div>mint for real?: { remainingMintTime != 0 ? (remainingMintTime || 0) - Date.now() : 0  }</div> */}
-          <div>countdown {countdown}</div>
-          <div>isLoading: {String(isLoading)}</div>
-          <div>isSuccess: {String(isSuccess)}</div>
-          <div>isError: {String(isError)}</div>
-        </div>
+        // initialized && 
+        // <div className="text-xs mt-8 p-4 bg-gray-50 rounded">
+        //   <div className="font-semibold mb-2">Debug Information</div>
+        //   <div>txHash: {txHash || 'null'}</div>
+        //   <div>canMint: {String(canMint)}</div>
+        //   <div>cooldownRemaining: {cooldownRemaining?.toString() || 'null'}</div>
+        //   <div>lastMintTime: {lastMintTime}</div>
+        //   <div>remainingMintTime: {remainingMintTime}</div>
+        //   {/* <div>mint for real?: { remainingMintTime != 0 ? (remainingMintTime || 0) - Date.now() : 0  }</div> */}
+        //   <div>countdown {countdown}</div>
+        //   <div>isLoading: {String(isLoading)}</div>
+        //   <div>isSuccess: {String(isSuccess)}</div>
+        //   <div>isError: {String(isError)}</div>
+        // </div>
       }
 
     </>

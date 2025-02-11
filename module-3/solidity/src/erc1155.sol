@@ -13,8 +13,8 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable {
     mapping(address => uint256) public lastMintTime;
 
     /// Cooldown period (in seconds) between free mints.
-    // uint256 public constant COOLDOWN = 1 minutes;
-    uint256 public constant COOLDOWN = 5 seconds;
+    uint256 public constant COOLDOWN = 1 minutes;
+    // uint256 public constant COOLDOWN = 5 seconds;
   
     constructor(string memory uri_) Ownable(msg.sender) ERC1155(uri_) {}
 
