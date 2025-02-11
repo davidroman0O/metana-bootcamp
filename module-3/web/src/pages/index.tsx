@@ -8,6 +8,8 @@ import { useCopyToClipboard } from '@/hooks/use-copy'
 import { useForge } from '@/hooks/use-forge'
 import { useToken } from "@/hooks/use-token"
 
+
+
 function Home() {
   const { address } = useAccount()
 
@@ -36,6 +38,9 @@ function Home() {
 
   const {
     owner: ownerToken,
+    freeMint,
+    canMint,
+    balances,
   } = useToken();
 
   // eslint-disable-next-line @eslint-react/no-nested-components
@@ -56,16 +61,37 @@ function Home() {
     </>
   )
 
+  const memoBalances = useMemo(() => {
+    return Object.entries(balances).map(([tokenId, balance]) => ({
+      tokenId: BigInt(tokenId), // Convert back to bigint if needed
+      balance,
+    }))
+  }, [balances])
+
   return (
     <>
       <Header
         action={<Action />}
       />
       
-      <div className='flex flex-row items-center justify-center flex-gap-4 m-5'>
-          <Button>Token 0</Button>
-          <Button>Token 1</Button>
-          <Button>Token 2</Button>
+      {
+        address &&
+        <div className='flex flex-row items-center justify-center flex-gap-4 m-5'>
+            <Button disabled={balances['0'] == BigInt(1)} onClick={() => freeMint(BigInt(0))}>Token 0</Button>
+            <Button disabled={balances['1'] == BigInt(1)} onClick={() => freeMint(BigInt(1))}>Token 1</Button>
+            <Button disabled={balances['2'] == BigInt(1)} onClick={() => freeMint(BigInt(2))}>Token 2</Button>
+        </div>
+      }
+
+        
+      <div>{`Can mint: ${canMint}`}</div>
+
+      <div>
+        {
+            memoBalances.map(({ tokenId, balance }) => (
+              <div key={tokenId}>{`Token ${tokenId}: ${balance}`}</div>
+            ))
+        }
       </div>
     </>
   )
