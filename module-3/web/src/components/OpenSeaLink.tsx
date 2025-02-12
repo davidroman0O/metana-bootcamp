@@ -7,13 +7,15 @@ const OpenSeaLink = () => {
   const chainId = useChainId();
   const tokenContract = useTokenContract();
 
-  const getOpenSeaURL = () => {
-    const baseURL = chainId === 1 
-      ? 'https://opensea.io' 
-      : 'https://testnets.opensea.io';
-    
-    return `${baseURL}/assets?search[query]=${tokenContract.address}`;
-  };
+  // Hide button on Anvil network (31337)
+  if (chainId === 31337) {
+    return null;
+  }
+
+  // Only show for Polygon mainnet (137)
+  if (chainId !== 137) {
+    return null;
+  }
 
   return (
     <Button 
@@ -21,7 +23,7 @@ const OpenSeaLink = () => {
       className="flex items-center"
     >
       <a 
-        href={getOpenSeaURL()} 
+        href={`https://opensea.io/collection/dwarf-metana-forge`}
         target="_blank" 
         rel="noopener noreferrer"
       >
@@ -29,6 +31,6 @@ const OpenSeaLink = () => {
       </a>
     </Button>
   );
-};
+}
 
 export default OpenSeaLink;

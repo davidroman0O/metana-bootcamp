@@ -26,7 +26,7 @@ What's happening on deploy can be seeing inside of the Makefile of `solidity` fo
 
  
 
-Verifyied https://polygonscan.com/address/0xE2e1dc06094Ba241fAB4A0f93eFd9DB8a0880d53#code  and https://polygonscan.com/address/0xFb9DC938DE68A2F8daAfFf7493c486d6f8cc73D2#code
+Verifyied https://polygonscan.com/address/0x042397d98fa5CcDAd97F79De0b686f2F9EBA5679#readContract  and https://polygonscan.com/address/0xF61Cce508003e372Faf0f7162f5944d40c534186#code
  
 
 TODO: fix the cooldown, we don't need to watch the blocks anymore since we know the timestamp when the cooldown will ends

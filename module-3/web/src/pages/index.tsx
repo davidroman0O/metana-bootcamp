@@ -13,6 +13,8 @@ import NotificationBanner from "@/components/NotificationBanner"
 import OpenSeaLink from '@/components/OpenSeaLink';
 import NetworkHandler from '@/components/NetworkHandler'
 import NetworkDebug from '@/components/NetworkDebug'
+import { useNotifications } from '@/hooks/use-notification'
+import { AppNotification } from '@/components/NotificationBanner';
 
 const HeaderActions = memo(() => {
   const { address } = useAccount()
@@ -69,23 +71,27 @@ const MainContent = ({
   isError,
   errorMessage,
   onDismissError,
+  notifications,
+  onDismissNotification,
   refreshData,
   setTxHash,  
 }: {
-  exists: boolean
-  initialized: boolean
-  address: string | undefined
-  txHash: `0x${string}` | null
-  countdown: number
-  handleFreeMint: (tokenID: bigint) => Promise<void>
-  tokens: Array<{ tokenId: bigint; balance: bigint }>
-  isLoading: boolean
-  isSuccess: boolean
-  isError: boolean
-  errorMessage?: string
-  onDismissError: () => void
-  refreshData: () => Promise<void>
-  setTxHash: (hash: `0x${string}` | null) => void
+  exists: boolean;
+  initialized: boolean;
+  address: string | undefined;
+  txHash: `0x${string}` | null;
+  countdown: number;
+  handleFreeMint: (tokenID: bigint) => Promise<void>;
+  tokens: Array<{ tokenId: bigint; balance: bigint }>;
+  isLoading: boolean;
+  isSuccess: boolean;
+  isError: boolean;
+  errorMessage?: string;
+  onDismissError: () => void;
+  notifications: AppNotification[];
+  onDismissNotification: (id: string) => void;
+  refreshData: () => Promise<void>;
+  setTxHash: (hash: `0x${string}` | null) => void;
 }) => {
   const forge = useForge({
     onSuccess: async () => {
@@ -96,7 +102,7 @@ const MainContent = ({
       console.log('Got transaction hash:', hash)
       setTxHash(hash)
     }
-  })
+  });
 
   const handleTrade = useCallback(async (tokenIDToTrade: bigint, tokenIDToReceive: bigint) => {
     try {
@@ -105,7 +111,7 @@ const MainContent = ({
     } catch (error) {
       console.error('Trade failed:', error)
     }
-  }, [forge])
+  }, [forge]);
 
   const handleForge = useCallback(async (tokenID: bigint) => {
     try {
@@ -114,7 +120,7 @@ const MainContent = ({
     } catch (error) {
       console.error('Forge failed:', error)
     }
-  }, [forge])
+  }, [forge]);
 
   return exists ? (
     <>
@@ -127,6 +133,8 @@ const MainContent = ({
         isSuccess={isSuccess}
         errorMessage={errorMessage}
         onDismissError={onDismissError}
+        notifications={notifications}
+        onDismissNotification={onDismissNotification}
       />
 
       {initialized && address && (
@@ -145,14 +153,17 @@ const MainContent = ({
         </div>
       )}
     </>
-  ) : null
-}
+  ) : null;
+};
+
+
 
 function Home() {
-  const { address } = useAccount()
-  const [txHash, setTxHash] = useState<`0x${string}` | null>(null)
-  const [errorMessage, setErrorMessage] = useState<string>("")
-
+  const { address } = useAccount();
+  const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string>("");
+  const { notifications, addNotification, removeNotification, clearAllNotifications } = useNotifications();
+  
   const { 
     exists, 
     freeMint, 
@@ -160,7 +171,7 @@ function Home() {
     tokens, 
     countdown,
     refreshData
-  } = useToken()
+  } = useToken();
   
   const { 
     isSuccess, 
@@ -169,87 +180,80 @@ function Home() {
   } = useWaitForTransactionReceipt({
     hash: txHash ?? undefined,
     pollingInterval: 1000,
-  })
+  });
 
-  // Watch for transaction success and refresh data
+  // Watch for transaction states
   useEffect(() => {
-    if (isSuccess && txHash) {
-      console.log('Transaction successful, refreshing data...')
-      refreshData()
-      setTxHash(null)
-      setErrorMessage("")
+    if (txHash) {
+      if (isLoading) {
+        addNotification('Transaction is pending...', 'info', txHash);
+      } else if (isSuccess) {
+        addNotification('Transaction confirmed!', 'success', txHash);
+        refreshData();
+        setTxHash(null);
+        setErrorMessage("");
+      } else if (isError) {
+        addNotification('Transaction failed. Please try again.', 'error', txHash);
+      }
     }
-  }, [isSuccess, txHash, refreshData])
+  }, [txHash, isLoading, isSuccess, isError, addNotification, refreshData]);
 
-  // Enhanced error dismissal handler
+  // Reset notifications when switching accounts or networks
+  useEffect(() => {
+    clearAllNotifications();
+    setErrorMessage("");
+    setTxHash(null);
+  }, [address, clearAllNotifications]);
+
   const handleDismissError = useCallback(() => {
-    setErrorMessage("")
+    setErrorMessage("");
     if (isError) {
-      setTxHash(null)
+      setTxHash(null);
     }
-  }, [isError])
-
-  // Clear error states when transaction succeeds
-  useEffect(() => {
-    if (isSuccess) {
-      setErrorMessage("")
-      setTxHash(null)
-    }
-  }, [isSuccess])
-
-  // Set error message when transaction fails
-  useEffect(() => {
-    if (isError && txHash) {
-      setErrorMessage("Transaction failed. Please try again.")
-    }
-  }, [isError, txHash])
+  }, [isError]);
 
   const handleFreeMint = useCallback(
     async (tokenID: bigint) => {
-      setErrorMessage("")
+      // Clear any existing error state
+      setErrorMessage("");
       
       if (txHash) {
-        setErrorMessage('Previous transaction still pending')
-        return
+        setErrorMessage('Previous transaction still pending');
+        return;
       }
-
+  
       if (countdown > 0) {
-        setErrorMessage(`Please wait ${countdown} seconds before minting again`)
-        return
+        setErrorMessage(`Please wait ${countdown} seconds before minting again`);
+        return;
       }
-
+  
       try {
-        const hash = await freeMint(tokenID)
-        console.log('New freeMint hash:', hash)
-        setTxHash(hash)
+        const hash = await freeMint(tokenID);
+        setTxHash(hash);
       } catch (error: any) {
-        console.error('freeMint error:', error)
-        let message = "Transaction failed"
+        console.error('freeMint error:', error);
+        let message = "Transaction failed";
         if (error?.message) {
           if (error.message.includes("user rejected")) {
-            message = "Transaction was rejected"
+            message = "Transaction was rejected";
           } else if (error.message.includes("insufficient funds")) {
-            message = "Insufficient funds to complete transaction"
+            message = "Insufficient funds to complete transaction";
           } else if (error.message.includes("was already minted")) {
-            message = "This token was already minted"
+            message = "This token was already minted";
           } else if (error.message.includes("Cooldown active")) {
-            message = "Please wait for cooldown to finish before minting again"
+            message = "Please wait for cooldown to finish before minting again";
           } else {
-            message = error.message.split('(')[0].trim()
+            // Clean up the error message by taking only the first part before any parentheses
+            message = error.message.split('(')[0].trim();
           }
         }
-        setErrorMessage(message)
-        setTxHash(null)
+        // Only set the error message, don't add it as a notification
+        setErrorMessage(message);
+        setTxHash(null);
       }
     },
     [freeMint, txHash, countdown]
-  )
-
-  // Reset all error states when switching accounts or networks
-  useEffect(() => {
-    setErrorMessage("")
-    setTxHash(null)
-  }, [address])
+  );
 
   return (
     <div className="min-h-screen">
@@ -268,11 +272,13 @@ function Home() {
         isError={isError}
         errorMessage={errorMessage}
         onDismissError={handleDismissError}
+        notifications={notifications}
+        onDismissNotification={removeNotification}
         refreshData={refreshData}
         setTxHash={setTxHash}
       />
     </div>
-  )
+  );
 }
 
 export default Home
