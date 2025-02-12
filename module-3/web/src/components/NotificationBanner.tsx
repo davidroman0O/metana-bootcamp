@@ -38,7 +38,7 @@ const NotificationBanner = ({
   if (!initialized || (!countdown && !txHash)) return null;
 
   return (
-    <div className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${getBgColor()}`}>
+    <div className={`fixed bottom-0 left-0 right-0 z-50 transition-all duration-300 ${getBgColor()}`}>
       <div className="container mx-auto">
         <div className="flex items-center justify-center gap-2 py-2 px-4 text-sm">
           {getIcon()}
