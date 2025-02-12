@@ -8,6 +8,8 @@ import { WalletModal } from '@/components/WalletModal'
 import { useForge } from '@/hooks/use-forge'
 import { useToken } from "@/hooks/use-token"
 import { LoadingMessage, CooldownMessage } from "@/components/RotatingHourGlass"
+import NativeBalance from "@/components/NativeBalance"
+import ForgeInterface from "@/components/ForgeInterface"
 
 // Create a stable header actions component
 const HeaderActions = memo(() => {
@@ -15,15 +17,16 @@ const HeaderActions = memo(() => {
   const [show, setShow] = useState(false)
   
   return (
-    <>
+    <div className="flex items-center gap-4"> 
       <NetworkSwitcher />
+      {address && <NativeBalance />}
       <WalletModal 
         open={show} 
         onOpenChange={setShow} 
         close={() => setShow(false)}
       >
         {({ isLoading: modalLoading }) => (
-          <Button className="mr-4 flex items-center">
+          <Button className="flex items-center"> 
             {modalLoading && (
               <span className="i-line-md:loading-twotone-loop mr-1 h-4 w-4 inline-flex text-white" />
             )}
@@ -31,7 +34,7 @@ const HeaderActions = memo(() => {
           </Button>
         )}
       </WalletModal>
-    </>
+    </div>
   )
 })
 
@@ -43,6 +46,8 @@ const StableHeader = memo(() => {
 })
 
 StableHeader.displayName = 'StableHeader'
+
+const DEBUG  = false
 
 // Main content component that handles the updates
 const MainContent = ({
@@ -78,6 +83,8 @@ const MainContent = ({
   lastMintTime?: number
   remainingMintTime?: number | null
 }) => {
+  const { forge, trade } = useForge(); 
+
   const isButtonDisabled = (tokenId: string) => {
     return balances[tokenId] == BigInt(1) || 
            !!txHash || 
@@ -135,17 +142,30 @@ const MainContent = ({
             ))}
           </div>
 
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            {tokens.map(({ tokenId, balance }) => (
-              <div key={tokenId.toString()} className="flex gap-2">
-                <span className="font-medium">Token {tokenId}:</span>
-                <span>{balance.toString()}</span>
-              </div>
-            ))}
-          </div>
+          <ForgeInterface
+            tokens={tokens}
+            forge={forge}
+            trade={trade}
+            isLoading={isLoading}
+            txHash={txHash}
+          />
+
+          {
+            DEBUG && 
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              {tokens.map(({ tokenId, balance }) => (
+                <div key={tokenId.toString()} className="flex gap-2">
+                  <span className="font-medium">Token {tokenId}:</span>
+                  <span>{balance.toString()}</span>
+                </div>
+              ))}
+            </div>
+          }
         </div>
       )}
-      {initialized && (
+
+
+      {initialized && DEBUG && (
         <div className="text-xs mt-8 p-4 bg-gray-50 rounded">
           <div className="font-semibold mb-2">Debug Information</div>
           <div>txHash: {txHash || 'null'}</div>
