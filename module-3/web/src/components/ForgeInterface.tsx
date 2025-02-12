@@ -3,6 +3,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LoadingMessage } from '@/components/RotatingHourGlass';
+import { useWaitForTransactionReceipt, useAccount } from 'wagmi';
+import { useToken } from '@/hooks/use-token';
+import { useForgeContract } from '@/hooks/use-forge-contract';
 
 interface TokenData {
   tokenId: bigint;
@@ -30,11 +33,27 @@ const ForgeInterface: React.FC<ForgeInterfaceProps> = ({
   tokens, 
   forge, 
   trade,
-  isLoading,
-  txHash 
+  isLoading: globalIsLoading,
+  txHash: globalTxHash 
 }) => {
   const [selectedToken, setSelectedToken] = useState<string>('0');
   const [tradeDestination, setTradeDestination] = useState<string>('0');
+  const [localTxHash, setLocalTxHash] = useState<`0x${string}` | null>(null);
+  
+  const { address } = useAccount();
+  const { setApprovalForAll, isApprovalLoading, isApprovedForAll } = useToken();
+  const forgeContract = useForgeContract();
+
+  const { 
+    isLoading: isWaiting,
+    isSuccess,
+    isError,
+  } = useWaitForTransactionReceipt({
+    hash: localTxHash || undefined,
+  });
+
+  const isLoading = globalIsLoading || isWaiting || isApprovalLoading;
+  const displayHash = localTxHash || globalTxHash;
 
   const forgeRecipes: ForgeRecipes = {
     3: { inputs: [0, 1], name: "Token 3" },
@@ -52,23 +71,94 @@ const ForgeInterface: React.FC<ForgeInterfaceProps> = ({
   };
 
   const handleForge = async (tokenId: number): Promise<void> => {
+    if (!address || !forgeContract.address) return;
+    
     try {
-      await forge(BigInt(tokenId));
+      console.log('Starting forge process for token:', tokenId);
+
+      // First check if already approved
+      const isApproved = await isApprovedForAll(forgeContract.address);
+      console.log('Is approved:', isApproved, 'for address:', forgeContract.address);
+      
+      if (!isApproved) {
+        console.log('Approving forge contract:', forgeContract.address);
+        const approvalHash = await setApprovalForAll(forgeContract.address);
+        console.log('Approval transaction:', approvalHash);
+        
+        // Wait for approval confirmation
+        const approvalReceipt = await window.ethereum.request({
+          method: 'eth_getTransactionReceipt',
+          params: [approvalHash],
+        });
+        console.log('Approval confirmed:', approvalReceipt);
+      }
+
+      console.log('Sending forge transaction...');
+      const hash = await forge(BigInt(tokenId));
+      console.log('Forge transaction submitted:', hash);
+      setLocalTxHash(hash);
+
     } catch (error) {
-      console.error('Forge error:', error);
+      console.error('Forge process failed:', error);
+      setLocalTxHash(null);
     }
   };
 
   const handleTrade = async (): Promise<void> => {
+    if (!address || !forgeContract.address) return;
+
     try {
-      await trade(BigInt(selectedToken), BigInt(tradeDestination));
+      // Check approval first
+      const isApproved = await isApprovedForAll(forgeContract.address);
+      console.log('Is approved for trade:', isApproved);
+      
+      if (!isApproved) {
+        const approvalHash = await setApprovalForAll(forgeContract.address);
+        console.log('Trade approval transaction:', approvalHash);
+        
+        // Wait for approval confirmation
+        const approvalReceipt = await window.ethereum.request({
+          method: 'eth_getTransactionReceipt',
+          params: [approvalHash],
+        });
+        console.log('Trade approval confirmed:', approvalReceipt);
+      }
+
+      const hash = await trade(BigInt(selectedToken), BigInt(tradeDestination));
+      console.log('Trade transaction:', hash);
+      setLocalTxHash(hash);
+
     } catch (error) {
       console.error('Trade error:', error);
+      setLocalTxHash(null);
     }
+  };
+
+  // Reset local tx hash when transaction completes
+  React.useEffect(() => {
+    if (isSuccess || isError) {
+      setLocalTxHash(null);
+    }
+  }, [isSuccess, isError]);
+
+  const getTransactionStatus = () => {
+    if (isApprovalLoading) return "Approving tokens...";
+    if (!displayHash) return null;
+    if (isError) return `❌ Transaction ${displayHash} failed`;
+    if (isLoading) return <LoadingMessage txHash={displayHash} />;
+    if (isSuccess) return `✅ Transaction ${displayHash} is confirmed!`;
+    return `Transaction ${displayHash} is in progress...`;
   };
 
   return (
     <div className="flex flex-col gap-6 p-4">
+      {/* Transaction Status */}
+      {(displayHash || isApprovalLoading) && (
+        <div className="p-4 bg-gray-100 rounded-lg">
+          {getTransactionStatus()}
+        </div>
+      )}
+
       {/* Forge Recipes */}
       <Card>
         <CardHeader>
@@ -84,7 +174,7 @@ const ForgeInterface: React.FC<ForgeInterfaceProps> = ({
                     onClick={() => handleForge(Number(tokenId))}
                     disabled={!canForge(Number(tokenId)) || isLoading}
                   >
-                    Forge
+                    {isApprovalLoading ? 'Approving...' : 'Forge'}
                   </Button>
                 </div>
                 <div className="text-sm">
@@ -145,15 +235,9 @@ const ForgeInterface: React.FC<ForgeInterfaceProps> = ({
                 onClick={() => handleTrade()}
                 disabled={isLoading || !tokens.find(t => t.tokenId === BigInt(selectedToken))?.balance}
               >
-                Trade
+                {isApprovalLoading ? 'Approving...' : 'Trade'}
               </Button>
             </div>
-
-            {txHash && isLoading && (
-              <div className="mt-4 p-4 bg-gray-100 rounded-lg">
-                <LoadingMessage txHash={txHash} />
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>

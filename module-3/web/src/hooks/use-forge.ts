@@ -58,14 +58,20 @@ export function useForge() {
           },
           {
             onSuccess: (data: any, variables: unknown, context: unknown) => {
+              console.log('forge success:', data);
               resolve(data);
             },
             onError: (error: any, variables: unknown, context: unknown) => {
+              console.log('forge error:', error);
               reject(error);
             },
           }
         )
       });
-    }
+    },
+
+    
+
+
   }
 }

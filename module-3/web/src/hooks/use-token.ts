@@ -39,6 +39,9 @@ interface UseTokenReturn {
   remainingMintTime?: number | null
   exists: boolean
   freeMint: (tokenID: bigint) => Promise<any>
+  setApprovalForAll: (spenderAddress: `0x${string}`) => Promise<`0x${string}`>
+  isApprovalLoading: boolean
+  isApprovedForAll: (spenderAddress: `0x${string}`) => Promise<boolean>
 }
 
 export function useToken(): UseTokenReturn {
@@ -60,6 +63,7 @@ export function useToken(): UseTokenReturn {
   const [ block, setBlock ] = useState<Block | null>(null)
   const [remainingMintTime, setRemainingMintTime] = useState<number | null>(null)
   const [timeLeft, setTimeLeft] = useState<number>(0)
+  const [isApprovalLoading, setIsApprovalLoading] = useState(false)
 
   // Contract availability check
   const { 
@@ -110,6 +114,13 @@ export function useToken(): UseTokenReturn {
     functionName: 'canMint',
   })
 
+  const { data: approvalData, refetch: refetchApproval } = useReadContract({
+    ...tokenContract,
+    functionName: 'isApprovedForAll',
+    args: address ? [address, tokenContract.address] : undefined,
+    account: address,
+  })
+
   // Network change effect
   useEffect(() => {
     setOwner("0x")
@@ -137,6 +148,50 @@ export function useToken(): UseTokenReturn {
     return () => clearInterval(interval)
   }, [remainingMintTime])
 
+  // Function to refresh all data
+  const refreshAllData = async (data: Block) => {
+    try {
+      const refreshedData = await refetch()
+      const refreshedCooldown = await refetchCooldown()
+      const refreshedLastMintTime = await refetchLastMintTime()
+      const refreshedCanMint = await refetchCanMint()
+
+      setOwner(refreshedData.data?.[0]?.result?.toString() as HexAddress || "" as HexAddress)
+      setCanMint(refreshedCanMint.data as boolean)
+
+      const cooldownRemaining = refreshedCooldown.data as bigint
+      const lastMintTime = refreshedLastMintTime.data as bigint
+      const currentTime = BigInt(data.timestamp)
+
+      const cooldownRemainingSeconds = cooldownRemaining - (currentTime - lastMintTime)
+      setCooldownRemaining(Number(cooldownRemainingSeconds > 0n ? cooldownRemainingSeconds : 0n))
+
+      // Calculate remainingMintTime in milliseconds
+      const mintTime = (lastMintTime + cooldownRemaining) * 1000n
+      setRemainingMintTime(Number(mintTime))
+
+      const refreshedBalanceResults = refreshedData.data?.[1]?.result as bigint[] | undefined
+      const refreshedBalances: TokenBalances = {}
+      if (refreshedBalanceResults) {
+        tokenIds.forEach((tokenId, index) => {
+          refreshedBalances[tokenId.toString()] = refreshedBalanceResults[index] ?? BigInt(0)
+        })
+      }
+      setBalances(refreshedBalances)
+
+      setLastMintTime(Number(lastMintTime) * 1000)
+
+      setTokens(
+        Object.entries(refreshedBalances).map(([tokenId, balance]) => ({
+          tokenId: BigInt(tokenId),
+          balance,
+        }))
+      )
+    } catch (error) {
+      console.error('Error refreshing data:', error)
+    }
+  }
+
   // Block watching
   useWatchBlocks({
     enabled: exists,
@@ -144,6 +199,8 @@ export function useToken(): UseTokenReturn {
     onBlock: async (data) => { 
       if (!exists) return
       if (block === null || data.timestamp != block?.timestamp) {
+        setBlock(data)
+        await refreshAllData(data)
         setBlock(data)
 
         const refreshedData = await refetch()
@@ -199,7 +256,10 @@ export function useToken(): UseTokenReturn {
       tokens: [],
       countdown: 0,
       remainingMintTime: null,
-      freeMint: async () => { throw new Error('No wallet connected') }
+      isApprovalLoading,
+      freeMint: async () => { throw new Error('No wallet connected') },
+      setApprovalForAll: async () => { throw new Error('No wallet connected') },
+      isApprovedForAll: async () => false
     }
   }
 
@@ -215,12 +275,15 @@ export function useToken(): UseTokenReturn {
       tokens: [],
       countdown: 0,
       remainingMintTime: null,
+      isApprovalLoading,
       freeMint: async () => { 
         if (!isAvailable) {
           throw new Error('Contract not deployed on this network') 
         }
         throw new Error('Contract exists but cannot be called')
-      }
+      },
+      setApprovalForAll: async () => { throw new Error('Contract not deployed on this network') },
+      isApprovedForAll: async () => false
     }
   }
 
@@ -235,6 +298,7 @@ export function useToken(): UseTokenReturn {
     tokens,
     remainingMintTime,
     countdown: timeLeft,
+    isApprovalLoading,
     freeMint: (tokenID: bigint): Promise<any> => {
       return new Promise<any>((resolve, reject) => {
         writeContract(
@@ -244,7 +308,11 @@ export function useToken(): UseTokenReturn {
             args: [tokenID],
           },
           {
-            onSuccess: (data: any, variables: unknown, context: unknown) => {
+            onSuccess: async (data: any, variables: unknown, context: unknown) => {
+              // Force an immediate data refresh after transaction
+              if (block) {
+                await refreshAllData(block)
+              }
               resolve(data)
             },
             onError: (error: any, variables: unknown, context: unknown) => {
@@ -254,5 +322,44 @@ export function useToken(): UseTokenReturn {
         )
       })
     },
+
+    setApprovalForAll: async (spenderAddress: `0x${string}`): Promise<`0x${string}`> => {
+      if (!address) throw new Error('No address connected');
+      setIsApprovalLoading(true);
+      
+      try {
+        return await new Promise((resolve, reject) => {
+          writeContract(
+            {
+              ...tokenContract,
+              functionName: 'setApprovalForAll',
+              args: [spenderAddress, true],
+            },
+            {
+              onSuccess: async (data: `0x${string}`) => {
+                console.log('Approval success:', data);
+                // Force an immediate data refresh after approval
+                if (block) {
+                  await refreshAllData(block)
+                }
+                resolve(data);
+              },
+              onError: (error: Error) => {
+                console.error('Approval error:', error);
+                reject(error);
+              },
+            }
+          );
+        });
+      } finally {
+        setIsApprovalLoading(false);
+      }
+    },
+
+    isApprovedForAll: async (spenderAddress: `0x${string}`): Promise<boolean> => {
+      if (!address) return false;
+      const result = await refetchApproval();
+      return !!result.data;
+    }
   }
 }
