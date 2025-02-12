@@ -12,7 +12,7 @@ contract ForgeTest is Test {
 
     /// @notice Test that free mint works correctly for allowed base tokens.
     function test_FreeMint_Success() public {
-        ERC1155Token token = new ERC1155Token("");
+        ERC1155Token token = new ERC1155Token();
         vm.startPrank(addressMain);
 
         // Move time forward enough for the first mint.
@@ -33,7 +33,7 @@ contract ForgeTest is Test {
 
     /// @notice Test that trying to free mint a token outside 0-2 fails.
     function test_FreeMint_RevertsForInvalidId() public {
-        ERC1155Token token = new ERC1155Token("");
+        ERC1155Token token = new ERC1155Token();
         vm.startPrank(addressMain);
 
         vm.warp(block.timestamp + 60);
@@ -44,7 +44,7 @@ contract ForgeTest is Test {
 
     /// @notice Test that free minting the same token twice reverts.
     function test_FreeMint_RevertsIfAlreadyMinted() public {
-        ERC1155Token token = new ERC1155Token("");
+        ERC1155Token token = new ERC1155Token();
         vm.startPrank(addressMain);
 
         vm.warp(block.timestamp + 60);
@@ -60,7 +60,7 @@ contract ForgeTest is Test {
 
     /// @notice Test that the cooldown is enforced.
     function test_FreeMint_CooldownEnforced() public {
-        ERC1155Token token = new ERC1155Token("");
+        ERC1155Token token = new ERC1155Token();
         vm.startPrank(addressMain);
 
         vm.warp(block.timestamp + 60);

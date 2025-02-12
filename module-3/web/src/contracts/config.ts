@@ -13,9 +13,9 @@ export const DEFAULT_CHAIN = isDev ? anvil : polygon;
 // Replace these with your actual contract addresses
 export const CONTRACT_ADDRESSES = {
   TOKEN: {
-    [polygon.id]: '0xf41C0CbB57F655a33e48d5dD9e833f0B5DdFAf2e',
+    [polygon.id]: '0xFb9DC938DE68A2F8daAfFf7493c486d6f8cc73D2',
   },
   FORGE: {
-    [polygon.id]: '0xD79E9c2B963fD21CAD8d40E2968c87a3D7Cce0b0',
+    [polygon.id]: '0xE2e1dc06094Ba241fAB4A0f93eFd9DB8a0880d53',
   },
 } as const;

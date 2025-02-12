@@ -18,7 +18,7 @@ contract Forge is Ownable(msg.sender) {
     event TokenTraded(address indexed trader, uint256 fromToken, uint256 toToken);
     
     constructor() {
-        token = new ERC1155Token("ipfs://bafybeihx2hcoh5pfuth7jw3winzc7l727zpieftswqibutaepwk6nbqsn4");
+        token = new ERC1155Token();
     }
 
     function getAddress() external view returns (address) {

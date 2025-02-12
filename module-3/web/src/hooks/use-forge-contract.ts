@@ -12,7 +12,7 @@ export function useForgeContractAddress() {
     () =>
       ({
         [anvil.id]: ADDRESS, 
-        [polygon.id]: '0xD79E9c2B963fD21CAD8d40E2968c87a3D7Cce0b0',
+        [polygon.id]: '0xE2e1dc06094Ba241fAB4A0f93eFd9DB8a0880d53',
       })[chain.id],
     [chain],
   )

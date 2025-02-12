@@ -16,7 +16,7 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable {
     // uint256 public constant COOLDOWN = 1 minutes;
     uint256 public constant COOLDOWN = 5 seconds;
   
-    constructor(string memory uri_) Ownable(msg.sender) ERC1155(uri_) {}
+    constructor() Ownable(msg.sender) ERC1155("ipfs://bafybeihx2hcoh5pfuth7jw3winzc7l727zpieftswqibutaepwk6nbqsn4") {}
 
     function canMint() public view returns (bool) {
         return block.timestamp >= lastMintTime[msg.sender] + COOLDOWN;
