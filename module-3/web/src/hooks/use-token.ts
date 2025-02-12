@@ -3,23 +3,22 @@ import {
   useReadContracts,
   useReadContract,
   useWriteContract,
-  useWatchBlocks,
   useChainId,
 } from 'wagmi'
 import type { ReadContractsErrorType } from '@wagmi/core'
-import type { MulticallResponse, Block } from "viem"
+import type { MulticallResponse } from "viem"
 import {
   QueryObserverResult,
 } from "@tanstack/react-query"
 import { useTokenContract } from './use-token-contract'
-import { useBlockCallback, useContractAvailability } from './use-block-provider'
-import { sepolia, mainnet, anvil, polygon } from 'wagmi/chains'
-import { useState, useEffect } from 'react'
+import { useContractAvailability } from './use-block-provider'
+import { anvil, polygon } from 'wagmi/chains'
+import { useState, useEffect, useCallback } from 'react'
 
 type HexAddress = `0x${string}`
 
 interface TokenBalances {
-  [tokenId: string]: bigint // Maps tokenId to balance as string
+  [tokenId: string]: bigint
 }
 
 interface TokenData {
@@ -42,6 +41,7 @@ interface UseTokenReturn {
   setApprovalForAll: (spenderAddress: `0x${string}`) => Promise<`0x${string}`>
   isApprovalLoading: boolean
   isApprovedForAll: (spenderAddress: `0x${string}`) => Promise<boolean>
+  refreshData: () => Promise<void>
 }
 
 export function useToken(): UseTokenReturn {
@@ -53,35 +53,32 @@ export function useToken(): UseTokenReturn {
   const tokenIds: bigint[] = Array.from({ length: 7 }, (_, i) => BigInt(i))
   const accounts: HexAddress[] = Array(tokenIds.length).fill(address as HexAddress)
 
-  // Declare all state hooks first
-  const [ owner, setOwner ] = useState<HexAddress>("0x")
-  const [ canMint, setCanMint ] = useState<boolean>(false)
-  const [ cooldownRemaining, setCooldownRemaining ] = useState<number>(0)
-  const [ balances, setBalances ] = useState<TokenBalances>({})
-  const [ tokens, setTokens ] = useState<TokenData[]>([])
-  const [ lastMintTime, setLastMintTime ] = useState<number>(0)
-  const [ block, setBlock ] = useState<Block | null>(null)
+  // State declarations
+  const [owner, setOwner] = useState<HexAddress>("0x")
+  const [canMint, setCanMint] = useState<boolean>(false)
+  const [cooldownRemaining, setCooldownRemaining] = useState<number>(0)
+  const [balances, setBalances] = useState<TokenBalances>({})
+  const [tokens, setTokens] = useState<TokenData[]>([])
+  const [lastMintTime, setLastMintTime] = useState<number>(0)
   const [remainingMintTime, setRemainingMintTime] = useState<number | null>(null)
   const [timeLeft, setTimeLeft] = useState<number>(0)
   const [isApprovalLoading, setIsApprovalLoading] = useState(false)
+  const [initialized, setInitialized] = useState(false)
 
   // Contract availability check
   const { 
-    isAvailable,
-    isValid,
     exists,
     contractAddress, 
   } = useContractAvailability(
     {
       [anvil.id]: tokenContract.address,
-      [mainnet.id]: tokenContract.address,
       [polygon.id]: tokenContract.address,
     },
     tokenContract.abi,
     'owner'
   )
 
-  // Declare all contract read hooks
+  // Contract read hooks
   const { data, refetch } = useReadContracts({
     contracts: [
       {
@@ -94,6 +91,11 @@ export function useToken(): UseTokenReturn {
         args: [accounts, tokenIds],
       },
     ],
+  })
+
+  const { data: cooldownPeriod } = useReadContract({
+    ...tokenContract,
+    functionName: 'COOLDOWN',
   })
 
   const { data: cooldownData, refetch: refetchCooldown } = useReadContract({
@@ -121,7 +123,17 @@ export function useToken(): UseTokenReturn {
     account: address,
   })
 
-  // Network change effect
+  // Helper functions
+  const calculateCooldown = useCallback((lastMintTime: bigint, cooldownPeriod: bigint) => {
+    const currentTime = BigInt(Math.floor(Date.now() / 1000))
+    const cooldownRemainingSeconds = cooldownPeriod - (currentTime - lastMintTime)
+    setCooldownRemaining(Number(cooldownRemainingSeconds > 0n ? cooldownRemainingSeconds : 0n))
+
+    // Calculate mint time in milliseconds
+    const mintTime = (lastMintTime + cooldownPeriod) * 1000n
+    setRemainingMintTime(Number(mintTime))
+  }, [])
+
   const resetState = useCallback(() => {
     setOwner("0x")
     setCanMint(false)
@@ -129,16 +141,96 @@ export function useToken(): UseTokenReturn {
     setBalances({})
     setTokens([])
     setLastMintTime(0)
-    setBlock(null)
     setRemainingMintTime(null)
+    setTimeLeft(0)
+    setInitialized(false)
   }, [])
 
-  // Network or account change effect
+  // Central data refresh function
+  const refreshAllData = useCallback(async () => {
+    if (!exists || !address) return
+
+    try {
+      const refreshedData = await refetch()
+      const refreshedCooldown = await refetchCooldown()
+      const refreshedLastMintTime = await refetchLastMintTime()
+      const refreshedCanMint = await refetchCanMint()
+
+      // Update owner and mint status
+      setOwner(refreshedData.data?.[0]?.result?.toString() as HexAddress || "" as HexAddress)
+      setCanMint(refreshedCanMint.data as boolean)
+
+      // Calculate cooldown times if we have the data
+      const lastMintTime = refreshedLastMintTime.data as bigint
+      if (lastMintTime && cooldownPeriod) {
+        calculateCooldown(lastMintTime, cooldownPeriod as bigint)
+      }
+
+      setLastMintTime(Number(lastMintTime) * 1000)
+
+      // Update balances
+      const refreshedBalanceResults = refreshedData.data?.[1]?.result as bigint[] | undefined
+      const refreshedBalances: TokenBalances = {}
+      if (refreshedBalanceResults) {
+        tokenIds.forEach((tokenId, index) => {
+          refreshedBalances[tokenId.toString()] = refreshedBalanceResults[index] ?? BigInt(0)
+        })
+      }
+      setBalances(refreshedBalances)
+
+      // Update token data
+      setTokens(
+        Object.entries(refreshedBalances).map(([tokenId, balance]) => ({
+          tokenId: BigInt(tokenId),
+          balance,
+        }))
+      )
+
+      setInitialized(true)
+    } catch (error) {
+      console.error('Error refreshing data:', error)
+    }
+  }, [exists, address, refetch, refetchCooldown, refetchLastMintTime, refetchCanMint, cooldownPeriod, calculateCooldown])
+
+  // Effects
   useEffect(() => {
     resetState()
   }, [chainId, address])
 
-  // Countdown effect
+  // Immediate cooldown calculation when we get contract data
+  useEffect(() => {
+    if (lastMintTimeData && cooldownPeriod) {
+      calculateCooldown(lastMintTimeData as bigint, cooldownPeriod as bigint)
+    }
+  }, [lastMintTimeData, cooldownPeriod, calculateCooldown])
+
+  // Initial data load and chain/account change refresh
+  useEffect(() => {
+    if (exists && address) {
+      refreshAllData()
+    }
+  }, [exists, address, chainId])
+
+  // Cooldown end refresh
+  useEffect(() => {
+    if (!remainingMintTime || !exists) return
+
+    const now = Date.now()
+    const timeUntilCooldownEnd = remainingMintTime - now
+
+    if (timeUntilCooldownEnd <= 0) {
+      refreshAllData()
+      return
+    }
+
+    const timeout = setTimeout(() => {
+      refreshAllData()
+    }, timeUntilCooldownEnd)
+
+    return () => clearTimeout(timeout)
+  }, [remainingMintTime, exists])
+
+  // Countdown timer effect
   useEffect(() => {
     if (remainingMintTime === null) return
 
@@ -153,148 +245,41 @@ export function useToken(): UseTokenReturn {
     return () => clearInterval(interval)
   }, [remainingMintTime])
 
-  // Function to refresh all data
-  const refreshAllData = async (data: Block) => {
-    try {
-      const refreshedData = await refetch()
-      const refreshedCooldown = await refetchCooldown()
-      const refreshedLastMintTime = await refetchLastMintTime()
-      const refreshedCanMint = await refetchCanMint()
-
-      setOwner(refreshedData.data?.[0]?.result?.toString() as HexAddress || "" as HexAddress)
-      setCanMint(refreshedCanMint.data as boolean)
-
-      const cooldownRemaining = refreshedCooldown.data as bigint
-      const lastMintTime = refreshedLastMintTime.data as bigint
-      const currentTime = BigInt(data.timestamp)
-
-      const cooldownRemainingSeconds = cooldownRemaining - (currentTime - lastMintTime)
-      setCooldownRemaining(Number(cooldownRemainingSeconds > 0n ? cooldownRemainingSeconds : 0n))
-
-      // Calculate remainingMintTime in milliseconds
-      const mintTime = (lastMintTime + cooldownRemaining) * 1000n
-      setRemainingMintTime(Number(mintTime))
-
-      const refreshedBalanceResults = refreshedData.data?.[1]?.result as bigint[] | undefined
-      const refreshedBalances: TokenBalances = {}
-      if (refreshedBalanceResults) {
-        tokenIds.forEach((tokenId, index) => {
-          refreshedBalances[tokenId.toString()] = refreshedBalanceResults[index] ?? BigInt(0)
-        })
-      }
-      setBalances(refreshedBalances)
-
-      setLastMintTime(Number(lastMintTime) * 1000)
-
-      setTokens(
-        Object.entries(refreshedBalances).map(([tokenId, balance]) => ({
-          tokenId: BigInt(tokenId),
-          balance,
-        }))
-      )
-    } catch (error) {
-      console.error('Error refreshing data:', error)
-    }
-  }
-
-  // Block watching
-  useWatchBlocks({
-    enabled: exists,
-    pollingInterval: 1000,
-    onBlock: async (data) => { 
-      if (!exists) return
-      if (block === null || data.timestamp != block?.timestamp) {
-        setBlock(data)
-        await refreshAllData(data)
-        setBlock(data)
-
-        const refreshedData = await refetch()
-        const refreshedCooldown = await refetchCooldown()
-        const refreshedLastMintTime = await refetchLastMintTime()
-        const refreshedCanMint = await refetchCanMint()
-
-        setOwner(refreshedData.data?.[0]?.result?.toString() as HexAddress || "" as HexAddress)
-        setCanMint(refreshedCanMint.data as boolean)
-
-        const cooldownRemaining = refreshedCooldown.data as bigint
-        const lastMintTime = refreshedLastMintTime.data as bigint
-        const currentTime = BigInt(data.timestamp)
-
-        const cooldownRemainingSeconds = cooldownRemaining - (currentTime - lastMintTime)
-        setCooldownRemaining(Number(cooldownRemainingSeconds > 0n ? cooldownRemainingSeconds : 0n))
-
-        // Calculate remainingMintTime in milliseconds
-        const mintTime = (lastMintTime + cooldownRemaining) * 1000n
-        setRemainingMintTime(Number(mintTime))
-
-        const refreshedBalanceResults = refreshedData.data?.[1]?.result as bigint[] | undefined
-        const refreshedBalances: TokenBalances = {}
-        if (refreshedBalanceResults) {
-          tokenIds.forEach((tokenId, index) => {
-            refreshedBalances[tokenId.toString()] = refreshedBalanceResults[index] ?? BigInt(0)
-          })
-        }
-        setBalances(refreshedBalances)
-
-        setLastMintTime(Number(lastMintTime) * 1000)
-
-        setTokens(
-          Object.entries(refreshedBalances).map(([tokenId, balance]) => ({
-            tokenId: BigInt(tokenId),
-            balance,
-          }))
-        )
-      }
-    },
-  })
-
-  // Early returns after all hook declarations
+  // Early return for disconnected state
   if (!address) {
     return {
       exists: false,
       initialized: false,
-      owner: undefined,
-      canMint: false,
-      cooldownRemaining: 0,
       balances: {},
-      lastMintTime: 0,
       tokens: [],
       countdown: 0,
-      remainingMintTime: null,
       isApprovalLoading,
       freeMint: async () => { throw new Error('No wallet connected') },
       setApprovalForAll: async () => { throw new Error('No wallet connected') },
-      isApprovedForAll: async () => false
+      isApprovedForAll: async () => false,
+      refreshData: async () => {}
     }
   }
 
+  // Early return for non-existent contract
   if (!exists) {
     return {
       exists: false,
       initialized: false,
-      owner: undefined,
-      canMint: false,
-      cooldownRemaining: 0,
       balances: {},
-      lastMintTime: 0,
       tokens: [],
       countdown: 0,
-      remainingMintTime: null,
       isApprovalLoading,
-      freeMint: async () => { 
-        if (!isAvailable) {
-          throw new Error('Contract not deployed on this network') 
-        }
-        throw new Error('Contract exists but cannot be called')
-      },
+      freeMint: async () => { throw new Error('Contract not deployed on this network') },
       setApprovalForAll: async () => { throw new Error('Contract not deployed on this network') },
-      isApprovedForAll: async () => false
+      isApprovedForAll: async () => false,
+      refreshData: async () => {}
     }
   }
 
   return {
     exists: true,
-    initialized: block !== null,
+    initialized,
     owner,
     canMint,
     cooldownRemaining,
@@ -304,7 +289,8 @@ export function useToken(): UseTokenReturn {
     remainingMintTime,
     countdown: timeLeft,
     isApprovalLoading,
-    freeMint: (tokenID: bigint): Promise<any> => {
+    
+    freeMint: async (tokenID: bigint): Promise<any> => {
       return new Promise<any>((resolve, reject) => {
         writeContract(
           {
@@ -313,14 +299,11 @@ export function useToken(): UseTokenReturn {
             args: [tokenID],
           },
           {
-            onSuccess: async (data: any, variables: unknown, context: unknown) => {
-              // Force an immediate data refresh after transaction
-              if (block) {
-                await refreshAllData(block)
-              }
+            onSuccess: async (data: any) => {
+              await refreshAllData()
               resolve(data)
             },
-            onError: (error: any, variables: unknown, context: unknown) => {
+            onError: (error: any) => {
               reject(error)
             },
           }
@@ -329,8 +312,8 @@ export function useToken(): UseTokenReturn {
     },
 
     setApprovalForAll: async (spenderAddress: `0x${string}`): Promise<`0x${string}`> => {
-      if (!address) throw new Error('No address connected');
-      setIsApprovalLoading(true);
+      if (!address) throw new Error('No address connected')
+      setIsApprovalLoading(true)
       
       try {
         return await new Promise((resolve, reject) => {
@@ -342,29 +325,26 @@ export function useToken(): UseTokenReturn {
             },
             {
               onSuccess: async (data: `0x${string}`) => {
-                console.log('Approval success:', data);
-                // Force an immediate data refresh after approval
-                if (block) {
-                  await refreshAllData(block)
-                }
-                resolve(data);
+                await refreshAllData()
+                resolve(data)
               },
               onError: (error: Error) => {
-                console.error('Approval error:', error);
-                reject(error);
+                reject(error)
               },
             }
-          );
-        });
+          )
+        })
       } finally {
-        setIsApprovalLoading(false);
+        setIsApprovalLoading(false)
       }
     },
 
     isApprovedForAll: async (spenderAddress: `0x${string}`): Promise<boolean> => {
-      if (!address) return false;
-      const result = await refetchApproval();
-      return !!result.data;
-    }
+      if (!address) return false
+      const result = await refetchApproval()
+      return !!result.data
+    },
+
+    refreshData: refreshAllData
   }
 }

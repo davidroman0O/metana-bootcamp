@@ -10,7 +10,6 @@ type BlockCallback = (block: Block) => void
 const blockAtom = atom<Block | null>(null)
 const blockCallbacksAtom = atom<Set<BlockCallback>>(new Set<BlockCallback>())
 
-// Add an atom for current chain
 const chainIdAtom = atom<number | null>(null)
 
 export function useBlockProvider() {

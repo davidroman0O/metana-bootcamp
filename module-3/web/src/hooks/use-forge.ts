@@ -3,10 +3,14 @@ import {
   useReadContracts,
   useWriteContract,
 } from 'wagmi'
+import { useForgeContract } from './use-forge-contract'
 
-import { useForgeContract} from './use-forge-contract'
+interface UseForgeConfig {
+  onSuccess?: () => Promise<void>
+  onTxHash?: (hash: `0x${string}`) => void
+}
 
-export function useForge() {
+export function useForge({ onSuccess, onTxHash }: UseForgeConfig = {}) {
   const { address } = useAccount()
   const forgeContract = useForgeContract()
   const { writeContract } = useWriteContract()
@@ -28,50 +32,63 @@ export function useForge() {
     tokenAddress: data?.[0].result?.toString() ?? undefined,
     owner: data?.[1].result?.toString() ?? undefined,
     
-    trade(tokenIDToTrade: bigint, tokenIDToReceive: bigint): Promise<any> {
-      return new Promise<any>((resolve, reject) => {
-        return writeContract(
+    trade: async (tokenIDToTrade: bigint, tokenIDToReceive: bigint): Promise<`0x${string}`> => {
+      return new Promise((resolve, reject) => {
+        writeContract(
           {
             ...forgeContract,
             functionName: 'trade',
             args: [tokenIDToTrade, tokenIDToReceive],
           },
           {
-            onSuccess: (data: any, variables: unknown, context: unknown) => {
-              resolve(data);
+            onSuccess: async (hash: `0x${string}`) => {
+              try {
+                // Report transaction hash immediately
+                if (onTxHash) {
+                  onTxHash(hash)
+                }
+                resolve(hash)
+              } catch (error) {
+                console.error('Error in trade onSuccess:', error)
+                reject(error)
+              }
             },
-            onError: (error: any, variables: unknown, context: unknown) => {
-              reject(error);
+            onError: (error: any) => {
+              console.error('Error in trade:', error)
+              reject(error)
             },
           }
         )
-      });
+      })
     },
     
-    forge(tokenID: bigint): Promise<any> {
-      return new Promise<any>((resolve, reject) => {
-        return writeContract(
+    forge: async (tokenID: bigint): Promise<`0x${string}`> => {
+      return new Promise((resolve, reject) => {
+        writeContract(
           {
             ...forgeContract,
             functionName: 'forge',
             args: [tokenID],
           },
           {
-            onSuccess: (data: any, variables: unknown, context: unknown) => {
-              console.log('forge success:', data);
-              resolve(data);
+            onSuccess: async (hash: `0x${string}`) => {
+              try {
+                if (onTxHash) {
+                  onTxHash(hash)
+                }
+                resolve(hash)
+              } catch (error) {
+                console.error('Error in forge onSuccess:', error)
+                reject(error)
+              }
             },
-            onError: (error: any, variables: unknown, context: unknown) => {
-              console.log('forge error:', error);
-              reject(error);
+            onError: (error: any) => {
+              console.error('Error in forge:', error)
+              reject(error)
             },
           }
         )
-      });
+      })
     },
-
-    
-
-
   }
 }

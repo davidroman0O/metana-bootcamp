@@ -55,6 +55,7 @@ StableHeader.displayName = 'StableHeader'
 
 const DEBUG = false
 
+
 const MainContent = ({
   exists,
   initialized,
@@ -67,7 +68,9 @@ const MainContent = ({
   isSuccess,
   isError,
   errorMessage,
-  onDismissError, // Add this prop
+  onDismissError,
+  refreshData,
+  setTxHash,  
 }: {
   exists: boolean
   initialized: boolean
@@ -80,9 +83,38 @@ const MainContent = ({
   isSuccess: boolean
   isError: boolean
   errorMessage?: string
-  onDismissError: () => void // Add this type
+  onDismissError: () => void
+  refreshData: () => Promise<void>
+  setTxHash: (hash: `0x${string}` | null) => void
 }) => {
-  const { forge, trade } = useForge()
+  const forge = useForge({
+    onSuccess: async () => {
+      console.log('Transaction successful, refreshing data...')
+      await refreshData()
+    },
+    onTxHash: (hash) => {
+      console.log('Got transaction hash:', hash)
+      setTxHash(hash)
+    }
+  })
+
+  const handleTrade = useCallback(async (tokenIDToTrade: bigint, tokenIDToReceive: bigint) => {
+    try {
+      const hash = await forge.trade(tokenIDToTrade, tokenIDToReceive)
+      console.log('Trade transaction submitted:', hash)
+    } catch (error) {
+      console.error('Trade failed:', error)
+    }
+  }, [forge])
+
+  const handleForge = useCallback(async (tokenID: bigint) => {
+    try {
+      const hash = await forge.forge(tokenID)
+      console.log('Forge transaction submitted:', hash)
+    } catch (error) {
+      console.error('Forge failed:', error)
+    }
+  }, [forge])
 
   return exists ? (
     <>
@@ -94,7 +126,7 @@ const MainContent = ({
         isLoading={isLoading}
         isSuccess={isSuccess}
         errorMessage={errorMessage}
-        onDismissError={onDismissError} // Pass the dismiss handler
+        onDismissError={onDismissError}
       />
 
       {initialized && address && (
@@ -102,8 +134,8 @@ const MainContent = ({
           <div className="w-full max-w-6xl">
             <ForgeInterface
               tokens={tokens}
-              forge={forge}
-              trade={trade}
+              forge={handleForge}
+              trade={handleTrade}
               isLoading={isLoading}
               txHash={txHash}
               freeMint={handleFreeMint}
@@ -127,6 +159,7 @@ function Home() {
     initialized, 
     tokens, 
     countdown,
+    refreshData
   } = useToken()
   
   const { 
@@ -138,10 +171,19 @@ function Home() {
     pollingInterval: 1000,
   })
 
+  // Watch for transaction success and refresh data
+  useEffect(() => {
+    if (isSuccess && txHash) {
+      console.log('Transaction successful, refreshing data...')
+      refreshData()
+      setTxHash(null)
+      setErrorMessage("")
+    }
+  }, [isSuccess, txHash, refreshData])
+
   // Enhanced error dismissal handler
   const handleDismissError = useCallback(() => {
     setErrorMessage("")
-    // Also clear txHash if there's an error state
     if (isError) {
       setTxHash(null)
     }
@@ -198,7 +240,6 @@ function Home() {
           }
         }
         setErrorMessage(message)
-        // Always clear txHash when there's an error
         setTxHash(null)
       }
     },
@@ -225,9 +266,11 @@ function Home() {
         tokens={tokens}
         isLoading={isLoading}
         isSuccess={isSuccess}
-        isError={isError || !!errorMessage}
+        isError={isError}
         errorMessage={errorMessage}
         onDismissError={handleDismissError}
+        refreshData={refreshData}
+        setTxHash={setTxHash}
       />
     </div>
   )
