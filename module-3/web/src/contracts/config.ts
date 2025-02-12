@@ -1,22 +1,21 @@
 // contracts/config.ts
-import { polygon, sepolia } from 'wagmi/chains';
+import { anvil, polygon, sepolia } from 'wagmi/chains';
 
 const isDev = process.env.NODE_ENV === 'development';
 
 export const SUPPORTED_CHAINS = isDev 
-  ? [sepolia, polygon]
+  // ? [sepolia, polygon]
+  ? [polygon]
   : [polygon];
 
-export const DEFAULT_CHAIN = isDev ? sepolia : polygon;
+export const DEFAULT_CHAIN = isDev ? anvil : polygon;
 
 // Replace these with your actual contract addresses
 export const CONTRACT_ADDRESSES = {
   TOKEN: {
-    [polygon.id]: '0xCafac3dD18aC6c6e92c921884f9E4176737C052c',
-    [sepolia.id]: '0xCafac3dD18aC6c6e92c921884f9E4176737C052c',
+    [polygon.id]: '0xf41C0CbB57F655a33e48d5dD9e833f0B5DdFAf2e',
   },
   FORGE: {
-    [polygon.id]: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512',
-    [sepolia.id]: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512',
+    [polygon.id]: '0xD79E9c2B963fD21CAD8d40E2968c87a3D7Cce0b0',
   },
 } as const;

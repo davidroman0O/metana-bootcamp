@@ -63,6 +63,7 @@ interface ContractAddresses {
   [chainId: number]: string | undefined
 }
 
+
 export function useContractAvailability(
   addresses: ContractAddresses,
   abi: any,

@@ -13,6 +13,9 @@ contract Forge is Ownable(msg.sender) {
 
     /// @notice The ERC1155 token contract.
     ERC1155Token private token;
+
+    event TokenForged(address indexed creator, uint256 tokenId);
+    event TokenTraded(address indexed trader, uint256 fromToken, uint256 toToken);
     
     constructor() {
         token = new ERC1155Token("ipfs://bafybeihx2hcoh5pfuth7jw3winzc7l727zpieftswqibutaepwk6nbqsn4");
@@ -46,6 +49,8 @@ contract Forge is Ownable(msg.sender) {
         
         // Mint the forged token to the caller.
         token.forgeMint(msg.sender, forgedTokenId, 1);
+
+        emit TokenForged(msg.sender, forgedTokenId);
     }
     
     function trade(uint256 tokenIdToTrade, uint256 desiredBaseTokenId) external {
@@ -57,5 +62,7 @@ contract Forge is Ownable(msg.sender) {
         
         // Mint the desired base token.
         token.forgeMint(msg.sender, desiredBaseTokenId, 1);
+
+        emit TokenTraded(msg.sender, tokenIdToTrade, desiredBaseTokenId);
     }
 }

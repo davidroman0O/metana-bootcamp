@@ -13,7 +13,7 @@ import {
 } from "@tanstack/react-query"
 import { useTokenContract } from './use-token-contract'
 import { useBlockCallback, useContractAvailability } from './use-block-provider'
-import { sepolia, mainnet, anvil } from 'wagmi/chains'
+import { sepolia, mainnet, anvil, polygon } from 'wagmi/chains'
 import { useState, useEffect } from 'react'
 
 type HexAddress = `0x${string}`
@@ -75,7 +75,7 @@ export function useToken(): UseTokenReturn {
     {
       [anvil.id]: tokenContract.address,
       [mainnet.id]: tokenContract.address,
-      [sepolia.id]: tokenContract.address,
+      [polygon.id]: tokenContract.address,
     },
     tokenContract.abi,
     'owner'
@@ -122,7 +122,7 @@ export function useToken(): UseTokenReturn {
   })
 
   // Network change effect
-  useEffect(() => {
+  const resetState = useCallback(() => {
     setOwner("0x")
     setCanMint(false)
     setCooldownRemaining(0)
@@ -131,7 +131,12 @@ export function useToken(): UseTokenReturn {
     setLastMintTime(0)
     setBlock(null)
     setRemainingMintTime(null)
-  }, [chainId])
+  }, [])
+
+  // Network or account change effect
+  useEffect(() => {
+    resetState()
+  }, [chainId, address])
 
   // Countdown effect
   useEffect(() => {

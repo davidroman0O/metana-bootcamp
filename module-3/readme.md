@@ -24,3 +24,10 @@ Here `0x86095f747174A2b9E44c2ed0e9265D5AC0c76BF7` is my dev address.
 What's happening on deploy can be seeing inside of the Makefile of `solidity` folder. It is taking the ABIs and addresses, then it puts them into `.ts` files in the `web` project. It's a poor's man automation.
 
 
+
+
+Verifyied https://polygonscan.com/address/0xD79E9c2B963fD21CAD8d40E2968c87a3D7Cce0b0#code
+
+
+TODO: fix the cooldown, we don't need to watch the blocks anymore since we know the timestamp when the cooldown will ends
+

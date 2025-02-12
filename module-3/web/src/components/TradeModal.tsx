@@ -19,7 +19,7 @@ const TradeModal: React.FC<TradeModalProps> = ({
   allBalances,
 }) => {
   const [isLoading, setIsLoading] = React.useState(false);
-  console.log("TradeModal rendered with:", { isOpen, tradingTokenId });
+  // console.log("TradeModal rendered with:", { isOpen, tradingTokenId });
   
   if (!isOpen) return null;
 

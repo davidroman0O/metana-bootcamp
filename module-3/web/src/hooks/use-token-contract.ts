@@ -11,8 +11,7 @@ export function useTokenContractAddress() {
     () =>
       ({
         [anvil.id]: ADDRESS, 
-        [polygon.id]: '0xCafac3dD18aC6c6e92c921884f9E4176737C052c',
-        [sepolia.id]: '0xCafac3dD18aC6c6e92c921884f9E4176737C052c',
+        [polygon.id]: '0xf41C0CbB57F655a33e48d5dD9e833f0B5DdFAf2e',
       })[chain.id],
     [chain],
   )

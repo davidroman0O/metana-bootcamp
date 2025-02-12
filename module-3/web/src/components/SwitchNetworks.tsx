@@ -4,7 +4,8 @@ import { useMemo, useState, useCallback, useEffect } from 'react'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { polygon, sepolia, anvil } from 'wagmi/chains'
 
-const SUPPORTED_CHAINS = [polygon, sepolia, anvil];
+// const SUPPORTED_CHAINS = [polygon, sepolia, anvil];
+const SUPPORTED_CHAINS = [polygon,  anvil];
 const FALLBACK_CHAIN = polygon;
 
 // Simple notification component

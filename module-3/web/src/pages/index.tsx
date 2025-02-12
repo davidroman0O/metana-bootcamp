@@ -12,6 +12,7 @@ import ForgeInterface from "@/components/ForgeInterface"
 import NotificationBanner from "@/components/NotificationBanner"
 import OpenSeaLink from '@/components/OpenSeaLink';
 import NetworkHandler from '@/components/NetworkHandler'
+import NetworkDebug from '@/components/NetworkDebug'
 
 const HeaderActions = memo(() => {
   const { address } = useAccount()
@@ -65,6 +66,8 @@ const MainContent = ({
   isLoading,
   isSuccess,
   isError,
+  errorMessage,
+  onDismissError, // Add this prop
 }: {
   exists: boolean
   initialized: boolean
@@ -76,6 +79,8 @@ const MainContent = ({
   isLoading: boolean
   isSuccess: boolean
   isError: boolean
+  errorMessage?: string
+  onDismissError: () => void // Add this type
 }) => {
   const { forge, trade } = useForge()
 
@@ -88,6 +93,8 @@ const MainContent = ({
         isError={isError}
         isLoading={isLoading}
         isSuccess={isSuccess}
+        errorMessage={errorMessage}
+        onDismissError={onDismissError} // Pass the dismiss handler
       />
 
       {initialized && address && (
@@ -105,17 +112,6 @@ const MainContent = ({
           </div>
         </div>
       )}
-
-      {DEBUG && initialized && (
-        <div className="text-xs mt-8 p-4 bg-gray-50 rounded">
-          <div className="font-semibold mb-2">Debug Information</div>
-          <div>txHash: {txHash || 'null'}</div>
-          <div>countdown: {countdown}</div>
-          <div>isLoading: {String(isLoading)}</div>
-          <div>isSuccess: {String(isSuccess)}</div>
-          <div>isError: {String(isError)}</div>
-        </div>
-      )}
     </>
   ) : null
 }
@@ -123,6 +119,7 @@ const MainContent = ({
 function Home() {
   const { address } = useAccount()
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string>("")
 
   const { 
     exists, 
@@ -141,15 +138,42 @@ function Home() {
     pollingInterval: 1000,
   })
 
+  // Enhanced error dismissal handler
+  const handleDismissError = useCallback(() => {
+    setErrorMessage("")
+    // Also clear txHash if there's an error state
+    if (isError) {
+      setTxHash(null)
+    }
+  }, [isError])
+
+  // Clear error states when transaction succeeds
+  useEffect(() => {
+    if (isSuccess) {
+      setErrorMessage("")
+      setTxHash(null)
+    }
+  }, [isSuccess])
+
+  // Set error message when transaction fails
+  useEffect(() => {
+    if (isError && txHash) {
+      setErrorMessage("Transaction failed. Please try again.")
+    }
+  }, [isError, txHash])
+
   const handleFreeMint = useCallback(
     async (tokenID: bigint) => {
+      // Always clear previous error states when starting new transaction
+      setErrorMessage("")
+      
       if (txHash) {
-        console.log('Previous transaction still pending:', txHash)
+        setErrorMessage('Previous transaction still pending')
         return
       }
 
       if (countdown > 0) {
-        console.log('Cooldown still active:', countdown)
+        setErrorMessage(`Please wait ${countdown} seconds before minting again`)
         return
       }
 
@@ -157,26 +181,35 @@ function Home() {
         const hash = await freeMint(tokenID)
         console.log('New freeMint hash:', hash)
         setTxHash(hash)
-      } catch (error) {
+      } catch (error: any) {
         console.error('freeMint error:', error)
+        let message = "Transaction failed"
+        if (error?.message) {
+          if (error.message.includes("user rejected")) {
+            message = "Transaction was rejected"
+          } else if (error.message.includes("insufficient funds")) {
+            message = "Insufficient funds to complete transaction"
+          } else if (error.message.includes("was already minted")) {
+            message = "This token was already minted"
+          } else if (error.message.includes("Cooldown active")) {
+            message = "Please wait for cooldown to finish before minting again"
+          } else {
+            message = error.message.split('(')[0].trim()
+          }
+        }
+        setErrorMessage(message)
+        // Always clear txHash when there's an error
+        setTxHash(null)
       }
     },
     [freeMint, txHash, countdown]
   )
 
+  // Reset all error states when switching accounts or networks
   useEffect(() => {
-    if (!exists || !txHash || !isSuccess) return
-    console.log('Transaction confirmed! Refreshing data...', txHash)
+    setErrorMessage("")
     setTxHash(null)
-  }, [isSuccess, txHash, exists])
-
-  useEffect(() => {
-    if (!exists || !isError || !txHash) return
-    if (isError && txHash) {
-      console.error('Transaction failed:', txHash)
-      setTxHash(null)
-    }
-  }, [exists, isError, txHash])
+  }, [address])
 
   return (
     <div className="min-h-screen">
@@ -192,7 +225,9 @@ function Home() {
         tokens={tokens}
         isLoading={isLoading}
         isSuccess={isSuccess}
-        isError={isError}
+        isError={isError || !!errorMessage}
+        errorMessage={errorMessage}
+        onDismissError={handleDismissError}
       />
     </div>
   )
