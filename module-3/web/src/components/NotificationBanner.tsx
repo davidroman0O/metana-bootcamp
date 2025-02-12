@@ -34,38 +34,6 @@ const NotificationBanner: React.FC<NotificationBannerProps> = ({
   notifications,
   onDismissNotification,
 }) => {
-  // Handle error state first
-  if (errorMessage || isError) {
-    return (
-      <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-red-50">
-        <div className="max-w-2xl mx-auto bg-white border border-red-200 rounded-lg p-4 flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
-          <div className="flex-1">
-            <h3 className="font-semibold text-red-900">
-              Transaction Failed
-            </h3>
-            <div className="text-red-700 mt-1">
-              {errorMessage || 'The transaction could not be completed. Please try again.'}
-              {txHash && (
-                <span className="block mt-1 text-sm text-red-600">
-                  Transaction: {txHash}
-                </span>
-              )}
-            </div>
-          </div>
-          {onDismissError && (
-            <button 
-              onClick={onDismissError}
-              className="text-gray-500 hover:text-gray-700 p-1 hover:bg-gray-100 rounded-full transition-colors"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   const getNotificationStyle = (type: string) => {
     switch (type) {
       case 'success':
@@ -101,28 +69,39 @@ const NotificationBanner: React.FC<NotificationBannerProps> = ({
     return 'bg-gray-50';
   };
 
+  // Create an error notification if there's an error
+  const allNotifications = [...notifications];
+  if (errorMessage || isError) {
+    allNotifications.unshift({
+      id: 'error',
+      message: errorMessage || 'The transaction could not be completed. Please try again.',
+      type: 'error',
+      txHash: txHash || undefined
+    });
+  }
+
   return (
     <>
       {/* Stackable Notifications Container */}
       <div className="fixed inset-x-0 bottom-0 z-50 space-y-4 pb-14">
-        {notifications.map((notification) => (
+        {allNotifications.map((notification) => (
           <div key={notification.id} className="flex justify-center px-4">
             <div className={`w-full max-w-2xl border rounded-lg p-4 ${getNotificationStyle(notification.type)}`}>
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
+                <div className="flex items-start gap-3 min-w-0">
                   {getIcon(notification.type)}
-                  <div>
-                    <div>{notification.message}</div>
+                  <div className="break-all min-w-0">
+                    <div className="break-words">{notification.message}</div>
                     {notification.txHash && (
-                      <div className="text-sm opacity-75">
+                      <div className="text-sm opacity-75 break-all">
                         Transaction: {notification.txHash}
                       </div>
                     )}
                   </div>
                 </div>
                 <button
-                  onClick={() => onDismissNotification(notification.id)}
-                  className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                  onClick={() => notification.id === 'error' ? onDismissError?.() : onDismissNotification(notification.id)}
+                  className="p-1 hover:bg-white/10 rounded-full transition-colors"
                 >
                   <X className="h-5 w-5" />
                 </button>
