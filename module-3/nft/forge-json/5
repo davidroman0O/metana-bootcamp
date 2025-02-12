@@ -1,0 +1,10 @@
+{
+  "name": "Molten Gauntlet",
+  "description": "A heavily armored gauntlet forged from molten ingot and raw etherium, pulsing with fiery energy. Perfect for devastating blows.",
+  "image": "ipfs://bafybeigcnwbpiclny2vodrr2dq5nq2kqn6wj775yl5k2u7xm5r3ylizg7y/5.png",
+  "attributes": [
+    { "trait_type": "Type", "value": "Equipment" },
+    { "trait_type": "Forged From", "value": "Molten Core Ingot + Raw Etherium Ore" },
+    { "trait_type": "Rarity", "value": "Epic" }
+  ]
+}

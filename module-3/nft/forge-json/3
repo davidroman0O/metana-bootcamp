@@ -1,0 +1,10 @@
+{
+  "name": "Blazing Obsidian Blade",
+  "description": "A dwarven battle axe forged from molten energy and sharp obsidian, glowing with fiery runes. A weapon of unmatched power.",
+  "image": "ipfs://bafybeigcnwbpiclny2vodrr2dq5nq2kqn6wj775yl5k2u7xm5r3ylizg7y/3.png",
+  "attributes": [
+    { "trait_type": "Type", "value": "Equipment" },
+    { "trait_type": "Forged From", "value": "Molten Core Ingot + Refined Obsidian Shard" },
+    { "trait_type": "Rarity", "value": "Rare" }
+  ]
+}

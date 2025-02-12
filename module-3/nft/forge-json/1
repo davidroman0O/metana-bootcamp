@@ -1,0 +1,10 @@
+{
+  "name": "Refined Obsidian Shard",
+  "description": "A sharp, dark shard of obsidian embedded with glowing dwarven runes. A key magical conductor in dwarven forging.",
+  "image": "ipfs://bafybeigcnwbpiclny2vodrr2dq5nq2kqn6wj775yl5k2u7xm5r3ylizg7y/1.png",
+  "attributes": [
+    { "trait_type": "Type", "value": "Material" },
+    { "trait_type": "Element", "value": "Magic" },
+    { "trait_type": "Rarity", "value": "Common" }
+  ]
+}
