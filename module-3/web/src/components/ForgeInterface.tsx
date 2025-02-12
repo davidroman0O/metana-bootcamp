@@ -1,264 +1,175 @@
 import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LoadingMessage } from '@/components/RotatingHourGlass';
-import { useWaitForTransactionReceipt, useAccount } from 'wagmi';
-import { useToken } from '@/hooks/use-token';
+import NFTCard from './NFTCard';
+import TradeModal from './TradeModal';
 import { useForgeContract } from '@/hooks/use-forge-contract';
+import { useToken } from '@/hooks/use-token';
 
-interface TokenData {
+interface Token {
   tokenId: bigint;
   balance: bigint;
 }
 
-interface ForgeRecipe {
-  inputs: number[];
-  name: string;
-}
-
-interface ForgeRecipes {
-  [key: number]: ForgeRecipe;
-}
-
 interface ForgeInterfaceProps {
-  tokens: TokenData[];
-  forge: (tokenId: bigint) => Promise<`0x${string}`>;
-  trade: (tokenIdToTrade: bigint, tokenIdToReceive: bigint) => Promise<`0x${string}`>;
+  tokens: Token[];
+  forge: (tokenId: bigint) => Promise<any>;
+  trade: (tokenId: bigint, baseTokenId: bigint) => Promise<any>;
+  freeMint: (tokenId: bigint) => Promise<any>;
   isLoading: boolean;
-  txHash: `0x${string}` | null;
+  txHash: string | null;
+  countdown?: number;
 }
 
-const ForgeInterface: React.FC<ForgeInterfaceProps> = ({ 
-  tokens, 
-  forge, 
+const ForgeInterface: React.FC<ForgeInterfaceProps> = ({
+  tokens,
+  forge,
   trade,
-  isLoading: globalIsLoading,
-  txHash: globalTxHash 
+  freeMint,
+  isLoading,
+  txHash,
+  countdown
 }) => {
-  const [selectedToken, setSelectedToken] = useState<string>('0');
-  const [tradeDestination, setTradeDestination] = useState<string>('0');
-  const [localTxHash, setLocalTxHash] = useState<`0x${string}` | null>(null);
-  
-  const { address } = useAccount();
-  const { setApprovalForAll, isApprovalLoading, isApprovedForAll } = useToken();
+  const [processingTokenId, setProcessingTokenId] = useState<number | null>(null);
+  const [tradeModalOpen, setTradeModalOpen] = useState(false);
+  const [tradingTokenId, setTradingTokenId] = useState<number | null>(null);
+  const [isApproving, setIsApproving] = useState(false);
+
   const forgeContract = useForgeContract();
+  const { setApprovalForAll, isApprovedForAll } = useToken();
 
-  const { 
-    isLoading: isWaiting,
-    isSuccess,
-    isError,
-  } = useWaitForTransactionReceipt({
-    hash: localTxHash || undefined,
-  });
-
-  const isLoading = globalIsLoading || isWaiting || isApprovalLoading;
-  const displayHash = localTxHash || globalTxHash;
-
-  const forgeRecipes: ForgeRecipes = {
-    3: { inputs: [0, 1], name: "Token 3" },
-    4: { inputs: [1, 2], name: "Token 4" },
-    5: { inputs: [0, 2], name: "Token 5" },
-    6: { inputs: [0, 1, 2], name: "Token 6" }
-  };
-
-  const canForge = (tokenId: number): boolean => {
-    const recipe = forgeRecipes[tokenId];
-    return recipe.inputs.every(input => {
-      const token = tokens.find(t => t.tokenId === BigInt(input));
-      return token?.balance !== undefined && token.balance > BigInt(0);
-    });
-  };
-
-  const handleForge = async (tokenId: number): Promise<void> => {
-    if (!address || !forgeContract.address) return;
-    
+  const handleFreeMint = async (tokenId: bigint) => {
+    console.log('Attempting to mint token:', tokenId.toString());
+    setProcessingTokenId(Number(tokenId));
     try {
-      console.log('Starting forge process for token:', tokenId);
+      await freeMint(tokenId);
+      console.log('Minting successful for token:', tokenId.toString());
+    } catch (error) {
+      console.error('Minting failed:', error);
+    } finally {
+      setProcessingTokenId(null);
+    }
+  };
 
-      // First check if already approved
+  const handleForge = async (tokenId: bigint) => {
+    console.log('Attempting to forge token:', tokenId.toString());
+    setProcessingTokenId(Number(tokenId));
+    try {
+      // Check and handle approval first
       const isApproved = await isApprovedForAll(forgeContract.address);
-      console.log('Is approved:', isApproved, 'for address:', forgeContract.address);
+      console.log('Forge approval status:', isApproved);
       
       if (!isApproved) {
-        console.log('Approving forge contract:', forgeContract.address);
-        const approvalHash = await setApprovalForAll(forgeContract.address);
-        console.log('Approval transaction:', approvalHash);
-        
-        // Wait for approval confirmation
-        const approvalReceipt = await window.ethereum.request({
-          method: 'eth_getTransactionReceipt',
-          params: [approvalHash],
-        });
-        console.log('Approval confirmed:', approvalReceipt);
+        console.log('Requesting forge approval...');
+        setIsApproving(true);
+        await setApprovalForAll(forgeContract.address);
+        console.log('Forge approval granted');
       }
 
-      console.log('Sending forge transaction...');
-      const hash = await forge(BigInt(tokenId));
-      console.log('Forge transaction submitted:', hash);
-      setLocalTxHash(hash);
-
+      await forge(tokenId);
+      console.log('Forging successful for token:', tokenId.toString());
     } catch (error) {
-      console.error('Forge process failed:', error);
-      setLocalTxHash(null);
+      console.error('Forging failed:', error);
+    } finally {
+      setProcessingTokenId(null);
+      setIsApproving(false);
     }
   };
 
-  const handleTrade = async (): Promise<void> => {
-    if (!address || !forgeContract.address) return;
-
+  const handleTrade = async (tokenId: bigint) => {
+    console.log("Trade initiated for token:", tokenId.toString());
     try {
-      // Check approval first
+      // Check and handle approval first
       const isApproved = await isApprovedForAll(forgeContract.address);
-      console.log('Is approved for trade:', isApproved);
+      console.log('Trade approval status:', isApproved);
       
       if (!isApproved) {
-        const approvalHash = await setApprovalForAll(forgeContract.address);
-        console.log('Trade approval transaction:', approvalHash);
-        
-        // Wait for approval confirmation
-        const approvalReceipt = await window.ethereum.request({
-          method: 'eth_getTransactionReceipt',
-          params: [approvalHash],
-        });
-        console.log('Trade approval confirmed:', approvalReceipt);
+        console.log('Requesting trade approval...');
+        setIsApproving(true);
+        await setApprovalForAll(forgeContract.address);
+        console.log('Trade approval granted');
       }
 
-      const hash = await trade(BigInt(selectedToken), BigInt(tradeDestination));
-      console.log('Trade transaction:', hash);
-      setLocalTxHash(hash);
-
+      setTradingTokenId(Number(tokenId));
+      setTradeModalOpen(true);
     } catch (error) {
-      console.error('Trade error:', error);
-      setLocalTxHash(null);
+      console.error("Error in handleTrade:", error);
+      setIsApproving(false);
     }
   };
 
-  // Reset local tx hash when transaction completes
-  React.useEffect(() => {
-    if (isSuccess || isError) {
-      setLocalTxHash(null);
+  const handleTradeConfirm = async (baseTokenId: bigint) => {
+    if (tradingTokenId === null) return;
+    console.log(`Attempting to trade token ${tradingTokenId} for token ${baseTokenId.toString()}`);
+    setProcessingTokenId(tradingTokenId);
+    try {
+      await trade(BigInt(tradingTokenId), baseTokenId);
+      console.log('Trade successful');
+      setTradeModalOpen(false);
+    } catch (error) {
+      console.error('Trade failed:', error);
+    } finally {
+      setProcessingTokenId(null);
+      setTradingTokenId(null);
+      setIsApproving(false);
     }
-  }, [isSuccess, isError]);
-
-  const getTransactionStatus = () => {
-    if (isApprovalLoading) return "Approving tokens...";
-    if (!displayHash) return null;
-    if (isError) return `❌ Transaction ${displayHash} failed`;
-    if (isLoading) return <LoadingMessage txHash={displayHash} />;
-    if (isSuccess) return `✅ Transaction ${displayHash} is confirmed!`;
-    return `Transaction ${displayHash} is in progress...`;
   };
+
+  // Convert tokens array to a balance map for easier access
+  const balanceMap = tokens.reduce((acc, token) => {
+    acc[token.tokenId.toString()] = token.balance;
+    return acc;
+  }, {} as Record<string, bigint>);
 
   return (
-    <div className="flex flex-col gap-6 p-4">
-      {/* Transaction Status */}
-      {(displayHash || isApprovalLoading) && (
-        <div className="p-4 bg-gray-100 rounded-lg">
-          {getTransactionStatus()}
+    <>
+      <div className="container mx-auto p-4">
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold mb-4">Base Materials</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[0, 1, 2].map((tokenId) => (
+              <NFTCard
+                key={tokenId}
+                tokenId={tokenId}
+                balance={tokens.find(t => t.tokenId === BigInt(tokenId))?.balance || BigInt(0)}
+                onMint={handleFreeMint}
+                onTrade={handleTrade}
+                disabled={!!txHash || isApproving}
+                countdown={countdown}
+                isLoading={isLoading && processingTokenId === tokenId}
+                allBalances={balanceMap}
+              />
+            ))}
+          </div>
         </div>
-      )}
 
-      {/* Forge Recipes */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Forge Recipes</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {Object.entries(forgeRecipes).map(([tokenId, recipe]) => (
-              <div key={tokenId} className="p-4 border rounded-lg">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="font-medium">{recipe.name}</span>
-                  <Button 
-                    onClick={() => handleForge(Number(tokenId))}
-                    disabled={!canForge(Number(tokenId)) || isLoading}
-                  >
-                    {isApprovalLoading ? 'Approving...' : 'Forge'}
-                  </Button>
-                </div>
-                <div className="text-sm">
-                  Requires: {recipe.inputs.map((input: number) => `Token ${input}`).join(' + ')}
-                </div>
-              </div>
+        <div>
+          <h2 className="text-2xl font-bold mb-4">Forge Equipment</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {[3, 4, 5, 6].map((tokenId) => (
+              <NFTCard
+                key={tokenId}
+                tokenId={tokenId}
+                balance={tokens.find(t => t.tokenId === BigInt(tokenId))?.balance || BigInt(0)}
+                onForge={handleForge}
+                disabled={!!txHash || isApproving}
+                isLoading={isLoading && processingTokenId === tokenId}
+                allBalances={balanceMap}
+              />
             ))}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      {/* Trading Interface */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Trade Tokens</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-4">
-              <Select 
-                value={selectedToken} 
-                onValueChange={(value: string) => setSelectedToken(value)}
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Select token" />
-                </SelectTrigger>
-                <SelectContent>
-                  {tokens.filter(t => t.balance > BigInt(0)).map(token => (
-                    <SelectItem 
-                      key={token.tokenId.toString()} 
-                      value={token.tokenId.toString()}
-                    >
-                      Token {token.tokenId.toString()}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <span>for</span>
-
-              <Select 
-                value={tradeDestination} 
-                onValueChange={(value: string) => setTradeDestination(value)}
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Select token" />
-                </SelectTrigger>
-                <SelectContent>
-                  {[0, 1, 2].map(id => (
-                    <SelectItem key={id} value={id.toString()}>
-                      Token {id}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Button 
-                onClick={() => handleTrade()}
-                disabled={isLoading || !tokens.find(t => t.tokenId === BigInt(selectedToken))?.balance}
-              >
-                {isApprovalLoading ? 'Approving...' : 'Trade'}
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Current Balances */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Your Token Balances</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {tokens.map(({ tokenId, balance }) => (
-              <div key={tokenId.toString()} className="p-2 border rounded">
-                <div className="font-medium">Token {tokenId.toString()}</div>
-                <div className="text-sm text-gray-600">Balance: {balance.toString()}</div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+      <TradeModal
+        isOpen={tradeModalOpen}
+        onClose={() => {
+          setTradeModalOpen(false);
+          setTradingTokenId(null);
+        }}
+        onTrade={handleTradeConfirm}
+        tradingTokenId={tradingTokenId}
+        allBalances={balanceMap}
+      />
+    </>
   );
 };
 

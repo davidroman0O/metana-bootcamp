@@ -129,7 +129,7 @@ const MainContent = ({
 
       {initialized && address && (
         <div className='flex flex-col items-center justify-center gap-4'>
-          <div className='flex flex-row items-center justify-center gap-4 m-5'>
+          {/* <div className='flex flex-row items-center justify-center gap-4 m-5'>
             {['0', '1', '2'].map((tokenId) => (
               <Button 
                 key={tokenId}
@@ -140,7 +140,7 @@ const MainContent = ({
                 {getButtonText(tokenId)}
               </Button>
             ))}
-          </div>
+          </div> */}
 
           <ForgeInterface
             tokens={tokens}
@@ -148,6 +148,7 @@ const MainContent = ({
             trade={trade}
             isLoading={isLoading}
             txHash={txHash}
+            freeMint={handleFreeMint}
           />
 
           {
