@@ -1,11 +1,11 @@
 import { createConfig, http } from 'wagmi'
-import { bsc, bscTestnet, goerli, mainnet, sepolia, anvil } from 'wagmi/chains'
+import { bsc, bscTestnet, sepolia, mainnet,  anvil } from 'wagmi/chains'
 import { walletConnect } from 'wagmi/connectors'
 
 export const wagmiConfig = createConfig({
   chains: [
     anvil,
-    goerli, 
+    sepolia, 
     // bsc, 
     // bscTestnet, 
     // mainnet, 
@@ -13,7 +13,7 @@ export const wagmiConfig = createConfig({
   ],
   transports: {
     [anvil.id]: http('http://127.0.0.1:8545'),
-    [goerli.id]: http(),
+    [sepolia.id]: http(),
     // [mainnet.id]: http(),
     // [sepolia.id]: http(),
     // [bsc.id]: http(),

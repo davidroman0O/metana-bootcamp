@@ -1,13 +1,19 @@
-import { useAccount, useSwitchChain } from 'wagmi'
+import { useAccount, useSwitchChain, useChainId } from 'wagmi'
+import { useBlockProvider } from '@/hooks/use-block-provider'
+import { useMemo, useState } from 'react'
 
 export function NetworkSwitcher() {
   const { chains, switchChain, isPending } = useSwitchChain()
   const { chain } = useAccount()
+  const block = useBlockProvider()
+  const chainId = useChainId()
+  
   const defaultValue = useMemo(() => chain?.id.toString(), [chain?.id])
-
   const [pendingChainId, setPendingChainId] = useState<number>()
-  if (!chain)
-    return null
+
+  const isInitializing = !block // Show loading while getting first block
+  
+  if (!chain) return null
 
   return (
     <Select
@@ -23,7 +29,7 @@ export function NetworkSwitcher() {
       <SelectTrigger className="max-w-auto lt-sm:hidden">
         <SelectValue>
           <span className="flex-center">
-            {isPending && (
+            {(isPending || isInitializing) && (
               <span className="i-line-md:loading-twotone-loop mr-1 h-4 w-4 inline-flex text-primary" />
             )}
             {' '}
@@ -39,7 +45,7 @@ export function NetworkSwitcher() {
               : (
                   <SelectItem value={`${x.id}`} key={x.id} className="">
                     <span className="flex-center">
-                      {isPending && x.id === pendingChainId && (
+                      {(isPending && x.id === pendingChainId) && (
                         <span className="i-line-md:loading-twotone-loop mr-1 h-4 w-4 inline-flex text-primary" />
                       )}
                       {' '}

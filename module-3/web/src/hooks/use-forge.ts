@@ -1,6 +1,7 @@
 import { 
   useAccount, 
   useReadContracts,
+  useWriteContract,
 } from 'wagmi'
 
 import { useForgeContract} from './use-forge-contract'
@@ -8,6 +9,7 @@ import { useForgeContract} from './use-forge-contract'
 export function useForge() {
   const { address } = useAccount()
   const forgeContract = useForgeContract()
+  const { writeContract } = useWriteContract()
 
   const { data } = useReadContracts({
     contracts: [
@@ -19,32 +21,51 @@ export function useForge() {
         ...forgeContract,
         functionName: 'owner',
       },
-      // {
-      //   ...forgeContract,
-      //   functionName: ''
-      //   // functionName: 'trade'
-      // },
-      // {
-      //   ...forgeContract,
-      //   // functionName: ''
-      //   // functionName: 'getAlive',
-      // },
-      // {
-      //   ...forgeContract,
-      //   // functionName: 'love',
-      //   args: [address!],
-      // },
     ],
   })
-
-  // console.log('data', data?.[0])
 
   return {
     tokenAddress: data?.[0].result?.toString() ?? undefined,
     owner: data?.[1].result?.toString() ?? undefined,
-    // getBoredom: data?.[1]?.toString() ?? undefined,
-    // getAlive: data?.[2]?.toString() ?? undefined,
-    // loved: data?.[3]?.toString() ?? undefined,
-    // status: data?.[0]?.toString() ?? undefined,
+    
+    trade(tokenIDToTrade: bigint, tokenIDToReceive: bigint): Promise<any> {
+      return new Promise<any>((resolve, reject) => {
+        return writeContract(
+          {
+            ...forgeContract,
+            functionName: 'trade',
+            args: [tokenIDToTrade, tokenIDToReceive],
+          },
+          {
+            onSuccess: (data: any, variables: unknown, context: unknown) => {
+              resolve(data);
+            },
+            onError: (error: any, variables: unknown, context: unknown) => {
+              reject(error);
+            },
+          }
+        )
+      });
+    },
+    
+    forge(tokenID: bigint): Promise<any> {
+      return new Promise<any>((resolve, reject) => {
+        return writeContract(
+          {
+            ...forgeContract,
+            functionName: 'forge',
+            args: [tokenID],
+          },
+          {
+            onSuccess: (data: any, variables: unknown, context: unknown) => {
+              resolve(data);
+            },
+            onError: (error: any, variables: unknown, context: unknown) => {
+              reject(error);
+            },
+          }
+        )
+      });
+    }
   }
 }

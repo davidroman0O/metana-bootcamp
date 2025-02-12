@@ -11,6 +11,8 @@ import { useToken } from "@/hooks/use-token"
 import { useToast } from '@/components/ui/use-toast'
 
 
+// TODO: fix the bug with the selector of network when we hav ea countdown
+
 function Home() {
   const { address } = useAccount()
   const [show, setShow] = useState(false)
@@ -36,8 +38,11 @@ function Home() {
     tokens,
     remainingMintTime,
     countdown,
+    exists,
   } = useToken()
 
+  
+  // Only use useWaitForTransactionReceipt if the contract exists
   const { 
     isSuccess, 
     isLoading, 
@@ -49,7 +54,7 @@ function Home() {
 
   // Handle transaction completion
   useEffect(() => {
-    if (!txHash || !isSuccess) return
+    if (!exists || !txHash || !isSuccess) return
 
     const handleSuccess = async () => {
       console.log('Transaction confirmed! Refreshing data...', txHash)
@@ -63,15 +68,16 @@ function Home() {
     }
 
     handleSuccess()
-  }, [isSuccess, txHash])
+  }, [isSuccess, txHash, exists])
 
   // Handle transaction error
   useEffect(() => {
+    if (!exists || !isError || !txHash) return
     if (isError && txHash) {
       console.error('Transaction failed:', txHash)
       setTxHash(null)
     }
-  }, [isError, txHash])
+  }, [exists, isError, txHash])
 
   const handleFreeMint = useCallback(
     async (tokenID: bigint) => {
@@ -142,61 +148,67 @@ function Home() {
   return (
     <>
       <Header action={<Action />} />
-      
-      <div className="p-4 rounded-lg bg-gray-100 my-4">
-        <div className="text-lg font-semibold mb-2 text-center">Minting Status</div>
-        <div className="text-md text-center font-medium">
-          {getTransactionStatus()}
-        </div>
-        {countdown > 0 && (
-          <div className="text-sm text-gray-600 mt-2 text-center">
-            Please wait {countdown} seconds before minting again
-          </div>
-        )}
-      </div>
-
-      {initialized && address && (
-        <div className='flex flex-col items-center justify-center gap-4'>
-          <div className='flex flex-row items-center justify-center gap-4 m-5'>
-            {['0', '1', '2'].map((tokenId) => (
-              <Button 
-                key={tokenId}
-                disabled={isButtonDisabled(tokenId)}
-                onClick={() => handleFreeMint(BigInt(tokenId))}
-                className="min-w-[120px]"
-              >
-                {getButtonText(tokenId)}
-              </Button>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            {tokens.map(({ tokenId, balance }) => (
-              <div key={tokenId.toString()} className="flex gap-2">
-                <span className="font-medium">Token {tokenId}:</span>
-                <span>{balance.toString()}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
 
       {
-        initialized && 
-        <div className="text-xs mt-8 p-4 bg-gray-50 rounded">
-          <div className="font-semibold mb-2">Debug Information</div>
-          <div>txHash: {txHash || 'null'}</div>
-          <div>canMint: {String(canMint)}</div>
-          <div>cooldownRemaining: {cooldownRemaining?.toString() || 'null'}</div>
-          <div>lastMintTime: {lastMintTime}</div>
-          <div>remainingMintTime: {remainingMintTime}</div>
-          {/* <div>mint for real?: { remainingMintTime != 0 ? (remainingMintTime || 0) - Date.now() : 0  }</div> */}
-          <div>countdown {countdown}</div>
-          <div>isLoading: {String(isLoading)}</div>
-          <div>isSuccess: {String(isSuccess)}</div>
-          <div>isError: {String(isError)}</div>
+        // exists ? "exists" : "does not exist"
+      }
+      
+      {
+        exists &&
+        <>
+        <div className="p-4 rounded-lg bg-gray-100 my-4">
+          <div className="text-lg font-semibold mb-2 text-center">Minting Status</div>
+          <div className="text-md text-center font-medium">
+            {getTransactionStatus()}
+          </div>
+          {countdown > 0 && (
+            <div className="text-sm text-gray-600 mt-2 text-center">
+              Please wait {countdown} seconds before minting again
+            </div>
+          )}
         </div>
+
+        {initialized && address && (
+          <div className='flex flex-col items-center justify-center gap-4'>
+            <div className='flex flex-row items-center justify-center gap-4 m-5'>
+              {['0', '1', '2'].map((tokenId) => (
+                <Button 
+                  key={tokenId}
+                  disabled={isButtonDisabled(tokenId)}
+                  onClick={() => handleFreeMint(BigInt(tokenId))}
+                  className="min-w-[120px]"
+                >
+                  {getButtonText(tokenId)}
+                </Button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              {tokens.map(({ tokenId, balance }) => (
+                <div key={tokenId.toString()} className="flex gap-2">
+                  <span className="font-medium">Token {tokenId}:</span>
+                  <span>{balance.toString()}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+
+        {initialized && 
+          <div className="text-xs mt-8 p-4 bg-gray-50 rounded">
+            <div className="font-semibold mb-2">Debug Information</div>
+            <div>txHash: {txHash || 'null'}</div>
+            <div>canMint: {String(canMint)}</div>
+            <div>cooldownRemaining: {cooldownRemaining?.toString() || 'null'}</div>
+            <div>lastMintTime: {lastMintTime}</div>
+            <div>remainingMintTime: {remainingMintTime}</div>
+            <div>countdown {countdown}</div>
+            <div>isLoading: {String(isLoading)}</div>
+            <div>isSuccess: {String(isSuccess)}</div>
+            <div>isError: {String(isError)}</div>
+          </div>}
+        </>
       }
 
     </>
