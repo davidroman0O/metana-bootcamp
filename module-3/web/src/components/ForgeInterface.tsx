@@ -126,17 +126,18 @@ const ForgeInterface: React.FC<ForgeInterfaceProps> = ({
           {/* Forge Equipment Section */}
           <div>
             <h2 className="text-xl font-bold mb-4">Forge Equipment</h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {[3, 4, 5, 6].map((tokenId) => (
-                <NFTCard
-                  key={tokenId}
-                  tokenId={tokenId}
-                  balance={tokens.find(t => t.tokenId === BigInt(tokenId))?.balance || BigInt(0)}
-                  onForge={handleForge}
-                  disabled={!!txHash || isApproving}
-                  isLoading={isLoading && processingTokenId === tokenId}
-                  allBalances={balanceMap}
-                />
+                <div key={tokenId} className="flex flex-col">
+                  <NFTCard
+                    tokenId={tokenId}
+                    balance={tokens.find(t => t.tokenId === BigInt(tokenId))?.balance || BigInt(0)}
+                    onForge={handleForge}
+                    disabled={!!txHash || isApproving}
+                    isLoading={isLoading && processingTokenId === tokenId}
+                    allBalances={balanceMap}
+                  />
+                </div>
               ))}
             </div>
           </div>

@@ -10,6 +10,8 @@ import { useToken } from "@/hooks/use-token"
 import NativeBalance from "@/components/NativeBalance"
 import ForgeInterface from "@/components/ForgeInterface"
 import NotificationBanner from "@/components/NotificationBanner"
+import OpenSeaLink from '@/components/OpenSeaLink';
+import NetworkHandler from '@/components/NetworkHandler'
 
 const HeaderActions = memo(() => {
   const { address } = useAccount()
@@ -18,7 +20,12 @@ const HeaderActions = memo(() => {
   return (
     <div className="flex items-center gap-4"> 
       <NetworkSwitcher />
-      {address && <NativeBalance />}
+      {address && (
+        <>
+          <NativeBalance />
+          <OpenSeaLink />
+        </>
+      )}
       <WalletModal 
         open={show} 
         onOpenChange={setShow} 
@@ -173,6 +180,7 @@ function Home() {
 
   return (
     <div className="min-h-screen">
+      <NetworkHandler />
       <StableHeader />
       <MainContent
         exists={exists}

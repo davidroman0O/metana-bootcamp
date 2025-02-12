@@ -1,17 +1,18 @@
 import { useAccount } from 'wagmi'
-import { sepolia, mainnet, anvil } from 'wagmi/chains'
+import { sepolia, polygon, anvil } from 'wagmi/chains'
 
 import ABI from './abi/Forge'
 import ADDRESS from './anvil/forge';
 
+
 export function useForgeContractAddress() {
-  const { chain = mainnet } = useAccount()
+  const { chain = polygon } = useAccount()
 
   return useMemo(
     () =>
       ({
         [anvil.id]: ADDRESS, 
-        [mainnet.id]: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512',
+        [polygon.id]: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512',
         [sepolia.id]: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512',
       })[chain.id],
     [chain],
