@@ -206,7 +206,6 @@ function Home() {
 
   const handleFreeMint = useCallback(
     async (tokenID: bigint) => {
-      // Always clear previous error states when starting new transaction
       setErrorMessage("")
       
       if (txHash) {
