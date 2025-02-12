@@ -7,6 +7,7 @@ import { NetworkSwitcher } from '@/components/SwitchNetworks'
 import { WalletModal } from '@/components/WalletModal'
 import { useForge } from '@/hooks/use-forge'
 import { useToken } from "@/hooks/use-token"
+import { LoadingMessage, CooldownMessage } from "@/components/RotatingHourGlass"
 
 // Create a stable header actions component
 const HeaderActions = memo(() => {
@@ -95,11 +96,12 @@ const MainContent = ({
   const getTransactionStatus = () => {
     if (!initialized) return 'Reading blocks...'
     if (countdown > 0) {
-      return `⏳ Cooldown active: ${countdown}s remaining before next mint`
+      return <CooldownMessage countdown={countdown} />
+      // return `⏳ Cooldown active: ${countdown}s remaining before next mint`
     }
     if (!txHash) return 'Ready to mint'
     if (isError) return `❌ Transaction ${txHash} failed`
-    if (isLoading) return `⏳ Transaction ${txHash} is pending...`
+    if (isLoading) return <LoadingMessage txHash={txHash} />
     if (isSuccess) return `✅ Transaction ${txHash} is confirmed!`
     return `Transaction ${txHash} is in progress...`
   }
@@ -108,14 +110,14 @@ const MainContent = ({
     <>
       <div className="p-4 rounded-lg bg-gray-100 my-4">
         <div className="text-lg font-semibold mb-2 text-center">Minting Status</div>
-        <div className="text-md text-center font-medium">
+        <div className="text-md text-center font-medium flex items-center justify-center gap-2">
           {getTransactionStatus()}
         </div>
-        {countdown > 0 && (
+        {/* {countdown > 0 && (
           <div className="text-sm text-gray-600 mt-2 text-center">
             Please wait {countdown} seconds before minting again
           </div>
-        )}
+        )} */}
       </div>
 
       {initialized && address && (
