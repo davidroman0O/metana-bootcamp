@@ -6,7 +6,6 @@ import {Forge} from "../src/forge.sol";
 import {ERC1155Token} from "../src/erc1155.sol";
 
 contract ForgeTest is Test {
-
     address addressMain = address(0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266);
     address addressSecond = address(0x70997970C51812dc3A010C7d01b50e0d17dc79C8);
 
@@ -123,33 +122,50 @@ contract ForgeTest is Test {
         vm.stopPrank();
     }
 
-    /// @notice Test trading: burning a forged token (e.g. token 3) in exchange for a base token.
-    function test_Trade_Success() public {
+    /// @notice Test trading base token for another base token
+    function test_TradeBaseToken_Success() public {
         Forge forgeContract = new Forge();
         ERC1155Token token = ERC1155Token(forgeContract.getAddress());
 
         vm.startPrank(addressMain);
 
-        // Mint all three base tokens.
+        // Mint a base token
+        vm.warp(block.timestamp + 60);
+        token.freeMint(0);
+        token.setApprovalForAll(address(forgeContract), true);
+
+        // Trade token 0 for token 1
+        forgeContract.trade(0, 1);
+
+        // After trading, token 0 should be burned and token 1 should be received
+        assertEq(token.balanceOf(addressMain, 0), 0);
+        assertEq(token.balanceOf(addressMain, 1), 1);
+
+        vm.stopPrank();
+    }
+
+    /// @notice Test trading higher tier token (3-6) results in burn only
+    function test_TradeHigherTierToken_OnlyBurns() public {
+        Forge forgeContract = new Forge();
+        ERC1155Token token = ERC1155Token(forgeContract.getAddress());
+
+        vm.startPrank(addressMain);
+
+        // Mint base tokens and forge token 3
         vm.warp(block.timestamp + 60);
         token.freeMint(0);
         vm.warp(block.timestamp + 60);
         token.freeMint(1);
-        vm.warp(block.timestamp + 60);
-        token.freeMint(2);
-
         token.setApprovalForAll(address(forgeContract), true);
-
-        // Forge token 3 (burns tokens 0 and 1).
         forgeContract.forge(3);
         assertEq(token.balanceOf(addressMain, 3), 1);
 
-        // Trade token 3 for base token 0.
+        // Trade token 3 for base token 0
         forgeContract.trade(3, 0);
 
-        // After trading, token 3 should be burned and base token 0 should be minted.
+        // After trading, token 3 should be burned but no token 0 should be received
         assertEq(token.balanceOf(addressMain, 3), 0);
-        assertEq(token.balanceOf(addressMain, 0), 1);  // Note: token 0 was previously burned by forging.
+        assertEq(token.balanceOf(addressMain, 0), 0);
 
         vm.stopPrank();
     }
@@ -169,6 +185,25 @@ contract ForgeTest is Test {
         // Attempt to trade token 0 for token 3 (which is not a base token, allowed IDs are 0-2).
         vm.expectRevert("Can only trade for base tokens (0-2)");
         forgeContract.trade(0, 3);
+
+        vm.stopPrank();
+    }
+
+    /// @notice Test that trading the same token for itself fails
+    function test_Trade_RevertsForSameToken() public {
+        Forge forgeContract = new Forge();
+        ERC1155Token token = ERC1155Token(forgeContract.getAddress());
+
+        vm.startPrank(addressMain);
+
+        // Mint a base token
+        vm.warp(block.timestamp + 60);
+        token.freeMint(0);
+        token.setApprovalForAll(address(forgeContract), true);
+
+        // Attempt to trade token 0 for token 0
+        vm.expectRevert("Cannot trade token for itself");
+        forgeContract.trade(0, 0);
 
         vm.stopPrank();
     }

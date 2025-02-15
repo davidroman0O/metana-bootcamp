@@ -34,6 +34,7 @@
     "@radix-ui/react-toast": "^1.2.4",
     "@tanstack/react-query": "^5.63.0",
     "@unocss/reset": "^65.4.0",
+    "@wagmi/core": "^2.16.4",
     "axios": "^1.7.9",
     "buffer": "^6.0.3",
     "class-variance-authority": "^0.7.1",

@@ -259,6 +259,16 @@ function Home() {
     <div className="min-h-screen">
       <NetworkHandler />
       <StableHeader />
+      {
+        !exists && (
+          <div className="flex justify-center items-center h-96">
+            <div className="text-center">
+              <h1 className="text-3xl font-bold mb-4">Not Found or not accessible</h1>
+              <p className="text-lg text-gray-500">It seems the contract address is the wrong one or simply doesn't exists or not accessible</p>
+            </div>
+          </div>
+        ) 
+      }
       <MainContent
         exists={exists}
         initialized={initialized}

@@ -56,12 +56,15 @@ contract Forge is Ownable(msg.sender) {
     function trade(uint256 tokenIdToTrade, uint256 desiredBaseTokenId) external {
         require(desiredBaseTokenId < 3, "Can only trade for base tokens (0-2)");
         require(tokenIdToTrade < 7, "Token id to trade must be between 0 and 6");
+        require(tokenIdToTrade != desiredBaseTokenId, "Cannot trade token for itself");
         
         // Burn the token provided by the user.
         token.burn(msg.sender, tokenIdToTrade, 1);
         
-        // Mint the desired base token.
-        token.forgeMint(msg.sender, desiredBaseTokenId, 1);
+        // Only mint a new token if they traded in a base token (0-1-2)
+        if (tokenIdToTrade < 3) {
+            token.forgeMint(msg.sender, desiredBaseTokenId, 1);
+        }
 
         emit TokenTraded(msg.sender, tokenIdToTrade, desiredBaseTokenId);
     }
