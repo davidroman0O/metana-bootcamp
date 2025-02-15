@@ -5,10 +5,17 @@ import { ERC721 } from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
 contract FacesNFT is ERC721 {
 
+    uint16 public constant MAX_SUPPLY = 10;
+    uint16 public currentTokenId;
+
     constructor() ERC721("Echoforms", "ECHO") {
-        for (uint16 i = 1; i < 11; i++) {
-            super._safeMint(msg.sender, i);
-        }
+        currentTokenId = 0;
+    }
+
+    function mint() external {
+        require(currentTokenId < MAX_SUPPLY, "Max supply reached");
+        currentTokenId++;
+        super._safeMint(msg.sender, currentTokenId);
     }
 
     fallback() external payable {
