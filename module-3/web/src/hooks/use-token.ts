@@ -44,6 +44,9 @@ interface UseTokenReturn {
   refreshData: () => Promise<void>
 }
 
+const isProd = import.meta.env.MODE === 'production'
+
+
 export function useToken(): UseTokenReturn {
   const { address } = useAccount()
   const tokenContract = useTokenContract()
@@ -70,6 +73,9 @@ export function useToken(): UseTokenReturn {
     exists,
     contractAddress, 
   } = useContractAvailability(
+    isProd ?{
+      [polygon.id]: tokenContract.address,
+    } :
     {
       [anvil.id]: tokenContract.address,
       [polygon.id]: tokenContract.address,

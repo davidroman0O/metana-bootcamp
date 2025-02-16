@@ -1,5 +1,5 @@
 import { shorten } from '@did-network/dapp-sdk'
-import { useAccount, useWaitForTransactionReceipt } from 'wagmi'
+import { useAccount,useConnections, useWaitForTransactionReceipt } from 'wagmi'
 import { useState, useCallback, useEffect, memo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Header } from '@/components/layout/Header'
@@ -164,6 +164,8 @@ function Home() {
   const [errorMessage, setErrorMessage] = useState<string>("");
   const { notifications, addNotification, removeNotification, clearAllNotifications } = useNotifications();
   
+  const connections = useConnections()
+
   const { 
     exists, 
     freeMint, 
@@ -257,10 +259,11 @@ function Home() {
 
   return (
     <div className="min-h-screen">
+      {/* <NetworkDebug /> */}
       <NetworkHandler />
       <StableHeader />
       {
-        !exists && (
+        !exists && connections.length > 0 && (
           <div className="flex justify-center items-center h-96">
             <div className="text-center">
               <h1 className="text-3xl font-bold mb-4">Not Found or not accessible</h1>
@@ -268,6 +271,16 @@ function Home() {
             </div>
           </div>
         ) 
+      }
+      {
+        connections.length === 0 && (
+          <div className="flex justify-center items-center h-96">
+            <div className="text-center">
+              <h1 className="text-3xl font-bold mb-4">No connections found</h1>
+              <p className="text-lg text-gray-500">Please connect your wallet!</p>
+            </div>
+          </div>
+        )
       }
       <MainContent
         exists={exists}

@@ -2,18 +2,16 @@ import { useAccount } from 'wagmi'
 import { sepolia, polygon, anvil } from 'wagmi/chains'
 
 import ABI from './abi/Forge'
-import ADDRESS from './anvil/forge';
 
+
+import { FORGE_ADDRESSES } from "@/config/networks";
 
 export function useForgeContractAddress() {
   const { chain = polygon } = useAccount()
 
   return useMemo(
     () =>
-      ({
-        [anvil.id]: ADDRESS, 
-        [polygon.id]: '0x042397d98fa5CcDAd97F79De0b686f2F9EBA5679',
-      })[chain.id],
+      FORGE_ADDRESSES[chain.id],
     [chain],
   )
 }

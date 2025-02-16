@@ -1,18 +1,15 @@
 import { useAccount } from 'wagmi'
 import { sepolia, polygon, anvil } from 'wagmi/chains'
-
 import ABI from './abi/ERC1155Token'
-import ADDRESS from './anvil/token';
+import { TOKEN_ADDRESSES } from "@/config/networks";
+
 
 export function useTokenContractAddress() {
   const { chain = polygon } = useAccount()
 
   return useMemo(
     () =>
-      ({
-        [anvil.id]: ADDRESS, 
-        [polygon.id]: '0xF61Cce508003e372Faf0f7162f5944d40c534186',
-      })[chain.id],
+      TOKEN_ADDRESSES[chain.id],
     [chain],
   )
 }
