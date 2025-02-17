@@ -19,7 +19,7 @@ contract ERCRefund is ERC20, Ownable2Step, ReentrancyGuard {
     }
 
     receive() external payable {
-        mintTokens();
+        mint();
     }
 
     function _update(
@@ -35,7 +35,7 @@ contract ERCRefund is ERC20, Ownable2Step, ReentrancyGuard {
 
     event Mint(address indexed sender, uint256 ethSent, uint256 tokensMinted, uint256 totalSupplyBefore);
 
-    function mintTokens() public payable {
+    function mint() public payable {
         // require(msg.value % 1 ether == 0, "send a multiple of 1 ETH");
         require(msg.value > 0, "Must send ETH to mint tokens"); // whatever amount
         // I understood why now
@@ -76,7 +76,7 @@ contract ERCRefund is ERC20, Ownable2Step, ReentrancyGuard {
         // Similar thing as for mintTokens
         uint256 etherToSendBack = (amount * 0.5 ether) / (1000 * 1e18); // 0.5 for every 1000 tokens
         require(address(this).balance >= etherToSendBack, "contract is broke");
-        require(transferFrom(msg.sender, address(this), amount), "Token transfer failed"); // safer than before
+        require(transfer(address(this), amount), "Token transfer failed"); // safer than before
         emit Selling(msg.sender, amount, etherToSendBack, totalSupply());
         (bool success, ) = payable(msg.sender).call{value: etherToSendBack}(""); // after looking at my notes of the smartcontractprogrammer, call is prefered
         require(success, "ETH transfer failed");
