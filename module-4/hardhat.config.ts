@@ -14,6 +14,12 @@ const config: HardhatUserConfig = {
       allowUnlimitedContractSize: true,
     },
   },
+  mocha: {
+    reporter: 'spec',
+  },
+  gasReporter: {
+    enabled: true,
+  },
 };
 
 export default config;
