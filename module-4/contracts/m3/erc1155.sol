@@ -5,9 +5,10 @@ pragma solidity ^0.8.20; // slither says the 0.8.0 had known severe issues
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 
-contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable {
+contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable, ReentrancyGuard {
     
     /// Mapping to track the timestamp of the last free mint per address.
     mapping(address => uint256) public lastMintTime;
@@ -50,7 +51,7 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable {
         return block.timestamp >= lastMintTime[account] + COOLDOWN;
     }
     
-    function freeMint(uint256 id) external {
+    function freeMint(uint256 id) external nonReentrant {
         require(id < 3, "Free mint only allowed for tokens 0-2");
         require(
             block.timestamp >= lastMintTime[msg.sender] + COOLDOWN,
@@ -68,7 +69,7 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable {
         address to,
         uint256 id,
         uint256 amount
-    ) external onlyOwner {
+    ) external onlyOwner nonReentrant {
         require(owner() == msg.sender, "Only forging contract can mint tokens");
         require(id < 7, "Token id must be between 0 and 6");
         _mint(to, id, amount, "");
@@ -84,4 +85,21 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable {
     {
         return super.supportsInterface(interfaceId);
     }
+
+
+    function batchBurn(
+        address account, 
+        uint256[] calldata ids, 
+        uint256[] calldata amounts
+    ) external onlyOwner nonReentrant {
+        require(ids.length == amounts.length, "Length mismatch");
+        for(uint256 i = 0; i < ids.length; i++) {
+            require(
+                account == msg.sender || isApprovedForAll(account, msg.sender),
+                "Not approved"
+            );
+            _burn(account, ids[i], amounts[i]);
+        }
+    }
+
 }
