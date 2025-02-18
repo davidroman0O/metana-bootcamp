@@ -22,7 +22,6 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable2Step, ReentrancyGuard
     // this fix the unit test ownership issue
     constructor(address initialOwner) Ownable(initialOwner) ERC1155("ipfs://bafybeihx2hcoh5pfuth7jw3winzc7l727zpieftswqibutaepwk6nbqsn4/") {
         console.log("ERC1155Token constructor address", address(this), initialOwner);
-        require(initialOwner != address(0), "Invalid owner");
     }
     
     function uri(uint256 tokenId) public view override returns (string memory) {
@@ -106,7 +105,7 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable2Step, ReentrancyGuard
         address account, 
         uint256[] calldata ids, 
         uint256[] calldata amounts
-    ) external onlyOwner nonReentrant {
+    ) external onlyOwner {
         require(ids.length == amounts.length, "Length mismatch");
         for(uint256 i = 0; i < ids.length; i++) {
             require(

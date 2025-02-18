@@ -32,6 +32,10 @@ contract Forge is Ownable2Step, ReentrancyGuard {
         console.log("Forge constructor address", address(this));
         token = ERC1155Token(payable(_token)); // explicitly having the contract address
     }
+
+    function acceptTokenOwnership() external onlyOwner {
+        token.acceptOwnership();
+    }
     
     function forge(uint256 forgedTokenId) external {
         require(forgedTokenId >= 3 && forgedTokenId <= 6, "Can only forge tokens 3-6");
