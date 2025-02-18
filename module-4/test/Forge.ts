@@ -37,7 +37,7 @@ describe("ERC1155Token and Forge", function () {
         return { forge, token, owner, otherAccount };
     }
 
-    async function deployMockContracts() {
+    async function deployMockBatchContracts() {
         const [owner, otherAccount] = await ethers.getSigners();
 
         // Deploy ERC1155Token
@@ -75,6 +75,14 @@ describe("ERC1155Token and Forge", function () {
                 // Also verify Ownable's check
                 await expect(ERC1155Token.deploy(ethers.ZeroAddress))
                     .to.be.revertedWithCustomError(ERC1155Token, "OwnableInvalidOwner");
+            });
+
+
+            it("Should prevent transfer ownership if not owner", async function () {
+                const { forge } = await loadFixture(deployContracts);
+                expect(
+                    forge.acceptOwnership()
+                ).to.be.revertedWithCustomError(forge, "OwnableUnauthorizedAccount");
             });
         });
 
@@ -348,7 +356,7 @@ describe("ERC1155Token and Forge", function () {
             });
 
             it("Should prevent forge minting invalid token IDs", async function () {
-                const { token, mockForge, owner } = await loadFixture(deployMockContracts);
+                const { token, mockForge, owner } = await loadFixture(deployMockBatchContracts);
 
                 // Valid ID (should succeed)
                 await expect(mockForge.forgeMint(owner.address, 6, 1)).to.not.be.reverted;
@@ -392,7 +400,7 @@ describe("ERC1155Token and Forge", function () {
             });
 
             it("Should revert batch burn with mismatched arrays", async function () {
-                const { token, mockForge, owner } = await loadFixture(deployMockContracts);
+                const { token, mockForge, owner } = await loadFixture(deployMockBatchContracts);
             
                 // Now attempt to call batchBurn from MockForge
                 await expect(
@@ -449,7 +457,6 @@ describe("ERC1155Token and Forge", function () {
     });
 
     describe("Forge", function () {
-
         describe("Fallback Behavior", function () {
             it("Should revert when sending ETH with data (fallback)", async function () {
                 const { forge, owner } = await loadFixture(deployContracts);
@@ -460,6 +467,47 @@ describe("ERC1155Token and Forge", function () {
                         data: "0x1234",
                     })
                 ).to.be.revertedWith("You can't send ether with data on that contract");
+            });
+        });
+
+        it("Should hit else path with invalid forge id", async function () {
+            const { token, forge, owner } = await loadFixture(deployContracts);
+            await token.connect(owner).setApprovalForAll(await forge.getAddress(), true);
+            // Try to forge with token id 7 which should hit all else conditions
+            await expect(
+                forge.forge(7)
+            ).to.be.revertedWith("Invalid forged token id");
+        });
+
+        describe("Token Ownership Management", function () {
+            it("Should test both ownership paths of acceptTokenOwnership", async function () {
+                // I started fresh here because i was so annoyed with the `[E]` behind onlyOwner on acceptTokenOwnership
+                const [owner, otherAccount] = await ethers.getSigners();
+                
+                // Deploy token owned by owner
+                const ERC1155Token = await ethers.getContractFactory("ERC1155Token");
+                const newToken = await ERC1155Token.deploy(owner);
+                
+                // Deploy forge owned by owner
+                const Forge = await ethers.getContractFactory("Forge");
+                const newForge = await Forge.deploy(owner, await newToken.getAddress());
+                
+                // Set up ownership transfer
+                await newToken.transferOwnership(await newForge.getAddress());
+                
+                // Test non-owner fails
+                await expect(
+                    newForge.connect(otherAccount).acceptTokenOwnership()
+                ).to.be.revertedWithCustomError(newForge, "OwnableUnauthorizedAccount")
+                .withArgs(otherAccount.address);
+                
+                // Test owner succeeds (should NOT revert)
+                await expect(
+                    newForge.connect(owner).acceptTokenOwnership()
+                ).to.not.be.reverted;
+                
+                // Verify ownership transferred successfully
+                expect(await newToken.owner()).to.equal(await newForge.getAddress());
             });
         });
 

@@ -37,9 +37,7 @@ contract Forge is Ownable2Step, ReentrancyGuard {
         token.acceptOwnership();
     }
     
-    function forge(uint256 forgedTokenId) external {
-        require(forgedTokenId >= 3 && forgedTokenId <= 6, "Can only forge tokens 3-6");
-        
+    function forge(uint256 forgedTokenId) external {        
         // Now that i know about Check-Effects-Interactions pattern, I will first burn the tokens differently.
         uint256[] memory ids; // false-positive because init later one
         uint256[] memory amounts; // false-positive because init later one
@@ -69,6 +67,8 @@ contract Forge is Ownable2Step, ReentrancyGuard {
             ids[0] = 0; amounts[0] = 1;
             ids[1] = 1; amounts[1] = 1;
             ids[2] = 2; amounts[2] = 1;
+        } else {
+            revert("Invalid forged token id"); // the only way to have an easy 100% coverage
         }
 
         // Slither also complained about the inside loop external call, so I will batchBurn the tokens.
