@@ -209,7 +209,7 @@ describe("ERCRefund", function () {
             it("Should revert if token transfer during sellBack fails", async function () {
                 const { ercRefund, owner } = await loadFixture(deployFixture);
                 
-                const MaliciousToken = await ethers.getContractFactory("MaliciousERC20");
+                const MaliciousToken = await ethers.getContractFactory("MockMaliciousERC20");
                 const maliciousToken = await MaliciousToken.deploy();
                 
                 await ethers.provider.send("hardhat_setBalance", [
@@ -256,7 +256,7 @@ describe("ERCRefund", function () {
             it("Should revert when the receiver rejects ETH on withdraw", async function () {
                 const { ercRefund, owner } = await loadFixture(deployFixture);
             
-                const MaliciousReceiver = await ethers.getContractFactory("MaliciousReceiver");
+                const MaliciousReceiver = await ethers.getContractFactory("MockMaliciousReceiver");
                 const maliciousReceiver = await MaliciousReceiver.deploy(await ercRefund.getAddress());
             
                 await ethers.provider.send("hardhat_setBalance", [
@@ -295,7 +295,7 @@ describe("ERCRefund", function () {
         it("Should prevent reentrancy in sellBack", async function () {
             const { ercRefund, owner } = await loadFixture(deployFixture);
             
-            const ReentrancyAttacker = await ethers.getContractFactory("ReentrancyAttacker");
+            const ReentrancyAttacker = await ethers.getContractFactory("MockReentrancyAttacker");
             const attacker = await ReentrancyAttacker.deploy(await ercRefund.getAddress());
             
             await ercRefund.connect(owner).mint({
@@ -319,7 +319,7 @@ describe("ERCRefund", function () {
         it("Should prevent reentrancy in withdraw", async function () {
             const { ercRefund } = await loadFixture(deployFixture);
             
-            const WithdrawReentrancyAttacker = await ethers.getContractFactory("WithdrawReentrancyAttacker");
+            const WithdrawReentrancyAttacker = await ethers.getContractFactory("MockWithdrawReentrancyAttacker");
             const attacker = await WithdrawReentrancyAttacker.deploy(await ercRefund.getAddress());
             
             await ethers.provider.send("hardhat_setBalance", [

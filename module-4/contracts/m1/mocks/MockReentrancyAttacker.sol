@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {ERCRefund} from "./m1/ERCRefund.sol";
+import {ERCRefund} from "../ERCRefund.sol";
 
-contract WithdrawReentrancyAttacker {
+contract MockReentrancyAttacker {
     ERCRefund public ercRefund;
     bool public attacking;
 
@@ -11,21 +11,17 @@ contract WithdrawReentrancyAttacker {
         ercRefund = ERCRefund(payable(_ercRefund));
     }
 
-    // Fallback function to receive ETH and attempt reentrancy
+    // Fallback function to receive ETH
     receive() external payable {
         if (attacking) {
             attacking = false;
-            ercRefund.withdraw();
+            // Try to reenter
+            ercRefund.sellBack(1000 * 1e18);
         }
     }
 
     function attack() external {
         attacking = true;
-        ercRefund.withdraw();
-    }
-
-    // Function to accept ownership of ERCRefund
-    function acceptRefundOwnership() external {
-        ercRefund.acceptOwnership();
+        ercRefund.sellBack(1000 * 1e18);
     }
 }

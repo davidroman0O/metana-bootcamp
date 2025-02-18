@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {ERCRefund} from "./m1/ERCRefund.sol";
+import {ERCRefund} from "../ERCRefund.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-contract MaliciousReceiver is Ownable {
+contract MockMaliciousReceiver is Ownable {
     ERCRefund public ercRefund;
     bool public shouldReject;
 

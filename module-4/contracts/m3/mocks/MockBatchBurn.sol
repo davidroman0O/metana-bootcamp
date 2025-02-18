@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./erc1155.sol";
+import "../erc1155.sol";
 
 contract MockBatch {
     ERC1155Token private token;

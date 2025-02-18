@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./erc1155.sol";
+import "../erc1155.sol";
 
-contract FreeMintReentrancyAttacker {
+contract MockFreeMintReentrancyAttacker {
     ERC1155Token public token;
     bool public attacking;
 

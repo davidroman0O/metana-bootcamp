@@ -20,8 +20,8 @@ contract Forge is Ownable2Step, ReentrancyGuard {
     event TokenForged(address indexed creator, uint256 tokenId);
     event TokenTraded(address indexed trader, uint256 fromToken, uint256 toToken);
     
-    fallback() external  {
-        // revert("You can't send ether with data on that contract");
+    fallback() external payable {
+        revert("You can't send ether with data on that contract");
     }
 
     receive() external payable {
@@ -88,10 +88,7 @@ contract Forge is Ownable2Step, ReentrancyGuard {
         // Burn the token provided by the user.
         token.burn(msg.sender, tokenIdToTrade, 1);
         
-        // Only mint a new token if they traded in a base token (0-1-2)
-        if (tokenIdToTrade < 3) {
-            token.forgeMint(msg.sender, desiredBaseTokenId, 1);
-        }
+        token.forgeMint(msg.sender, desiredBaseTokenId, 1);
 
         emit TokenTraded(msg.sender, tokenIdToTrade, desiredBaseTokenId);
     }

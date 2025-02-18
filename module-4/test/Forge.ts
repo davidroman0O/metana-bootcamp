@@ -216,7 +216,122 @@ describe("ERC1155Token and Forge", function () {
                 
                 expect(await token.balanceOf(owner.address, 3)).to.equal(1);
             });
-    
+
+            it("Should forge them all", async function () {
+                const { token, forge, owner } = await loadFixture(deployContracts);
+                
+                // First approve Forge to handle tokens
+                await token.connect(owner).setApprovalForAll(await forge.getAddress(), true);
+                
+                await time.increase(time.duration.minutes(2));
+                await token.connect(owner).freeMint(0);
+                await time.increase(time.duration.minutes(2));
+                await token.connect(owner).freeMint(1);
+                await time.increase(time.duration.minutes(2));
+                await forge.forge(3);
+
+                await token.connect(owner).freeMint(1);
+                await time.increase(time.duration.minutes(2));
+                await token.connect(owner).freeMint(2);
+                await time.increase(time.duration.minutes(2));
+                await forge.forge(4);
+
+                await token.connect(owner).freeMint(0);
+                await time.increase(time.duration.minutes(2));
+                await token.connect(owner).freeMint(2);
+                await time.increase(time.duration.minutes(2));
+                await forge.forge(5);
+                
+                await token.connect(owner).freeMint(0);
+                await time.increase(time.duration.minutes(2));
+                await token.connect(owner).freeMint(1);
+                await time.increase(time.duration.minutes(2));
+                await token.connect(owner).freeMint(2);
+                await time.increase(time.duration.minutes(2));
+                await forge.forge(6);
+                
+                expect(await token.balanceOf(owner.address, 3)).to.equal(1);
+            });
+
+            it("Should prevent forging outside of range", async function () {
+                const { token, forge, owner } = await loadFixture(deployContracts);
+                
+                // First approve Forge to handle tokens
+                await token.connect(owner).setApprovalForAll(await forge.getAddress(), true);
+                
+                await time.increase(time.duration.minutes(2));
+                await token.connect(owner).freeMint(0);
+                await time.increase(time.duration.minutes(2));
+                await token.connect(owner).freeMint(1);
+                await time.increase(time.duration.minutes(2));
+                
+                expect(
+                    forge.forge(1),
+                ).to.be.revertedWith("Can only forge tokens 3-6");
+            });
+
+            it("Should allow trading", async function () {
+                const { token, forge, owner } = await loadFixture(deployContracts);
+                
+                // First approve Forge to handle tokens
+                await token.connect(owner).setApprovalForAll(await forge.getAddress(), true);
+                
+                await time.increase(time.duration.minutes(2));
+                await token.connect(owner).freeMint(0);
+                await time.increase(time.duration.minutes(2));
+                await token.connect(owner).freeMint(1);
+                await time.increase(time.duration.minutes(2));
+                
+                expect(
+                    forge.trade(0, 2)
+                ).to.be.emit(token, "TokenTraded");
+            });
+
+            it("Should prevent trading invalid tokens 0-2", async function () {
+                const { token, forge, owner } = await loadFixture(deployContracts);
+
+                await token.connect(owner).setApprovalForAll(await forge.getAddress(), true);
+                
+                await time.increase(time.duration.minutes(2));
+                await token.connect(owner).freeMint(0);
+                await time.increase(time.duration.minutes(2));
+                await token.connect(owner).freeMint(1);
+                await time.increase(time.duration.minutes(2));
+
+                expect(
+                    forge.trade(0, 3)
+                ).to.be.revertedWith("Can only trade for base tokens (0-2)");
+            });
+
+            it("Should prevent trading invalid tokens within range", async function () {
+                const { token, forge, owner } = await loadFixture(deployContracts);
+
+                await token.connect(owner).setApprovalForAll(await forge.getAddress(), true);
+                
+                await time.increase(time.duration.minutes(2));
+                await token.connect(owner).freeMint(0);
+                await time.increase(time.duration.minutes(2));
+                await token.connect(owner).freeMint(1);
+                await time.increase(time.duration.minutes(2));
+
+                expect(
+                    forge.trade(7, 0)
+                ).to.be.revertedWith("Token id to trade must be between 0 and 6");
+            });
+
+            it("Should prevent trading invalid token with itself", async function () {
+                const { token, forge, owner } = await loadFixture(deployContracts);
+
+                await token.connect(owner).setApprovalForAll(await forge.getAddress(), true);
+                
+                await time.increase(time.duration.minutes(2));
+                await token.connect(owner).freeMint(0);
+                await time.increase(time.duration.minutes(2));
+
+                expect(
+                    forge.trade(0, 0)
+                ).to.be.revertedWith("Cannot trade token for itself");
+            });
 
             it("Should prevent non-owner from forge minting", async function () {
                 const { token, otherAccount } = await loadFixture(deployContracts);
@@ -226,7 +341,6 @@ describe("ERC1155Token and Forge", function () {
 
             it("Should prevent forge minting invalid token ids", async function () {
                 const { token, owner } = await loadFixture(deployContracts);
-                
                 await expect(
                     token.forgeMint(owner.address, 7, 1)
                 ).to.be.revertedWithCustomError(token, "OwnableUnauthorizedAccount")
@@ -303,7 +417,7 @@ describe("ERC1155Token and Forge", function () {
             it("Should prevent reentrancy in freeMint", async function () {
                 const { token } = await loadFixture(deployContracts);
                 
-                const FreeMintReentrancyAttacker = await ethers.getContractFactory("FreeMintReentrancyAttacker");
+                const FreeMintReentrancyAttacker = await ethers.getContractFactory("MockFreeMintReentrancyAttacker");
                 const attacker = await FreeMintReentrancyAttacker.deploy(await token.getAddress());
                 
                 await expect(attacker.attack())
@@ -325,6 +439,23 @@ describe("ERC1155Token and Forge", function () {
                 await expect(
                     owner.sendTransaction({
                         to: await token.getAddress(),
+                        value: ethers.parseEther("1"),
+                        data: "0x1234",
+                    })
+                ).to.be.revertedWith("You can't send ether with data on that contract");
+            });
+        });
+
+    });
+
+    describe("Forge", function () {
+
+        describe("Fallback Behavior", function () {
+            it("Should revert when sending ETH with data (fallback)", async function () {
+                const { forge, owner } = await loadFixture(deployContracts);
+                await expect(
+                    owner.sendTransaction({
+                        to: await forge.getAddress(),
                         value: ethers.parseEther("1"),
                         data: "0x1234",
                     })
