@@ -3,14 +3,16 @@ pragma solidity ^0.8.0;
 
 // Import the token contract interface.
 import "./erc1155.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
+import "hardhat/console.sol";
 
 /**
  * @title Forge
  * @notice Implements forging (burning and minting) and trading functions.
  */
-contract Forge is Ownable(msg.sender), ReentrancyGuard {
+contract Forge is Ownable2Step, ReentrancyGuard {
 
     /// @notice The ERC1155 token contract.
     ERC1155Token private immutable token;
@@ -18,20 +20,25 @@ contract Forge is Ownable(msg.sender), ReentrancyGuard {
     event TokenForged(address indexed creator, uint256 tokenId);
     event TokenTraded(address indexed trader, uint256 fromToken, uint256 toToken);
     
-    constructor() {
-        token = new ERC1155Token();
+    fallback() external  {
+        // revert("You can't send ether with data on that contract");
     }
 
-    function getAddress() external view returns (address) {
-        return address(token);
+    receive() external payable {
+        revert("You can't send ether on that contract");
+    }
+
+    constructor(address initialOwner, address _token) Ownable(initialOwner) {
+        console.log("Forge constructor address", address(this));
+        token = ERC1155Token(payable(_token)); // explicitly having the contract address
     }
     
     function forge(uint256 forgedTokenId) external {
         require(forgedTokenId >= 3 && forgedTokenId <= 6, "Can only forge tokens 3-6");
         
         // Now that i know about Check-Effects-Interactions pattern, I will first burn the tokens differently.
-        uint256[] memory ids; // false-positive because init later on
-        uint256[] memory amounts; // false-positive because init later on
+        uint256[] memory ids; // false-positive because init later one
+        uint256[] memory amounts; // false-positive because init later one
         
         if (forgedTokenId == 3) {
             // Forge token 3 by burning one token 0 and one token 1.

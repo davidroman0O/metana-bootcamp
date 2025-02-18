@@ -4,11 +4,13 @@ pragma solidity ^0.8.20; // slither says the 0.8.0 had known severe issues
 // Import OpenZeppelin’s ERC1155 base, burnable extension and Ownable.
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 
+import "hardhat/console.sol";
 
-contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable, ReentrancyGuard {
+contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable2Step, ReentrancyGuard {
     
     /// Mapping to track the timestamp of the last free mint per address.
     mapping(address => uint256) public lastMintTime;
@@ -17,7 +19,20 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable, ReentrancyGuard {
     uint256 public constant COOLDOWN = 1 minutes;
     // uint256 public constant COOLDOWN = 5 seconds;
   
-    constructor() Ownable(msg.sender) ERC1155("ipfs://bafybeihx2hcoh5pfuth7jw3winzc7l727zpieftswqibutaepwk6nbqsn4/{id}") {}
+    // this fix the unit test ownership issue
+    constructor(address initialOwner) Ownable(initialOwner) ERC1155("ipfs://bafybeihx2hcoh5pfuth7jw3winzc7l727zpieftswqibutaepwk6nbqsn4/") {
+        console.log("ERC1155Token constructor address", address(this), initialOwner);
+        require(initialOwner != address(0), "Invalid owner");
+    }
+    
+    function uri(uint256 tokenId) public view override returns (string memory) {
+        return string(
+            abi.encodePacked(
+                super.uri(tokenId),
+                Strings.toString(tokenId) // Convert token ID to a string
+            )
+        );
+    }
 
     function canMint() public view returns (bool) {
         return block.timestamp >= lastMintTime[msg.sender] + COOLDOWN;
@@ -100,6 +115,14 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable, ReentrancyGuard {
             );
             _burn(account, ids[i], amounts[i]);
         }
+    }
+
+    fallback() external  {
+        // revert("You can't send ether with data on that contract");
+    }
+
+    receive() external payable {
+        revert("You can't send ether on that contract");
     }
 
 }
