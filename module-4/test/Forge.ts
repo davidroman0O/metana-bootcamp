@@ -27,14 +27,34 @@ describe("ERC1155Token and Forge", function () {
         await token.transferOwnership(await forge.getAddress());
         await forge.acceptTokenOwnership();
 
-        console.log("Owner address:", owner.address);
-        console.log("Forge Contract Address:", await forge.getAddress());
-        console.log("Token Address from Forge:", tokenAddress);
+        // console.log("Owner address:", owner.address);
+        // console.log("Forge Contract Address:", await forge.getAddress());
+        // console.log("Token Address from Forge:", tokenAddress);
         
-        console.log("Actual Forge Owner:", await forge.owner());
-        console.log("Actual Token Owner:", await token.owner());
+        // console.log("Actual Forge Owner:", await forge.owner());
+        // console.log("Actual Token Owner:", await token.owner());
         
         return { forge, token, owner, otherAccount };
+    }
+
+    async function deployMockContracts() {
+        const [owner, otherAccount] = await ethers.getSigners();
+
+        // Deploy ERC1155Token
+        const ERC1155Token = await ethers.getContractFactory("ERC1155Token");
+        const token = await ERC1155Token.deploy(owner);
+        await token.waitForDeployment();
+    
+        // Deploy MockForge (which will call forgeMint)
+        const MockForge = await ethers.getContractFactory("MockBatch"); 
+        const mockForge = await MockForge.deploy(await token.getAddress());
+        await mockForge.waitForDeployment();
+    
+        // Transfer ownership to MockForge so it can mint
+        await token.transferOwnership(await mockForge.getAddress());
+        await mockForge.acceptTokenOwnership();
+    
+        return { token, mockForge, owner };
     }
 
     describe("ERC1155Token", function () {
@@ -186,16 +206,12 @@ describe("ERC1155Token and Forge", function () {
                 // First approve Forge to handle tokens
                 await token.connect(owner).setApprovalForAll(await forge.getAddress(), true);
                 
-                // Mint first base token
                 await token.connect(owner).freeMint(0);
                 
-                // Wait for cooldown
                 await time.increase(time.duration.minutes(2));
                 
-                // Mint second base token
                 await token.connect(owner).freeMint(1);
                 
-                // Now forge can burn these tokens and mint new one
                 await forge.forge(3);
                 
                 expect(await token.balanceOf(owner.address, 3)).to.equal(1);
@@ -216,6 +232,21 @@ describe("ERC1155Token and Forge", function () {
                 ).to.be.revertedWithCustomError(token, "OwnableUnauthorizedAccount")
                 .withArgs(owner.address);
             });
+
+            it("Should prevent forge minting invalid token IDs", async function () {
+                const { token, mockForge, owner } = await loadFixture(deployMockContracts);
+
+                // Valid ID (should succeed)
+                await expect(mockForge.forgeMint(owner.address, 6, 1)).to.not.be.reverted;
+            
+                // Invalid ID (should fail)
+                await expect(mockForge.forgeMint(owner.address, 7, 1))
+                    .to.be.revertedWith("Invalid token id: must be 0 to 6");
+            
+                await expect(mockForge.forgeMint(owner.address, 100, 1))
+                    .to.be.revertedWith("Invalid token id: must be 0 to 6");
+            });
+            
         });
 
         describe("Batch Operations", function () {
@@ -225,16 +256,10 @@ describe("ERC1155Token and Forge", function () {
                 // Approve Forge
                 await token.connect(owner).setApprovalForAll(await forge.getAddress(), true);
                 
-                // Mint first token
                 await token.connect(owner).freeMint(0);
-                
-                // Increase time to bypass cooldown
                 await time.increase(time.duration.minutes(2));
-                
-                // Mint second token
                 await token.connect(owner).freeMint(1);
-                
-                // Forge token 3 which will burn tokens 0 and 1
+
                 await forge.forge(3);
                 
                 expect(await token.balanceOf(owner.address, 0)).to.equal(0);
@@ -253,14 +278,14 @@ describe("ERC1155Token and Forge", function () {
             });
 
             it("Should revert batch burn with mismatched arrays", async function () {
-                const { token, owner } = await loadFixture(deployContracts);
-                
+                const { token, mockForge, owner } = await loadFixture(deployMockContracts);
+            
+                // Now attempt to call batchBurn from MockForge
                 await expect(
-                    token.batchBurn(owner.address, [0, 1], [1])
-                ).to.be.revertedWithCustomError(token, "OwnableUnauthorizedAccount")
-                .withArgs(owner.address);
+                     mockForge.triggerBatchBurn(owner.address, [0, 1], [1])
+                ).to.be.revertedWith("Length mismatch");
             });
-    
+
     
         });
 
@@ -284,8 +309,6 @@ describe("ERC1155Token and Forge", function () {
                 await expect(attacker.attack())
                     .to.be.reverted; // Will revert due to nonReentrant modifier
             });
-
-
         });
 
         describe("Interface Support", function () {
@@ -295,6 +318,20 @@ describe("ERC1155Token and Forge", function () {
                 expect(await token.supportsInterface("0xd9b67a26")).to.be.true;
             });
         });
+
+        describe("Fallback Behavior", function () {
+            it("Should revert when sending ETH with data (fallback)", async function () {
+                const { token, owner } = await loadFixture(deployContracts);
+                await expect(
+                    owner.sendTransaction({
+                        to: await token.getAddress(),
+                        value: ethers.parseEther("1"),
+                        data: "0x1234",
+                    })
+                ).to.be.revertedWith("You can't send ether with data on that contract");
+            });
+        });
+
     });
 
 });

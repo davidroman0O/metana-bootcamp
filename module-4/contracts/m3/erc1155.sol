@@ -83,9 +83,8 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable2Step, ReentrancyGuard
         address to,
         uint256 id,
         uint256 amount
-    ) external onlyOwner nonReentrant {
-        require(owner() == msg.sender, "Only forging contract can mint tokens");
-        require(id < 7, "Token id must be between 0 and 6");
+    ) external onlyOwner {
+        require(id <= 6, "Invalid token id: must be 0 to 6");
         _mint(to, id, amount, "");
     }
 
@@ -108,16 +107,12 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable2Step, ReentrancyGuard
     ) external onlyOwner {
         require(ids.length == amounts.length, "Length mismatch");
         for(uint256 i = 0; i < ids.length; i++) {
-            require(
-                account == msg.sender || isApprovedForAll(account, msg.sender),
-                "Not approved"
-            );
             _burn(account, ids[i], amounts[i]);
         }
     }
 
-    fallback() external  {
-        // revert("You can't send ether with data on that contract");
+    fallback() external payable  {
+        revert("You can't send ether with data on that contract");
     }
 
     receive() external payable {
