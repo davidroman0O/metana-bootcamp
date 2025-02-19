@@ -86,7 +86,7 @@ contract Forge is Ownable2Step, ReentrancyGuard {
         token.burn(msg.sender, tokenIdToTrade, 1);
         
         token.forgeMint(msg.sender, desiredBaseTokenId, 1);
-
+        
         emit TokenTraded(msg.sender, tokenIdToTrade, desiredBaseTokenId);
     }
 

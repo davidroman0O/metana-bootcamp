@@ -22,7 +22,7 @@ contract ERCTokenSale is ERC20, Ownable2Step, ReentrancyGuard {
 
     event Mint(address indexed sender, uint256 ethSent, uint256 tokensMinted, uint256 totalSupplyBefore);
 
-    function mintTokens() public payable {
+    function mint() public payable {
          // require(msg.value % 1 ether == 0, "send a multiple of 1 ETH");
         require(msg.value > 0, "Must send ETH to mint tokens"); // whatever amount
         uint256 tokensToMint = (TOKEN_PER_ETH * msg.value) / 1 ether;
@@ -37,7 +37,7 @@ contract ERCTokenSale is ERC20, Ownable2Step, ReentrancyGuard {
     }
 
     receive() external payable {
-        mintTokens();
+        mint();
     }
 
 }

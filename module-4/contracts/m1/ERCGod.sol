@@ -7,14 +7,12 @@ import "@openzeppelin/contracts/access/Ownable2Step.sol";
 // Open Remix, build it, deploy it
 contract ERCGod is ERC20, Ownable2Step {
 
-    constructor(string memory name_, string memory symbol_) // literally copied from the ERC20 constructor
+    constructor(string memory name_, string memory symbol_)
         ERC20(name_, symbol_)
         Ownable(msg.sender)
-    {
+    {}
 
-    }
-
-    function mintTokensToAddress(address recipient, uint256 amount)  public virtual onlyOwner {
+    function mint(address recipient, uint256 amount)  public virtual onlyOwner {
         _mint(recipient, amount);
     }
 
