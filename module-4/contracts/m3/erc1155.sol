@@ -8,8 +8,6 @@ import "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 
-import "hardhat/console.sol";
-
 contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable2Step, ReentrancyGuard {
     
     /// Mapping to track the timestamp of the last free mint per address.
@@ -17,13 +15,20 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable2Step, ReentrancyGuard
 
     /// Cooldown period (in seconds) between free mints.
     uint256 public constant COOLDOWN = 1 minutes;
-    // uint256 public constant COOLDOWN = 5 seconds;
   
     // this fix the unit test ownership issue
-    constructor(address initialOwner) Ownable(initialOwner) ERC1155("ipfs://bafybeihx2hcoh5pfuth7jw3winzc7l727zpieftswqibutaepwk6nbqsn4/") {
-        console.log("ERC1155Token constructor address", address(this), initialOwner);
+    constructor(address initialOwner) Ownable(initialOwner) ERC1155("ipfs://bafybeihx2hcoh5pfuth7jw3winzc7l727zpieftswqibutaepwk6nbqsn4/") {}
+
+    // We're not allowing money to flow in anyway, the tokens are free, thus we cannot lock funds
+    fallback() external payable  {
+        revert("You can't send ether with data on that contract");
     }
-    
+
+    // We're not allowing money to flow in anyway, the tokens are free, thus we cannot lock funds
+    receive() external payable {
+        revert("You can't send ether on that contract");
+    }
+
     function uri(uint256 tokenId) public view override returns (string memory) {
         return string(
             abi.encodePacked(
@@ -99,24 +104,15 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable2Step, ReentrancyGuard
         return super.supportsInterface(interfaceId);
     }
 
-
     function batchBurn(
         address account, 
         uint256[] calldata ids, 
         uint256[] calldata amounts
-    ) external onlyOwner {
+    ) public virtual onlyOwner {
         require(ids.length == amounts.length, "Length mismatch");
         for(uint256 i = 0; i < ids.length; i++) {
             _burn(account, ids[i], amounts[i]);
         }
-    }
-
-    fallback() external payable  {
-        revert("You can't send ether with data on that contract");
-    }
-
-    receive() external payable {
-        revert("You can't send ether on that contract");
     }
 
 }

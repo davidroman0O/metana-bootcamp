@@ -6,8 +6,6 @@ import "./erc1155.sol";
 import "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-import "hardhat/console.sol";
-
 /**
  * @title Forge
  * @notice Implements forging (burning and minting) and trading functions.
@@ -29,7 +27,6 @@ contract Forge is Ownable2Step, ReentrancyGuard {
     }
 
     constructor(address initialOwner, address _token) Ownable(initialOwner) {
-        console.log("Forge constructor address", address(this));
         token = ERC1155Token(payable(_token)); // explicitly having the contract address
     }
 
@@ -37,7 +34,7 @@ contract Forge is Ownable2Step, ReentrancyGuard {
         token.acceptOwnership();
     }
     
-    function forge(uint256 forgedTokenId) external {        
+    function forge(uint256 forgedTokenId) external nonReentrant() {        
         // Now that i know about Check-Effects-Interactions pattern, I will first burn the tokens differently.
         uint256[] memory ids; // false-positive because init later one
         uint256[] memory amounts; // false-positive because init later one
