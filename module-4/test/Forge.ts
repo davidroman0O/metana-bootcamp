@@ -454,6 +454,16 @@ describe("ERC1155Token and Forge", function () {
             });
         });
 
+        it("Should revert when sending ETH directly (receive)", async function () {
+            const { forge, owner } = await loadFixture(deployContracts);
+            await expect(
+                owner.sendTransaction({
+                    to: await forge.getAddress(),
+                    value: ethers.parseEther("1")
+                })
+            ).to.be.revertedWith("You can't send ether on that contract");
+        });
+
     });
 
     describe("Forge", function () {
