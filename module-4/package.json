@@ -6,6 +6,6 @@
   },
   "scripts": {
       "coverage": "open ./coverage/index.html",
-      "slither": "slither ./contracts/ERCRefund.sol --solc-remaps '@openzeppelin=node_modules/@openzeppelin'"
+      "slither": "slither $1 --solc-remaps '@openzeppelin=node_modules/@openzeppelin'"
   }
 }
