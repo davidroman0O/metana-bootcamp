@@ -35,12 +35,12 @@ contract StakingVisageToken is ERC20("Visage Token", "VSG"), Ownable2Step, Reent
         require(msg.value > 0, "send eth to buy tokens");
         uint256 tokensToMint = (TOKENS_PER_ETH * msg.value) / 1 ether;
         emit Mint(buyer, msg.value, tokensToMint, totalSupply());
-        super._mint(buyer, tokensToMint);
+        _mint(buyer, tokensToMint);
     }
 
     // Used for rewards
-    function mintToken(address minter, uint256 tokens) public onlyOwner nonReentrant  {
-        super._mint(minter, tokens);
+    function mintToken(address minter, uint256 tokens) public onlyOwner  {
+        _mint(minter, tokens);
     }
 
     function withdraw() external onlyOwner nonReentrant {

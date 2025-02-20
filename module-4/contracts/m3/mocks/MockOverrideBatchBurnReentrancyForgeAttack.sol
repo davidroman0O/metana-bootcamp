@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "../erc1155.sol";
 import "../forge.sol";
 
-contract MaliciousERC1155Token is ERC1155Token {
+contract MockOverrideBatchBurnReentrancyForgeAttack is ERC1155Token {
     address public forgeAddress;
 
     constructor(address payable initialOwner)

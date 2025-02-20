@@ -307,9 +307,9 @@ describe("Forge", function() {
     async function deployMaliciousContracts() {
         const [owner, otherAccount] = await ethers.getSigners();
 
-        // Deploy MaliciousERC1155Token (which overrides batchBurn to reenter forge())
-        const MaliciousERC1155Token = await ethers.getContractFactory("MaliciousERC1155Token");
-        const maliciousToken = await MaliciousERC1155Token.deploy(owner.address);
+        // Deploy MockOverrideBatchBurnReentrancyForgeAttack (which overrides batchBurn to reenter forge())
+        const MockOverrideBatchBurnReentrancyForgeAttack = await ethers.getContractFactory("MockOverrideBatchBurnReentrancyForgeAttack");
+        const maliciousToken = await MockOverrideBatchBurnReentrancyForgeAttack.deploy(owner.address);
         await maliciousToken.waitForDeployment();
 
         // Deploy the Forge contract with the malicious token address

@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {ERCRefund} from "../ERCRefund.sol";
 
-contract MockReentrancyAttacker {
+contract MockRefundSellbackReentrancyAttacker {
     ERCRefund public ercRefund;
     bool public attacking;
 

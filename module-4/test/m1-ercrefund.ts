@@ -209,7 +209,7 @@ describe("ERCRefund", function () {
             it("Should revert if token transfer during sellBack fails", async function () {
                 const { ercRefund, owner } = await loadFixture(deployFixture);
                 
-                const MaliciousToken = await ethers.getContractFactory("MockMaliciousERC20");
+                const MaliciousToken = await ethers.getContractFactory("MockRefundFailSellBackTransferAttacker");
                 const maliciousToken = await MaliciousToken.deploy();
                 
                 await ethers.provider.send("hardhat_setBalance", [
@@ -256,8 +256,8 @@ describe("ERCRefund", function () {
             it("Should revert when the receiver rejects ETH on withdraw", async function () {
                 const { ercRefund, owner } = await loadFixture(deployFixture);
             
-                const MaliciousReceiver = await ethers.getContractFactory("MockMaliciousReceiver");
-                const maliciousReceiver = await MaliciousReceiver.deploy(await ercRefund.getAddress());
+                const MockWithdrawReceiveAttacker = await ethers.getContractFactory("MockWithdrawReceiveAttacker");
+                const attacker = await MockWithdrawReceiveAttacker.deploy(await ercRefund.getAddress());
             
                 await ethers.provider.send("hardhat_setBalance", [
                     await ercRefund.getAddress(),
@@ -265,14 +265,11 @@ describe("ERCRefund", function () {
                 ]);
         
                 // Transfer ownership using the two-step process.
-                await ercRefund.transferOwnership(await maliciousReceiver.getAddress());
-                await maliciousReceiver.acceptRefundOwnership();
-                
-                // Configure the malicious receiver to reject ETH.
-                await maliciousReceiver.setReject(true);
+                await ercRefund.transferOwnership(await attacker.getAddress());
+                await attacker.acceptOwnership();
                 
                 await expect(
-                    maliciousReceiver.withdrawFromRefund()
+                    attacker.attack()
                 ).to.be.revertedWith("withdraw failed");
             });
         });
@@ -295,7 +292,7 @@ describe("ERCRefund", function () {
         it("Should prevent reentrancy in sellBack", async function () {
             const { ercRefund, owner } = await loadFixture(deployFixture);
             
-            const ReentrancyAttacker = await ethers.getContractFactory("MockReentrancyAttacker");
+            const ReentrancyAttacker = await ethers.getContractFactory("MockRefundSellbackReentrancyAttacker");
             const attacker = await ReentrancyAttacker.deploy(await ercRefund.getAddress());
             
             await ercRefund.connect(owner).mint({
