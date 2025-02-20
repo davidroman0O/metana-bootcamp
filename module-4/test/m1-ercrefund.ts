@@ -319,8 +319,8 @@ describe("ERCRefund", function () {
         it("Should prevent reentrancy in withdraw", async function () {
             const { ercRefund } = await loadFixture(deployFixture);
             
-            const WithdrawReentrancyAttacker = await ethers.getContractFactory("MockWithdrawReentrancyAttacker");
-            const attacker = await WithdrawReentrancyAttacker.deploy(await ercRefund.getAddress());
+            const MockWithdrawReentrancyAttacker = await ethers.getContractFactory("MockWithdrawReentrancyAttacker");
+            const attacker = await MockWithdrawReentrancyAttacker.deploy(await ercRefund.getAddress());
             
             await ethers.provider.send("hardhat_setBalance", [
                 await ercRefund.getAddress(),
@@ -329,7 +329,7 @@ describe("ERCRefund", function () {
     
             // Transfer ownership to the attacker contract.
             await ercRefund.transferOwnership(await attacker.getAddress());
-            await attacker.acceptRefundOwnership();
+            await attacker.acceptOwnership();
             
             await expect(
                 attacker.attack()

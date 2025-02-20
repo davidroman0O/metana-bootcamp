@@ -23,38 +23,8 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 /// - on VisageExchange call `allowance` to see `10000000000000000000`
 /// - finally call `mintNFT` and you have an NFT
 
-contract ExchangeVisageNFT is ERC721("Visage NFT", "NVSG"), Ownable2Step, ReentrancyGuard {
-
-    constructor(address initialOwner) Ownable(initialOwner) {}
-
-    uint256 private tokenSupply = 1;
-    uint256 constant private MAX_SUPPLY = 11; 
-
-    function mint(address minter) external onlyOwner nonReentrant {
-        require(tokenSupply < MAX_SUPPLY, "no more NFT to mint");
-        super._safeMint(minter, tokenSupply);
-        tokenSupply++;
-    }
-
-    function _baseURI() internal pure override returns (string memory) {
-        return "ipfs://bafybeia3kfwpeqqxpwimflmqclo3hwewa7ziueennq2wocj3nlvv34bq34/";
-    }
-
-    function withdraw() public onlyOwner nonReentrant {
-        uint256 amount = address(this).balance;
-        require(amount > 0, "Nothing to withdraw");
-        (bool success, ) = payable(owner()).call{value: amount}("");
-        require(success, "withdraw failed");
-    }
-
-    function balance() public view onlyOwner returns (uint256) {
-        return balanceOf(address(this));
-    }
-
-    receive() external payable {
-        // Allow receiving ETH
-    }
-}
+event Received(address indexed sender, uint256 value);
+event Mint(address indexed sender, uint256 ethSent, uint256 tokensMinted, uint256 totalSupplyBefore);
 
 // The only way to buy some ExchangeVisageNFT
 // Basically it's the token sales
@@ -65,19 +35,15 @@ contract ExchangeVisageToken is ERC20("Visage Token", "VSG"), Ownable2Step, Reen
     uint256 public constant TOKENS_PER_ETH = 10 * 1e18;
     uint256 public constant MAX_SUPPLY = 1_000_000 * 1e18; // wei
 
-    event Mint(address indexed sender, uint256 ethSent, uint256 tokensMinted, uint256 totalSupplyBefore);
-
     constructor(address initialOwner) Ownable(initialOwner) {}
 
-    fallback() external payable  {
-        revert("You can't send ether with data on that contract");
-    }
+    fallback() external payable  { revert(); }
 
     receive() external payable {
+        emit Received(msg.sender, msg.value);
         mint(msg.sender);
     }
 
-    //  I used to have a nonReentrant modifier but it's not needed since we do not exchange ether
     function mint(address buyer) public payable {
         require(msg.value > 0, "send eth to buy tokens");
         uint256 tokensToMint = (TOKENS_PER_ETH * msg.value) / 1 ether;
@@ -86,7 +52,7 @@ contract ExchangeVisageToken is ERC20("Visage Token", "VSG"), Ownable2Step, Reen
         _mint(buyer, tokensToMint);
     }
 
-    function withdraw() external onlyOwner { // no need for nonReentrant, onlyOwner is enough
+    function withdraw() external onlyOwner nonReentrant {
         uint256 amount = address(this).balance;
         require(amount > 0, "Nothing to withdraw");
         (bool success, ) = payable(owner()).call{value: amount}("");
@@ -94,6 +60,26 @@ contract ExchangeVisageToken is ERC20("Visage Token", "VSG"), Ownable2Step, Reen
     }
 }
 
+contract ExchangeVisageNFT is ERC721("Visage NFT", "NVSG"), Ownable2Step, ReentrancyGuard {
+
+    uint256 private tokenSupply = 1;
+    uint256 constant private MAX_SUPPLY = 11; 
+
+    constructor(address initialOwner) Ownable(initialOwner) {}
+
+    receive() external payable { revert(); }
+    fallback() external payable { revert(); }
+
+    function mint(address minter) external onlyOwner {
+        require(tokenSupply < MAX_SUPPLY, "no more NFT to mint");
+        _safeMint(minter, tokenSupply);
+        tokenSupply++;
+    }
+
+    function _baseURI() internal pure override returns (string memory) {
+        return "ipfs://bafybeia3kfwpeqqxpwimflmqclo3hwewa7ziueennq2wocj3nlvv34bq34/";
+    }
+}
 
 // Basically an exchange
 // 000000000000000000
@@ -110,20 +96,21 @@ contract VisageExchange is Ownable2Step {
         nft = ExchangeVisageNFT(payable(_nft));
     }
 
+    fallback() external payable  {
+        revert("You can't send ether with data on that contract");
+    }
+
+    receive() external payable {
+        emit Received(msg.sender, msg.value);
+        token.mint{value: msg.value}(msg.sender);
+    }
+
     function acceptNftOwnership() external onlyOwner {
         nft.acceptOwnership();
     }
     
     function acceptTokenOwnership() external onlyOwner {
         token.acceptOwnership();
-    }
-
-    fallback() external payable  {
-        revert("You can't send ether with data on that contract");
-    }
-
-    receive() external payable {
-        token.mint{value: msg.value}(msg.sender);
     }
 
     function withdraw() external onlyOwner {

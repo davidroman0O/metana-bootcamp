@@ -155,8 +155,7 @@ describe("ERCTokenSale", function () {
             
             const WithdrawReentrancyAttacker = await ethers.getContractFactory("MockWithdrawReentrancyAttacker");
             const attacker = await WithdrawReentrancyAttacker.deploy(await tokenSale.getAddress());
-            
-            // Fund the contract
+
             await owner.sendTransaction({
                 to: await tokenSale.getAddress(),
                 value: ethers.parseEther("2")
@@ -164,8 +163,8 @@ describe("ERCTokenSale", function () {
 
             // Transfer ownership to the attacker contract
             await tokenSale.transferOwnership(await attacker.getAddress());
-            await attacker.acceptRefundOwnership();
-            
+            await attacker.acceptOwnership();
+
             await expect(
                 attacker.attack()
             ).to.be.reverted;

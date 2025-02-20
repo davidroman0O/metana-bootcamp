@@ -15,29 +15,30 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 /// Fake the time obviously
 /// Do not force people to withdraw NFT to get token, just let's them get their money
 
+event Received(address indexed sender, uint256 value);
+event Mint(address indexed sender, uint256 ethSent, uint256 tokensMinted, uint256 totalSupplyBefore);
+
 contract StakingVisageToken is ERC20("Visage Token", "VSG"), Ownable2Step, ReentrancyGuard {
     
     uint256 public constant TOKENS_PER_ETH = 10  * 1e18;
 
-    event Mint(address indexed sender, uint256 ethSent, uint256 tokensMinted, uint256 totalSupplyBefore);
-
     constructor(address deployer) Ownable(deployer) {}
 
-    fallback() external payable  {
-        revert("You can't send ether with data on that contract");
-    }
+    fallback() external payable { revert(); }
 
     receive() external payable {
+        emit Received(msg.sender, msg.value);
         mint(msg.sender);
     }
 
-    function mint(address buyer) public payable nonReentrant {
+    function mint(address buyer) public payable {
         require(msg.value > 0, "send eth to buy tokens");
         uint256 tokensToMint = (TOKENS_PER_ETH * msg.value) / 1 ether;
         emit Mint(buyer, msg.value, tokensToMint, totalSupply());
         super._mint(buyer, tokensToMint);
     }
 
+    // Used for rewards
     function mintToken(address minter, uint256 tokens) public onlyOwner nonReentrant  {
         super._mint(minter, tokens);
     }
@@ -48,40 +49,32 @@ contract StakingVisageToken is ERC20("Visage Token", "VSG"), Ownable2Step, Reent
         (bool success, ) = payable(owner()).call{value: address(this).balance}("");
         require(success, "withdraw failed");
     }
-
 }
 
 contract StakingVisageNFT is ERC721("Visage NFT", "NVSG"), Ownable2Step, ReentrancyGuard {
 
-    constructor(address deployer) Ownable(deployer) {}
-
     uint256 private tokenSupply = 1;
     uint256 constant private MAX_SUPPLY = 11; 
 
-    function mint(address minter) external onlyOwner nonReentrant {
+    constructor(address deployer) Ownable(deployer) {}
+
+    receive() external payable { revert(); }
+    fallback() external payable { revert(); }
+    
+    function mint(address minter) external onlyOwner {
         require(tokenSupply < MAX_SUPPLY, "no more NFT to mint");
         uint256 supplyToMint = tokenSupply;
         tokenSupply++;
-        super._safeMint(minter, supplyToMint);
+        _safeMint(minter, supplyToMint);
     }
 
     function _baseURI() internal pure override returns (string memory) {
         return "ipfs://bafybeia3kfwpeqqxpwimflmqclo3hwewa7ziueennq2wocj3nlvv34bq34/";
     }
-
-    function withdraw() public onlyOwner nonReentrant {
-        uint256 amount = address(this).balance;
-        require(amount > 0, "Nothing to withdraw");
-        (bool success, ) = payable(owner()).call{value: address(this).balance}("");
-        require(success, "withdraw failed");
-    }
-
-    function balance() public view onlyOwner returns (uint256) {
-        return balanceOf(address(this));
-    }
 }
 
 contract VisageStaking is Ownable2Step, ReentrancyGuard, IERC721Receiver {
+
     struct Stake {
         address owner;
         uint256 whenStaked;
@@ -102,6 +95,9 @@ contract VisageStaking is Ownable2Step, ReentrancyGuard, IERC721Receiver {
         _nft = StakingVisageNFT(payable(nft));
     }
 
+    fallback() external payable { revert(); }
+    receive() external payable { revert(); }
+
     function acceptNftOwnership() external onlyOwner {
         _nft.acceptOwnership();
     }
@@ -112,14 +108,6 @@ contract VisageStaking is Ownable2Step, ReentrancyGuard, IERC721Receiver {
 
     function getAddresses() external view returns (address tokenAddress, address nftAddress) {
         return (address(_token), address(_nft));
-    }
-
-    fallback() external {
-        revert("You can't send ether with data on that contract");
-    }
-
-    receive() external payable {
-        revert("You can't just sent money like that");
     }
 
     event NFTStaked(address indexed staker, uint256 tokenID);
@@ -213,5 +201,4 @@ contract VisageStaking is Ownable2Step, ReentrancyGuard, IERC721Receiver {
     function balanceOf(address account) external view returns (uint256) {
         return _token.balanceOf(account);
     }
-
 }

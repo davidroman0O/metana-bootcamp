@@ -17,7 +17,7 @@ contract MockNFTReceiver is Ownable {
     }
 
     // Accept ownership of the NFT contract
-    function acceptNFTOwnership() external onlyOwner {
+    function acceptOwnership() external onlyOwner {
         nft.acceptOwnership();
     }
 
@@ -28,7 +28,7 @@ contract MockNFTReceiver is Ownable {
         }
     }
 
-    function withdrawFromNFT() external onlyOwner {
-        nft.withdraw();
-    }
+    // function withdrawFromNFT() external onlyOwner {
+    //     nft.withdraw();
+    // }
 }
