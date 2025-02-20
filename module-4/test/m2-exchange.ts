@@ -659,7 +659,7 @@ describe("VisageExchange", function () {
                 .to.be.revertedWith("Nothing to withdraw");
         });
 
-        // Targeting the `require(success, "withdraw failed");` line
+        // Targeting the `require(success, "withdraw failed");` line and the `require(success, "Nothing to withdraw");` line
         it("Should handle failed withdrawals from exchange", async function () {
             const { owner, exchange } = await loadFixture(deployFixture);
 
@@ -667,8 +667,7 @@ describe("VisageExchange", function () {
                 await exchange.getAddress(),
                 ethers.toBeHex(ethers.parseEther("1")),
             ]);
-
-            await expect(exchange.withdraw())
+            await expect(exchange.withdraw())  // test the if path of both "nothing to withdraw" and "withdraw failed"
           
             // Deploy the rejecting contract.
             const RejectETHFactory = await ethers.getContractFactory("RejectETH");
@@ -678,28 +677,26 @@ describe("VisageExchange", function () {
             await exchange.transferOwnership(await rejectETH.getAddress());
             await rejectETH.acceptOwnership();
 
-            console.log("owner address", owner.address);
+            // console.log("owner address", owner.address);
             
-            console.log("exchange address", await exchange.getAddress());
-            console.log("rejectETH address", await rejectETH.getAddress());
+            // console.log("exchange address", await exchange.getAddress());
+            // console.log("rejectETH address", await rejectETH.getAddress());
 
-            console.log("rejectETH owner", await rejectETH.owner());
-            console.log("exchange owner", await exchange.owner());
+            // console.log("rejectETH owner", await rejectETH.owner());
+            // console.log("exchange owner", await exchange.owner());
           
             
-            await expect(rejectETH.withdraw()).to.be.revertedWith("Nothing to withdraw");
+            await expect(rejectETH.withdraw()).to.be.revertedWith("Nothing to withdraw"); // else path
 
             await ethers.provider.send("hardhat_setBalance", [
                 await exchange.getAddress(),
                 ethers.toBeHex(ethers.parseEther("1")),
             ]);
 
-            console.log("balance of exchange", await ethers.provider.getBalance(await exchange.getAddress()));
+            // console.log("balance of exchange", await ethers.provider.getBalance(await exchange.getAddress()));
 
-            await expect(rejectETH.withdraw()).to.be.revertedWith("withdraw failed");
+            await expect(rejectETH.withdraw()).to.be.revertedWith("withdraw failed"); // test the else path
           });
-          
-        
     });
 
     describe("Integration Tests", function () {
