@@ -85,7 +85,8 @@ contract VisageStaking is Ownable2Step, ReentrancyGuard, IERC721Receiver {
     mapping(uint256 => Stake) public stakes;
 
     uint256 public constant REWARD_RATE = 10 * 1e18; // 10 tokens per 24 hours
-    uint256 public constant REWARD_INTERVAL = 24 hours;
+    // uint256 public constant REWARD_INTERVAL = 24 hours;
+    uint256 public constant REWARD_INTERVAL = 10 seconds;
 
     StakingVisageNFT immutable _nft;
     StakingVisageToken immutable _token;
@@ -158,6 +159,11 @@ contract VisageStaking is Ownable2Step, ReentrancyGuard, IERC721Receiver {
 
         _nft.safeTransferFrom(address(this), msg.sender, tokenID);
         emit NFTUnstaked(msg.sender, tokenID);
+    }
+
+    function getRewardBalanceOf(uint256 tokenID) external view returns (uint256) {
+        require(stakes[tokenID].whenStaked > 0, "NFT not staked");
+        return _calculateReward(tokenID);
     }
 
     function withdrawReward(uint256 tokenID) public nonReentrant {

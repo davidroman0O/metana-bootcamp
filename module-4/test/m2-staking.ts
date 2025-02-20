@@ -367,3 +367,407 @@ describe("StakingVisageToken", function () {
         });
     });
 });
+
+describe("VisageStaking", function () {
+    async function deployFixture() {
+        const [owner, otherAccount] = await ethers.getSigners();
+
+        // Deploy token and NFT first
+        const TokenFactory = await ethers.getContractFactory("StakingVisageToken");
+        const token = await TokenFactory.deploy(owner.address);
+
+        const NFTFactory = await ethers.getContractFactory("StakingVisageNFT");
+        const nft = await NFTFactory.deploy(owner.address);
+
+        // Deploy staking contract
+        const StakingFactory = await ethers.getContractFactory("VisageStaking");
+        const staking = await StakingFactory.deploy(
+            owner.address,
+            await token.getAddress(),
+            await nft.getAddress()
+        );
+
+        // Transfer ownership to staking contract
+        await token.transferOwnership(await staking.getAddress());
+        await staking.acceptTokenOwnership();
+        
+        await nft.transferOwnership(await staking.getAddress());
+        await staking.acceptNftOwnership();
+
+        return { staking, token, nft, owner, otherAccount };
+    }
+
+    describe("Deployment", function () {
+        it("Should set the right owner", async function () {
+            const { staking, owner } = await loadFixture(deployFixture);
+            expect(await staking.owner()).to.equal(owner.address);
+        });
+
+        it("Should have correct token and NFT addresses", async function () {
+            const { staking, token, nft } = await loadFixture(deployFixture);
+            const [tokenAddr, nftAddr] = await staking.getAddresses();
+            expect(tokenAddr).to.equal(await token.getAddress());
+            expect(nftAddr).to.equal(await nft.getAddress());
+        });
+
+        it("Should own both token and NFT contracts", async function () {
+            const { staking, token, nft } = await loadFixture(deployFixture);
+            expect(await token.owner()).to.equal(await staking.getAddress());
+            expect(await nft.owner()).to.equal(await staking.getAddress());
+        });
+    });
+
+    describe("NFT Minting", function () {
+        it("Should allow minting NFT with tokens", async function () {
+            const { staking, token, nft, otherAccount } = await loadFixture(deployFixture);
+            
+            // First mint tokens
+            await staking.connect(otherAccount).mintToken({
+                value: ethers.parseEther("1")
+            });
+
+            // Approve tokens for staking contract
+            await token.connect(otherAccount).approve(
+                await staking.getAddress(),
+                ethers.parseUnits("10", 18)
+            );
+
+            // Mint NFT
+            await staking.connect(otherAccount).mintNFT();
+            expect(await nft.ownerOf(1)).to.equal(otherAccount.address);
+        });
+
+        it("Should fail NFT mint without token approval", async function () {
+            const { staking, token, otherAccount } = await loadFixture(deployFixture);
+            
+            // First mint tokens
+            await staking.connect(otherAccount).mintToken({
+                value: ethers.parseEther("1")
+            });
+            
+            // Try to mint NFT without approval
+            await expect(
+                staking.connect(otherAccount).mintNFT()
+            ).to.be.revertedWithCustomError(token, "ERC20InsufficientAllowance");
+        });
+    });
+
+    describe("Staking", function () {
+        it("Should emit NFTStaked event when staking", async function () {
+            const { staking, token, nft, otherAccount } = await loadFixture(deployFixture);
+            
+            // Mint NFT first
+            await staking.connect(otherAccount).mintToken({
+                value: ethers.parseEther("1")
+            });
+            await token.connect(otherAccount).approve(
+                await staking.getAddress(),
+                ethers.parseUnits("10", 18)
+            );
+            await staking.connect(otherAccount).mintNFT();
+
+            // Stake NFT
+            await expect(
+                nft.connect(otherAccount)["safeTransferFrom(address,address,uint256)"](
+                    otherAccount.address,
+                    await staking.getAddress(),
+                    1
+                )
+            ).to.emit(staking, "NFTStaked")
+             .withArgs(otherAccount.address, 1);
+        });
+
+        it("Should prevent staking already staked NFT", async function () {
+            const { staking, token, nft, otherAccount } = await loadFixture(deployFixture);
+            
+            // Mint and stake first NFT
+            await staking.connect(otherAccount).mintToken({
+                value: ethers.parseEther("1")
+            });
+            await token.connect(otherAccount).approve(
+                await staking.getAddress(),
+                ethers.parseUnits("10", 18)
+            );
+            await staking.connect(otherAccount).mintNFT();
+            // Mint NFT first
+            await staking.connect(otherAccount).mintToken({
+                value: ethers.parseEther("1")
+            });
+            await token.connect(otherAccount).approve(
+                await staking.getAddress(),
+                ethers.parseUnits("10", 18)
+            );
+            await staking.connect(otherAccount).mintNFT();
+
+            // Approve NFT for staking contract
+            await nft.connect(otherAccount).setApprovalForAll(await staking.getAddress(), true);
+            
+            // Stake NFT
+            await nft.connect(otherAccount)["safeTransferFrom(address,address,uint256)"](
+                otherAccount.address,
+                await staking.getAddress(),
+                1
+            );
+
+            // Try to stake it again
+            await expect(
+                nft.connect(otherAccount)["safeTransferFrom(address,address,uint256)"](
+                    otherAccount.address,
+                    await staking.getAddress(),
+                    1
+                )
+            ).to.be.revertedWithCustomError(nft, "ERC721InsufficientApproval");
+        });
+
+        it("Should only accept NFTs from contract NFT", async function () {
+            const { staking, owner } = await loadFixture(deployFixture);
+            
+            // Deploy another NFT contract
+            const OtherNFT = await ethers.getContractFactory("StakingVisageNFT");
+            const otherNft = await OtherNFT.deploy(owner.address);
+            
+            // Try to stake from other NFT contract
+            await expect(
+                otherNft.mint(owner.address)
+            ).to.not.be.reverted;
+            
+            await expect(
+                otherNft["safeTransferFrom(address,address,uint256)"](
+                    owner.address,
+                    await staking.getAddress(),
+                    1
+                )
+            ).to.be.revertedWith("only our NFT smart contract can call back");
+        });
+    });
+
+    describe("Rewards", function () {
+        it("Should calculate rewards correctly", async function () {
+            const { staking, token, nft, otherAccount } = await loadFixture(deployFixture);
+            
+            // Mint and stake NFT
+            await staking.connect(otherAccount).mintToken({
+                value: ethers.parseEther("1")
+            });
+            await token.connect(otherAccount).approve(
+                await staking.getAddress(),
+                ethers.parseUnits("10", 18)
+            );
+            await staking.connect(otherAccount).mintNFT();
+            await nft.connect(otherAccount)["safeTransferFrom(address,address,uint256)"](
+                otherAccount.address,
+                await staking.getAddress(),
+                1
+            );
+
+            // Get current block timestamp
+            const latestBlock = await ethers.provider.getBlock('latest');
+            const currentTime = latestBlock!.timestamp;
+            // Set time to exact multiple of REWARD_INTERVAL
+            await time.setNextBlockTimestamp(currentTime + 24 * 60 * 60);
+
+            // Check reward
+            await staking.connect(otherAccount).withdrawReward(1);
+            expect(await token.balanceOf(otherAccount.address))
+                .to.equal(ethers.parseUnits("10", 18)); // 10 tokens per 24 hours
+        });
+
+        it("Should prevent non-owner from claiming rewards", async function () {
+            const { staking, token, nft, otherAccount, owner } = await loadFixture(deployFixture);
+            
+            // Mint and stake NFT
+            await staking.connect(otherAccount).mintToken({
+                value: ethers.parseEther("1")
+            });
+            await token.connect(otherAccount).approve(
+                await staking.getAddress(),
+                ethers.parseUnits("10", 18)
+            );
+            await staking.connect(otherAccount).mintNFT();
+            await nft.connect(otherAccount)["safeTransferFrom(address,address,uint256)"](
+                otherAccount.address,
+                await staking.getAddress(),
+                1
+            );
+
+            // Try to claim rewards from non-owner
+            await expect(
+                staking.connect(owner).withdrawReward(1)
+            ).to.be.revertedWith("only the owner can withdraw rewards");
+        });
+
+        it("Should emit RewardClaimed event", async function () {
+            const { staking, token, nft, otherAccount } = await loadFixture(deployFixture);
+            
+            // Mint and stake NFT
+            await staking.connect(otherAccount).mintToken({
+                value: ethers.parseEther("1")
+            });
+            await token.connect(otherAccount).approve(
+                await staking.getAddress(),
+                ethers.parseUnits("10", 18)
+            );
+            await staking.connect(otherAccount).mintNFT();
+            await nft.connect(otherAccount)["safeTransferFrom(address,address,uint256)"](
+                otherAccount.address,
+                await staking.getAddress(),
+                1
+            );
+
+            // Advance time
+            await time.increase(24 * 60 * 60);
+
+            // Claim rewards
+            await expect(
+                staking.connect(otherAccount).withdrawReward(1)
+            ).to.emit(staking, "RewardClaimed")
+            await expect(
+                staking.connect(otherAccount).withdrawReward(1)
+            ).to.emit(staking, "RewardClaimed");
+            expect(await token.balanceOf(otherAccount.address))
+                .to.be.gte(ethers.parseUnits("10", 18));
+        });
+    });
+
+    describe("Unstaking", function () {
+        it("Should allow unstaking and claim pending rewards", async function () {
+            const { staking, token, nft, otherAccount } = await loadFixture(deployFixture);
+            
+            // Mint NFT
+            await staking.connect(otherAccount).mintToken({
+                value: ethers.parseEther("1")
+            });
+            await token.connect(otherAccount).approve(
+                await staking.getAddress(),
+                ethers.parseUnits("10", 18)
+            );
+            await staking.connect(otherAccount).mintNFT();
+
+            // Approve and stake NFT
+            await nft.connect(otherAccount).approve(await staking.getAddress(), 1);
+            await nft.connect(otherAccount)["safeTransferFrom(address,address,uint256)"](
+                otherAccount.address,
+                await staking.getAddress(),
+                1
+            );
+
+            // Advance time
+            await time.increase(time.duration.hours(25));
+
+            // Unstake
+            await staking.connect(otherAccount).unstakeNFT(1);
+
+            // Check rewards were received
+            expect(await staking.balanceOf(otherAccount.address))
+                .to.equal(ethers.parseUnits("10", 18));
+
+            // Check NFT was returned
+            expect(await nft.ownerOf(1)).to.equal(otherAccount.address);
+        });
+
+        it("Should prevent non-owner from unstaking", async function () {
+            const { staking, token, nft, otherAccount, owner } = await loadFixture(deployFixture);
+            
+            // Mint and stake NFT
+            await staking.connect(otherAccount).mintToken({
+                value: ethers.parseEther("1")
+            });
+            await token.connect(otherAccount).approve(
+                await staking.getAddress(),
+                ethers.parseUnits("10", 18)
+            );
+            await staking.connect(otherAccount).mintNFT();
+            await nft.connect(otherAccount)["safeTransferFrom(address,address,uint256)"](
+                otherAccount.address,
+                await staking.getAddress(),
+                1
+            );
+
+            // Try to unstake from non-owner
+            await expect(
+                staking.connect(owner).unstakeNFT(1)
+            ).to.be.revertedWith("only the owner can unstake");
+        });
+    });
+
+    describe("ETH Handling", function () {
+        it("Should revert when sending ETH with data", async function () {
+            const { staking, otherAccount } = await loadFixture(deployFixture);
+            
+            await expect(
+                otherAccount.sendTransaction({
+                    to: await staking.getAddress(),
+                    value: ethers.parseEther("1"),
+                    data: "0x1234"
+                })
+            ).to.be.reverted;
+        });
+
+        it("Should revert direct ETH transfers", async function () {
+            const { staking, otherAccount } = await loadFixture(deployFixture);
+            
+            await expect(
+                otherAccount.sendTransaction({
+                    to: await staking.getAddress(),
+                    value: ethers.parseEther("1")
+                })
+            ).to.be.reverted;
+        });
+    });
+
+    describe("Reentrancy Protection", function () {
+        it("Should prevent reentrancy in unstake", async function () {
+            const { staking, token, nft, otherAccount } = await loadFixture(deployFixture);
+            
+            // Setup initial stake
+            await staking.connect(otherAccount).mintToken({
+                value: ethers.parseEther("1")
+            });
+            await token.connect(otherAccount).approve(
+                await staking.getAddress(),
+                ethers.parseUnits("10", 18)
+            );
+            await staking.connect(otherAccount).mintNFT();
+            await nft.connect(otherAccount)["safeTransferFrom(address,address,uint256)"](
+                otherAccount.address,
+                await staking.getAddress(),
+                1
+            );
+
+            // Attempt malicious unstake
+            await expect(
+                staking.connect(otherAccount).unstakeNFT(1)
+            ).not.to.be.reverted;
+
+            // Second attempt should fail because NFT is already unstaked
+            await expect(
+                staking.connect(otherAccount).unstakeNFT(1)
+            ).to.be.revertedWith("only the owner can unstake");
+        });
+
+        it("Should prevent reentrancy in unstake", async function () {
+            const { staking, token, nft, otherAccount } = await loadFixture(deployFixture);
+            
+            // Setup staked NFT
+            await staking.connect(otherAccount).mintToken({
+                value: ethers.parseEther("1")
+            });
+            await token.connect(otherAccount).approve(
+                await staking.getAddress(),
+                ethers.parseUnits("10", 18)
+            );
+            await staking.connect(otherAccount).mintNFT();
+            await nft.connect(otherAccount)["safeTransferFrom(address,address,uint256)"](
+                otherAccount.address,
+                await staking.getAddress(),
+                1
+            );
+
+            // Double unstake attempt should fail
+            await staking.connect(otherAccount).unstakeNFT(1);
+            await expect(
+                staking.connect(otherAccount).unstakeNFT(1)
+            ).to.be.reverted;
+        });
+    });
+});
