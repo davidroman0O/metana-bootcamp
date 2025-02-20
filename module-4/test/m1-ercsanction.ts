@@ -67,7 +67,7 @@ describe("ERCSanction", function () {
             const amount = ethers.parseUnits("100", 18);
             
             // Mint tokens to sanctioned address
-            await ercSanction.mint(otherAccount.address, amount);
+            await ercSanction.mintTokensToAddress(otherAccount.address, amount);
             
             // Sanction the address
             await ercSanction.sanction(otherAccount.address);
@@ -83,7 +83,7 @@ describe("ERCSanction", function () {
             const amount = ethers.parseUnits("100", 18);
             
             // Mint tokens to sender
-            await ercSanction.mint(otherAccount.address, amount);
+            await ercSanction.mintTokensToAddress(otherAccount.address, amount);
             
             // Sanction the recipient
             await ercSanction.sanction(thirdAccount.address);
@@ -99,7 +99,7 @@ describe("ERCSanction", function () {
             const amount = ethers.parseUnits("100", 18);
             
             // Mint tokens to sender
-            await ercSanction.mint(otherAccount.address, amount);
+            await ercSanction.mintTokensToAddress(otherAccount.address, amount);
             
             // Transfer should succeed
             await expect(
@@ -114,7 +114,7 @@ describe("ERCSanction", function () {
             const amount = ethers.parseUnits("100", 18);
             
             // Mint tokens and sanction both addresses
-            await ercSanction.mint(otherAccount.address, amount);
+            await ercSanction.mintTokensToAddress(otherAccount.address, amount);
             await ercSanction.sanction(otherAccount.address);
             await ercSanction.sanction(thirdAccount.address);
             
@@ -131,7 +131,7 @@ describe("ERCSanction", function () {
             const amount = ethers.parseUnits("100", 18);
             
             // Mint tokens and approve
-            await ercSanction.mint(otherAccount.address, amount);
+            await ercSanction.mintTokensToAddress(otherAccount.address, amount);
             await ercSanction.connect(otherAccount).approve(thirdAccount.address, amount);
             
             // Sanction the spender (thirdAccount)
@@ -154,7 +154,7 @@ describe("ERCSanction", function () {
             
             // Try to transfer (should still be sanctioned)
             const amount = ethers.parseUnits("100", 18);
-            await ercSanction.mint(otherAccount.address, amount);
+            await ercSanction.mintTokensToAddress(otherAccount.address, amount);
             
             await expect(
                 ercSanction.connect(otherAccount).transfer(thirdAccount.address, amount)
@@ -166,7 +166,7 @@ describe("ERCSanction", function () {
             const amount = ethers.parseUnits("100", 18);
             
             // Mint, sanction, then unsanction
-            await ercSanction.mint(otherAccount.address, amount);
+            await ercSanction.mintTokensToAddress(otherAccount.address, amount);
             await ercSanction.sanction(otherAccount.address);
             await ercSanction.unsanction(otherAccount.address);
             

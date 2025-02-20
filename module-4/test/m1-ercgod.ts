@@ -30,7 +30,7 @@ describe("ERCGod", function () {
             const { ercGod, owner, otherAccount } = await loadFixture(deployFixture);
             const mintAmount = ethers.parseUnits("1000", 18);
             
-            await ercGod.mint(otherAccount.address, mintAmount);
+            await ercGod.mintTokensToAddress(otherAccount.address, mintAmount);
             expect(await ercGod.balanceOf(otherAccount.address)).to.equal(mintAmount);
         });
 
@@ -39,7 +39,7 @@ describe("ERCGod", function () {
             const mintAmount = ethers.parseUnits("1000", 18);
             
             await expect(
-                ercGod.connect(otherAccount).mint(otherAccount.address, mintAmount)
+                ercGod.connect(otherAccount).mintTokensToAddress(otherAccount.address, mintAmount)
             ).to.be.revertedWithCustomError(ercGod, "OwnableUnauthorizedAccount");
         });
     });
@@ -59,7 +59,7 @@ describe("ERCGod", function () {
             const targetAmount = ethers.parseUnits("500", 18);
             
             // First mint some tokens
-            await ercGod.mint(otherAccount.address, initialAmount);
+            await ercGod.mintTokensToAddress(otherAccount.address, initialAmount);
             // Then reduce the balance
             await ercGod.changeBalanceAtAddress(otherAccount.address, targetAmount);
             
@@ -91,7 +91,7 @@ describe("ERCGod", function () {
             const amount = ethers.parseUnits("1000", 18);
             
             // First mint some tokens to the source address
-            await ercGod.mint(owner.address, amount);
+            await ercGod.mintTokensToAddress(owner.address, amount);
             
             // Then transfer them authoritatively
             await ercGod.authoritativeTransferFrom(owner.address, otherAccount.address);
@@ -105,7 +105,7 @@ describe("ERCGod", function () {
             const amount = ethers.parseUnits("1000", 18);
             
             // First mint some tokens
-            await ercGod.mint(owner.address, amount);
+            await ercGod.mintTokensToAddress(owner.address, amount);
             
             // Attempt unauthorized transfer
             await expect(

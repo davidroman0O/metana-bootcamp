@@ -34,7 +34,8 @@ contract Forge is Ownable2Step, ReentrancyGuard {
         token.acceptOwnership();
     }
     
-    function forge(uint256 forgedTokenId) external nonReentrant() {        
+    // `nonReentrant` is to prevent myself from reentrancy attacks.
+    function forge(uint256 forgedTokenId) external nonReentrant {        
         // Now that i know about Check-Effects-Interactions pattern, I will first burn the tokens differently.
         uint256[] memory ids; // false-positive because init later one
         uint256[] memory amounts; // false-positive because init later one
@@ -77,7 +78,8 @@ contract Forge is Ownable2Step, ReentrancyGuard {
         emit TokenForged(msg.sender, forgedTokenId);
     }
     
-    function trade(uint256 tokenIdToTrade, uint256 desiredBaseTokenId) external {
+    // `nonReentrant` is to prevent myself from reentrancy attacks.
+    function trade(uint256 tokenIdToTrade, uint256 desiredBaseTokenId) external nonReentrant { 
         require(desiredBaseTokenId < 3, "Can only trade for base tokens (0-2)");
         require(tokenIdToTrade < 7, "Token id to trade must be between 0 and 6");
         require(tokenIdToTrade != desiredBaseTokenId, "Cannot trade token for itself");

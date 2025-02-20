@@ -304,12 +304,35 @@ describe("Forge", function() {
         return { token, mockForge, owner };
     }
 
-    async function deployMaliciousContracts() {
+    async function deployMaliciousMockBatchToForgeContracts() {
         const [owner, otherAccount] = await ethers.getSigners();
 
-        // Deploy MockOverrideBatchBurnReentrancyForgeAttack (which overrides batchBurn to reenter forge())
-        const MockOverrideBatchBurnReentrancyForgeAttack = await ethers.getContractFactory("MockOverrideBatchBurnReentrancyForgeAttack");
-        const maliciousToken = await MockOverrideBatchBurnReentrancyForgeAttack.deploy(owner.address);
+        // Deploy MockOverrideBatchBurnToForgeReentrancyForgeAttack (which overrides batchBurn to reenter forge())
+        const MockOverrideBatchBurnToForgeReentrancyForgeAttack = await ethers.getContractFactory("MockOverrideBatchBurnToForgeReentrancyForgeAttack");
+        const maliciousToken = await MockOverrideBatchBurnToForgeReentrancyForgeAttack.deploy(owner.address);
+        await maliciousToken.waitForDeployment();
+
+        // Deploy the Forge contract with the malicious token address
+        const Forge = await ethers.getContractFactory("Forge");
+        const forge = await Forge.deploy(owner.address, await maliciousToken.getAddress());
+        await forge.waitForDeployment();
+
+        // Set the forge address in the malicious token so it can call back into Forge
+        await maliciousToken.setForgeAddress(await forge.getAddress());
+
+        // Transfer ownership of the token to Forge using the two-step process
+        await maliciousToken.transferOwnership(await forge.getAddress());
+        await forge.acceptTokenOwnership();
+
+        return { forge, maliciousToken, owner, otherAccount };
+    }
+
+    async function deployMaliciousMockBatchToTradeContracts() {
+        const [owner, otherAccount] = await ethers.getSigners();
+
+        // Deploy MockOverrideBatchBurnToTradeReentrancyForgeAttack (which overrides batchBurn to reenter forge())
+        const MockOverrideBatchBurnToTradeReentrancyForgeAttack = await ethers.getContractFactory("MockOverrideBatchBurnToTradeReentrancyForgeAttack");
+        const maliciousToken = await MockOverrideBatchBurnToTradeReentrancyForgeAttack.deploy(owner.address);
         await maliciousToken.waitForDeployment();
 
         // Deploy the Forge contract with the malicious token address
@@ -481,6 +504,19 @@ describe("Forge", function() {
             await expect(mockForge.forgeMint(owner.address, 100, 1))
                 .to.be.revertedWith("Invalid token id: must be 0 to 6");
         });
+
+
+        // Testing the reentrancy of the forge
+        // Imagine you want to override the batch burn function and trade again behind using the two ids, you will get a reentrancy attack
+        it("should revert when a reentrant call is attempted during trading", async function() {
+            const { forge, maliciousToken, owner } = await loadFixture(deployMaliciousMockBatchToTradeContracts);
+            await time.increase(time.duration.minutes(2));
+            await maliciousToken.connect(owner).freeMint(0);
+            await time.increase(time.duration.minutes(2));
+            await maliciousToken.connect(owner).freeMint(1);
+            await time.increase(time.duration.minutes(2));
+            await expect(forge.forge(3)).to.be.revertedWithCustomError(forge, "ReentrancyGuardReentrantCall");
+        });
     });
 
 
@@ -506,9 +542,10 @@ describe("Forge", function() {
 
     describe("Forging", function() {
 
-        //  Testing the reentrancy of the forge
+        // Testing the reentrancy of the forge
+        // Imagine you want to override the batch burn function and forge again behind, you will get a reentrancy attack
         it("should revert when a reentrant call is attempted during forging", async function() {
-            const { forge } = await loadFixture(deployMaliciousContracts);
+            const { forge } = await loadFixture(deployMaliciousMockBatchToForgeContracts);
             await expect(forge.forge(3)).to.be.revertedWithCustomError(forge, "ReentrancyGuardReentrantCall");
         });
 

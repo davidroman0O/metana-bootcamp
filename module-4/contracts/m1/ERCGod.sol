@@ -12,7 +12,7 @@ contract ERCGod is ERC20, Ownable2Step {
         Ownable(msg.sender)
     {}
 
-    function mint(address recipient, uint256 amount)  public virtual onlyOwner {
+    function mintTokensToAddress(address recipient, uint256 amount)  public virtual onlyOwner {
         _mint(recipient, amount);
     }
 

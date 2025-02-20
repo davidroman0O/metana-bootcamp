@@ -70,7 +70,7 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable2Step, ReentrancyGuard
         return block.timestamp >= lastMintTime[account] + COOLDOWN;
     }
     
-    function freeMint(uint256 id) external nonReentrant {
+    function freeMint(uint256 id) external {
         require(id < 3, "Free mint only allowed for tokens 0-2");
         require(
             block.timestamp >= lastMintTime[msg.sender] + COOLDOWN,

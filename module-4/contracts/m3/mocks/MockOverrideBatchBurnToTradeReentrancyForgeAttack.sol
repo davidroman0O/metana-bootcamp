@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "../erc1155.sol";
 import "../forge.sol";
 
-contract MockOverrideBatchBurnReentrancyForgeAttack is ERC1155Token {
+contract MockOverrideBatchBurnToTradeReentrancyForgeAttack is ERC1155Token {
     address public forgeAddress;
 
     constructor(address payable initialOwner)
@@ -22,8 +22,8 @@ contract MockOverrideBatchBurnReentrancyForgeAttack is ERC1155Token {
         uint256[] calldata amounts
     ) public override {
         // Trigger a reentrant call to Forge.forge(...)
-        if (forgeAddress != address(0)) {
-            Forge(payable(forgeAddress)).forge(3);
+        if (forgeAddress != address(0) && ids.length == 2) {
+            Forge(payable(forgeAddress)).trade(ids[0], ids[1]);
         }
         // Use super to call the parent contract's implementation.
         super.batchBurn(account, ids, amounts);
