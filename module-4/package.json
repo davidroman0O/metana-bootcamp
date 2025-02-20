@@ -6,6 +6,7 @@
   },
   "scripts": {
       "coverage": "open ./coverage/index.html",
-      "slither": "slither $1 --solc-remaps '@openzeppelin=node_modules/@openzeppelin'"
+      "slither": "slither $1 --solc-remaps '@openzeppelin=node_modules/@openzeppelin'",
+      "triage": "slither $1 --solc-remaps '@openzeppelin=node_modules/@openzeppelin' --triage-mode"
   }
 }

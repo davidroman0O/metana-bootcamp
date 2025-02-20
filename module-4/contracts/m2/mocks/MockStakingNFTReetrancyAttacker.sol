@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {StakingVisageNFT} from "../03-Staking.sol";
+import {StakingVisageNFT} from "../staking.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 
 contract MockStakingNFTReentrancyAttacker is IERC721Receiver {

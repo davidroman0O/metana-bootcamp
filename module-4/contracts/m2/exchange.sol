@@ -71,9 +71,10 @@ contract ExchangeVisageNFT is ERC721("Visage NFT", "NVSG"), Ownable2Step, Reentr
     fallback() external payable { revert(); }
 
     function mint(address minter) external onlyOwner {
+        uint256 newSupply = tokenSupply + 1;
         require(tokenSupply < MAX_SUPPLY, "no more NFT to mint");
-        _safeMint(minter, tokenSupply);
         tokenSupply++;
+        _safeMint(minter, newSupply);
     }
 
     function _baseURI() internal pure override returns (string memory) {

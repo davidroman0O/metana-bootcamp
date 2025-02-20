@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {ERCRefund} from "../ERCRefund.sol";
+import {ERCRefund} from "../erc-refund.sol";
 
 contract MockRefundSellbackReentrancyAttacker {
     ERCRefund public ercRefund;

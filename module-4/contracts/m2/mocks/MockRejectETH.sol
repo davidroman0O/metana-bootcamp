@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {ExchangeVisageToken} from "../02-Exchange.sol";
+import {ExchangeVisageToken} from "../exchange.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 contract RejectETH is Ownable {

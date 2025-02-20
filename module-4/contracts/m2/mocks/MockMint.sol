@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {StakingVisageToken} from "../03-Staking.sol";
+import {StakingVisageToken} from "../staking.sol";
 
 // For testing reentrancy on payable mint function
 contract MockPayableMintReentrancyAttacker {

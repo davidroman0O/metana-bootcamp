@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20; // slither version constraint
 
-import { ERCGod } from "./ERCGod.sol"; // mean that you have to create the other contract ERCGod.sol in the same directory
+import { ERCGod } from "./erc-god.sol"; // mean that you have to create the other contract ERCGod.sol in the same directory
 
 // Found in the ERC20.sol that _update is used by `transfer` and `transferFrom` 
 contract ERCSanction is ERCGod {
