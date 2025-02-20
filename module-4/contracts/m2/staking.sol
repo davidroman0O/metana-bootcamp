@@ -85,8 +85,8 @@ contract VisageStaking is Ownable2Step, ReentrancyGuard, IERC721Receiver {
     mapping(uint256 => Stake) public stakes;
 
     uint256 public constant REWARD_RATE = 10 * 1e18; // 10 tokens per 24 hours
-    // uint256 public constant REWARD_INTERVAL = 24 hours;
-    uint256 public constant REWARD_INTERVAL = 10 seconds;
+    uint256 public constant REWARD_INTERVAL = 24 hours;
+    // uint256 public constant REWARD_INTERVAL = 10 seconds;
 
     StakingVisageNFT immutable _nft;
     StakingVisageToken immutable _token;
