@@ -15,7 +15,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 /// Fake the time obviously
 /// Do not force people to withdraw NFT to get token, just let's them get their money
 
-contract VisageToken is ERC20("Visage Token", "VSG"), Ownable2Step, ReentrancyGuard {
+contract StakingVisageToken is ERC20("Visage Token", "VSG"), Ownable2Step, ReentrancyGuard {
     
     uint256 public constant TOKENS_PER_ETH = 10  * 1e18;
 
@@ -51,7 +51,7 @@ contract VisageToken is ERC20("Visage Token", "VSG"), Ownable2Step, ReentrancyGu
 
 }
 
-contract VisageNFT is ERC721("Visage NFT", "NVSG"), Ownable2Step, ReentrancyGuard {
+contract StakingVisageNFT is ERC721("Visage NFT", "NVSG"), Ownable2Step, ReentrancyGuard {
 
     constructor(address deployer) Ownable(deployer) {}
 
@@ -94,12 +94,20 @@ contract VisageStaking is Ownable2Step, ReentrancyGuard, IERC721Receiver {
     uint256 public constant REWARD_RATE = 10 * 1e18; // 10 tokens per 24 hours
     uint256 public constant REWARD_INTERVAL = 24 hours;
 
-    VisageNFT immutable _nft;
-    VisageToken immutable _token;
+    StakingVisageNFT immutable _nft;
+    StakingVisageToken immutable _token;
 
-    constructor() Ownable(msg.sender) {
-        _nft = new VisageNFT(address(this));
-        _token = new VisageToken(address(this));
+    constructor(address initialOwner, address token, address nft) Ownable(initialOwner) {
+        _token = StakingVisageToken(payable(token));
+        _nft = StakingVisageNFT(payable(nft));
+    }
+
+    function acceptNftOwnership() external onlyOwner {
+        _nft.acceptOwnership();
+    }
+    
+    function acceptTokenOwnership() external onlyOwner {
+        _token.acceptOwnership();
     }
 
     function getAddresses() external view returns (address tokenAddress, address nftAddress) {

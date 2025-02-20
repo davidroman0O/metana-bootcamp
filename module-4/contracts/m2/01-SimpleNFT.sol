@@ -19,7 +19,7 @@ contract FacesNFT is ERC721 {
         super._safeMint(msg.sender, currentTokenId);
     }
 
-    fallback() external { // slither says that "payable" was useless 
+    fallback() external payable {
         revert("You can't send ether with data on that contract");
     }
 
