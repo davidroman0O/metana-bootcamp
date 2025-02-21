@@ -23,8 +23,6 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 /// - on VisageExchange call `allowance` to see `10000000000000000000`
 /// - finally call `mintNFT` and you have an NFT
 
-event Received(address indexed sender, uint256 value);
-event Mint(address indexed sender, uint256 ethSent, uint256 tokensMinted, uint256 totalSupplyBefore);
 
 // The only way to buy some ExchangeVisageNFT
 // Basically it's the token sales
@@ -36,6 +34,9 @@ contract ExchangeVisageToken is ERC20("Visage Token", "VSG"), Ownable2Step, Reen
     uint256 public constant MAX_SUPPLY = 1_000_000 * 1e18; // wei
 
     constructor(address initialOwner) Ownable(initialOwner) {}
+
+    event Received(address indexed sender, uint256 value);
+    event Mint(address indexed sender, uint256 ethSent, uint256 tokensMinted, uint256 totalSupplyBefore);
 
     fallback() external payable  { revert(); }
 
@@ -95,6 +96,8 @@ contract VisageExchange is Ownable2Step {
         token = ExchangeVisageToken(payable(_token));
         nft = ExchangeVisageNFT(payable(_nft));
     }
+
+    event Received(address indexed sender, uint256 value);
 
     fallback() external payable  {
         revert("You can't send ether with data on that contract");
