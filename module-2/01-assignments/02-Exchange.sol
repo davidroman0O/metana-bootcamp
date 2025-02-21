@@ -1,73 +1,46 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.22;
+pragma solidity ^0.8.20; //slither version constraint
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /// Here how to use it:
 /// - Deploy VisageExchange
 /// - call `getAddresses`
 /// - copy the value of `tokenAddress` which is the address
-/// - select the contract "VisageToken"
+/// - select the contract "ExchangeVisageToken"
 /// - paste the address of `tokenAddress` into the input "At Address"
 /// - just click on "At Address" (DO NOT click on "Deploy")
-/// - VisageToken should show up
+/// - ExchangeVisageToken should show up
 /// - change wallet 
 /// - set 1 Ether
 /// - call `mintToken` on VisageExchange
 /// - call `balance` which gives you `10000000000000000000`
-/// - scroll down to VisageToken
+/// - scroll down to ExchangeVisageToken
 /// - call `approve` with the amount to `10000000000000000000` and the spender is the address of the contract VisageExchange
 /// - on VisageExchange call `allowance` to see `10000000000000000000`
 /// - finally call `mintNFT` and you have an NFT
 
-contract VisageNFT is ERC721("Visage NFT", "NVSG"), Ownable {
+event Received(address indexed sender, uint256 value);
+event Mint(address indexed sender, uint256 ethSent, uint256 tokensMinted, uint256 totalSupplyBefore);
 
-    constructor(address deployer) Ownable(deployer) {}
-
-    uint256 private tokenSupply = 1;
-    uint256 constant private MAX_SUPPLY = 11; 
-
-    function mint(address minter) external onlyOwner {
-        require(tokenSupply < MAX_SUPPLY, "no more NFT to mint");
-        super._safeMint(minter, tokenSupply);
-        tokenSupply++;
-    }
-
-    function _baseURI() internal pure override returns (string memory) {
-        return "ipfs://bafybeia3kfwpeqqxpwimflmqclo3hwewa7ziueennq2wocj3nlvv34bq34/";
-    }
-
-    function withdraw() public onlyOwner() {
-        (bool success, ) = payable(owner()).call{value: address(this).balance}("");
-        require(success, "withdraw failed");
-    }
-
-    function balance() public view onlyOwner returns (uint256) {
-        return this.balanceOf(address(this));
-    }
-
-}
-
-// The only way to buy some VisageNFT
+// The only way to buy some ExchangeVisageNFT
 // Basically it's the token sales
 // - user need to use approve with the address of the exchange contract
-contract VisageToken is ERC20("Visage Token", "VSG"), Ownable {
+contract ExchangeVisageToken is ERC20("Visage Token", "VSG"), Ownable2Step, ReentrancyGuard {
     
     // 10 VSG for 1ETH but in wei
     uint256 public constant TOKENS_PER_ETH = 10 * 1e18;
     uint256 public constant MAX_SUPPLY = 1_000_000 * 1e18; // wei
 
-    event Mint(address indexed sender, uint256 ethSent, uint256 tokensMinted, uint256 totalSupplyBefore);
+    constructor(address initialOwner) Ownable(initialOwner) {}
 
-    constructor(address deployer) Ownable(deployer) {}
-
-    fallback() external payable  {
-        revert("You can't send ether with data on that contract");
-    }
+    fallback() external payable  { revert(); }
 
     receive() external payable {
+        emit Received(msg.sender, msg.value);
         mint(msg.sender);
     }
 
@@ -76,29 +49,51 @@ contract VisageToken is ERC20("Visage Token", "VSG"), Ownable {
         uint256 tokensToMint = (TOKENS_PER_ETH * msg.value) / 1 ether;
         require(totalSupply() + tokensToMint <= MAX_SUPPLY, "mint would exceed max token supply");
         emit Mint(buyer, msg.value, tokensToMint, totalSupply());
-        super._mint(buyer, tokensToMint);
+        _mint(buyer, tokensToMint);
     }
 
-    function withdraw() external onlyOwner {
-        (bool success, ) = payable(owner()).call{value: address(this).balance}("");
+    function withdraw() external onlyOwner nonReentrant {
+        uint256 amount = address(this).balance;
+        require(amount > 0, "Nothing to withdraw");
+        (bool success, ) = payable(owner()).call{value: amount}("");
         require(success, "withdraw failed");
     }
 }
 
+contract ExchangeVisageNFT is ERC721("Visage NFT", "NVSG"), Ownable2Step, ReentrancyGuard {
+
+    uint256 private tokenSupply = 1;
+    uint256 constant private MAX_SUPPLY = 11; 
+
+    constructor(address initialOwner) Ownable(initialOwner) {}
+
+    receive() external payable { revert(); }
+    fallback() external payable { revert(); }
+
+    function mint(address minter) external onlyOwner {
+        require(tokenSupply < MAX_SUPPLY, "no more NFT to mint");
+        _safeMint(minter, tokenSupply);
+        tokenSupply++;
+    }
+
+    function _baseURI() internal pure override returns (string memory) {
+        return "ipfs://bafybeia3kfwpeqqxpwimflmqclo3hwewa7ziueennq2wocj3nlvv34bq34/";
+    }
+}
 
 // Basically an exchange
 // 000000000000000000
 // 10000000000000000000
 // ETH => VSG 
 // 10 VSG => NFT 
-contract VisageExchange is Ownable(msg.sender) {
+contract VisageExchange is Ownable2Step {
 
-    VisageToken public immutable token;
-    VisageNFT public immutable nft;
+    ExchangeVisageToken public immutable token;
+    ExchangeVisageNFT public immutable nft;
 
-    constructor() {
-        token = new VisageToken(address(this));
-        nft = new VisageNFT(address(this));
+    constructor(address initialOwner, address _token, address _nft) Ownable(initialOwner) {
+        token = ExchangeVisageToken(payable(_token));
+        nft = ExchangeVisageNFT(payable(_nft));
     }
 
     fallback() external payable  {
@@ -106,11 +101,23 @@ contract VisageExchange is Ownable(msg.sender) {
     }
 
     receive() external payable {
-        token.mint{ value: msg.value }(msg.sender);
+        emit Received(msg.sender, msg.value);
+        token.mint{value: msg.value}(msg.sender);
+    }
+
+    function acceptNftOwnership() external onlyOwner {
+        nft.acceptOwnership();
+    }
+    
+    function acceptTokenOwnership() external onlyOwner {
+        token.acceptOwnership();
     }
 
     function withdraw() external onlyOwner {
-        token.withdraw();
+        uint256 amount = address(this).balance;
+        require(amount > 0, "Nothing to withdraw");
+        (bool success, ) = payable(owner()).call{value: amount}("");
+        require(success, "withdraw failed");
     }
 
     function allowance() external view returns (uint256) {
@@ -145,4 +152,3 @@ contract VisageExchange is Ownable(msg.sender) {
         return (address(token), address(nft));
     }
 }
-
