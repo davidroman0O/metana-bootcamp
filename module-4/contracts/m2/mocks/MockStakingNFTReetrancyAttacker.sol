@@ -17,18 +17,18 @@ contract MockStakingNFTReentrancyAttacker is IERC721Receiver {
         address,
         uint256,
         bytes memory
-    ) public override returns (bytes4) {
+    ) public virtual override returns (bytes4) {
         if (attacking) {
             attacking = false;
-            // Try to reenter during the _safeMint callback
+            // Try to reenter mint during the _safeMint callback
             nft.mint(address(this));
         }
         return this.onERC721Received.selector;
     }
 
-    // This first mint will trigger _safeMint which calls onERC721Received
     function attack() external {
         attacking = true;
+        // First mint will call _safeMint which triggers onERC721Received
         nft.mint(address(this));
     }
 

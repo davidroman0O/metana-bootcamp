@@ -81,13 +81,26 @@ describe("ERC1155Token", function() {
                 .to.be.revertedWith("Free mint only allowed for tokens 0-2");
         });
 
-        it("Should prevent minting the same token twice", async function () {
+        it("Should allow minting same token multiple times after cooldown", async function () {
             const { token, otherAccount } = await loadFixture(deployContract);
+            
+            // First mint of token 0
             await token.connect(otherAccount).freeMint(0);
-            // Wait for cooldown to pass
+            expect(await token.balanceOf(otherAccount.address, 0)).to.equal(1);
+            
+            // Wait for cooldown
             await time.increase(61);
-            await expect(token.connect(otherAccount).freeMint(0))
-                .to.be.revertedWith("was already minted");
+            
+            // Second mint of token 0
+            await token.connect(otherAccount).freeMint(0);
+            expect(await token.balanceOf(otherAccount.address, 0)).to.equal(2);
+            
+            // Wait for cooldown again
+            await time.increase(61);
+            
+            // Third mint of token 0
+            await token.connect(otherAccount).freeMint(0);
+            expect(await token.balanceOf(otherAccount.address, 0)).to.equal(3);
         });
 
         it("Should enforce cooldown period", async function () {

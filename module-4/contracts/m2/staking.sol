@@ -34,7 +34,7 @@ contract StakingVisageToken is ERC20("Visage Token", "VSG"), Ownable2Step, Reent
         mint(msg.sender);
     }
 
-    function mint(address buyer) public payable {
+    function mint(address buyer) public payable  {
         require(msg.value > 0, "send eth to buy tokens");
         uint256 tokensToMint = (TOKENS_PER_ETH * msg.value) / 1 ether;
         emit Mint(buyer, msg.value, tokensToMint, totalSupply());
@@ -42,7 +42,7 @@ contract StakingVisageToken is ERC20("Visage Token", "VSG"), Ownable2Step, Reent
     }
 
     // Used for rewards
-    function mintToken(address minter, uint256 tokens) public onlyOwner  {
+    function mintToken(address minter, uint256 tokens) public onlyOwner {
         _mint(minter, tokens);
     }
 
@@ -72,7 +72,7 @@ contract StakingVisageNFT is ERC721("Visage NFT", "NVSG"), Ownable2Step, Reentra
     receive() external payable { revert(); }
     fallback() external payable { revert(); }
     
-    function mint(address minter) external onlyOwner {
+    function mint(address minter) external onlyOwner nonReentrant {
         require(tokenSupply < MAX_SUPPLY, "no more NFT to mint");
         uint256 supplyToMint = tokenSupply;
         tokenSupply++;
@@ -155,9 +155,9 @@ contract VisageStaking is Ownable2Step, ReentrancyGuard, IERC721Receiver {
         Stake storage stakeInfo = stakes[tokenID];
         require(stakeInfo.owner == msg.sender, "only the owner can unstake");
 
-        delete stakes[tokenID]; // Check-Effects-Interaction pattern
         // Claim any pending reward for this NFT
         uint256 reward = _calculateReward(tokenID);
+        delete stakes[tokenID]; // Check-Effects-Interaction pattern
         if (reward > 0) {
             // Reset lastClaim for this NFT to prevent double counting
             stakeInfo.lastClaim = block.timestamp;
@@ -185,7 +185,7 @@ contract VisageStaking is Ownable2Step, ReentrancyGuard, IERC721Receiver {
         emit RewardClaimed(msg.sender, tokenID, reward);
     }
 
-    function mintNFT() external payable nonReentrant {
+    function mintNFT() external payable {
         // if no allowance it will fail 
         require(
             _token.transferFrom(msg.sender, address(this), 10 * 1e18),
@@ -195,7 +195,7 @@ contract VisageStaking is Ownable2Step, ReentrancyGuard, IERC721Receiver {
         _nft.mint(msg.sender);
     }
 
-    function mintToken() external payable nonReentrant {
+    function mintToken() external payable {
         _token.mint{ value: msg.value }(msg.sender);
     }
 }

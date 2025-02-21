@@ -15,12 +15,13 @@ contract MockPayableMintReentrancyAttacker {
     receive() external payable {
         if (attacking) {
             attacking = false;
-            // Try to reenter the mint function
-            token.mint{value: 1 ether}(address(this));
+            // Try to reenter with a minimal amount of ETH
+            token.mint{value: 1 wei}(address(this));
         }
     }
 
     function attack() external payable {
+        require(msg.value > 0, "Send ETH to attack");
         attacking = true;
         token.mint{value: msg.value}(address(this));
     }
@@ -35,14 +36,10 @@ contract MockMintTokenReentrancyAttacker {
         token = StakingVisageToken(payable(_token));
     }
 
-    function acceptTokenOwnership() external {
-        token.acceptOwnership();
-    }
-
-    function onMinted(uint256 amount) internal {
+    function onTokenUpdate(uint256 amount) external {
         if (attacking) {
             attacking = false;
-            // Try to reenter mintToken
+            // Try to reenter mintToken during the _update callback
             token.mintToken(address(this), amount);
         }
     }
@@ -50,5 +47,9 @@ contract MockMintTokenReentrancyAttacker {
     function attack() external {
         attacking = true;
         token.mintToken(address(this), 1000 * 1e18);
+    }
+
+    function acceptTokenOwnership() external {
+        token.acceptOwnership();
     }
 }
