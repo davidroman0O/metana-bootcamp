@@ -1,6 +1,6 @@
 import { createConfig, http } from 'wagmi'
 import {  sepolia, polygon,  anvil } from 'wagmi/chains'
-import { walletConnect } from 'wagmi/connectors'
+import { walletConnect, injected } from 'wagmi/connectors'
 
 const isProd = import.meta.env.MODE === 'production'
 
@@ -10,7 +10,9 @@ const transportsEnv = isProd ? {
   [polygon.id]: http('https://polygon-rpc.com'),
 } : {
   [polygon.id]: http('https://polygon-rpc.com'),
-  [anvil.id]: http('http://127.0.0.1:8545'),
+  [anvil.id]: http('http://127.0.0.1:8545', {
+    timeout: 2000, 
+  }),
 };
 
 export const wagmiConfig = createConfig({
@@ -19,6 +21,6 @@ export const wagmiConfig = createConfig({
   // @ts-ignore
   transports: transportsEnv,
   connectors: [
-    
+    injected(), 
   ],
 })

@@ -19,21 +19,25 @@ const TradeModal: React.FC<TradeModalProps> = ({
   allBalances,
 }) => {
   const [isLoading, setIsLoading] = React.useState(false);
-  // console.log("TradeModal rendered with:", { isOpen, tradingTokenId });
   
-  if (!isOpen) return null;
+  if (!isOpen || tradingTokenId === null) return null;
 
   const baseMaterials = [
     { id: 0, name: "Molten Core Ingot" },
     { id: 1, name: "Refined Obsidian Shard" },
     { id: 2, name: "Raw Etherium Ore" }
-  ].filter(material => 
-    material.id !== tradingTokenId && 
-    !(allBalances[material.id.toString()] > BigInt(0))  // Filter out owned materials
-  );
+  ].filter(material => {
+    // Can't trade for the same token
+    if (material.id === tradingTokenId) return false;
+
+    // For tokens 3-6, show all base materials
+    if (tradingTokenId >= 3) return true;
+    
+    // For tokens 0-2, show all other base materials
+    return true;
+  });
 
   const handleTrade = async (baseTokenId: number) => {
-    console.log("Trade attempt:", { from: tradingTokenId, to: baseTokenId });
     setIsLoading(true);
     try {
       await onTrade(BigInt(baseTokenId));

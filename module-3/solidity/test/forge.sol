@@ -56,15 +56,21 @@ contract ForgeTest is Test {
 
     /// @notice Test forging token 3 by burning tokens 0 and 1.
     function test_ForgeToken3_Success() public {
-        // First deploy the token contract
+        // Deploy token contract with addressMain as owner
         ERC1155Token token = new ERC1155Token(addressMain);
         
-        // Then deploy the forge contract with the token address
+        // Deploy forge contract with addressMain as owner and token address
         Forge forgeContract = new Forge(addressMain, address(token));
+
+        vm.startPrank(addressMain);
         
         // Transfer token ownership to forge and accept it
         token.transferOwnership(address(forgeContract));
-        forgeContract.acceptTokenOwnership();
+        vm.stopPrank();
+
+        vm.startPrank(address(forgeContract));
+        token.acceptOwnership();
+        vm.stopPrank();
 
         vm.startPrank(addressMain);
 
@@ -91,15 +97,29 @@ contract ForgeTest is Test {
         vm.stopPrank();
     }
 
+    /// @notice Helper function to deploy and setup contracts
+    function setupContracts() internal returns (ERC1155Token, Forge) {
+        // Deploy token contract with addressMain as owner
+        ERC1155Token token = new ERC1155Token(addressMain);
+        
+        // Deploy forge contract with addressMain as owner and token address
+        Forge forgeContract = new Forge(addressMain, address(token));
+
+        vm.startPrank(addressMain);
+        // Transfer token ownership to forge
+        token.transferOwnership(address(forgeContract));
+        vm.stopPrank();
+
+        vm.startPrank(address(forgeContract));
+        token.acceptOwnership();
+        vm.stopPrank();
+
+        return (token, forgeContract);
+    }
+
     /// @notice Test that forging fails if required base tokens are missing.
     function test_ForgeFailsWithoutRequiredTokens() public {
-        // Deploy contracts
-        ERC1155Token token = new ERC1155Token(addressMain);
-        Forge forgeContract = new Forge(addressMain, address(token));
-        
-        // Transfer token ownership to forge and accept it
-        token.transferOwnership(address(forgeContract));
-        forgeContract.acceptTokenOwnership();
+        (ERC1155Token token, Forge forgeContract) = setupContracts();
 
         vm.startPrank(addressMain);
 
@@ -120,13 +140,7 @@ contract ForgeTest is Test {
 
     /// @notice Test trading base token for another base token
     function test_TradeBaseToken_Success() public {
-        // Deploy contracts
-        ERC1155Token token = new ERC1155Token(addressMain);
-        Forge forgeContract = new Forge(addressMain, address(token));
-        
-        // Transfer token ownership to forge and accept it
-        token.transferOwnership(address(forgeContract));
-        forgeContract.acceptTokenOwnership();
+        (ERC1155Token token, Forge forgeContract) = setupContracts();
 
         vm.startPrank(addressMain);
 
@@ -145,15 +159,9 @@ contract ForgeTest is Test {
         vm.stopPrank();
     }
 
-    /// @notice Test trading higher tier token (3-6) results in burn only
-    function test_TradeHigherTierToken_OnlyBurns() public {
-        // Deploy contracts
-        ERC1155Token token = new ERC1155Token(addressMain);
-        Forge forgeContract = new Forge(addressMain, address(token));
-        
-        // Transfer token ownership to forge and accept it
-        token.transferOwnership(address(forgeContract));
-        forgeContract.acceptTokenOwnership();
+    /// @notice Test trading higher tier token (3-6) for a base token
+    function test_TradeHigherTierToken_Success() public {
+        (ERC1155Token token, Forge forgeContract) = setupContracts();
 
         vm.startPrank(addressMain);
 
@@ -178,13 +186,7 @@ contract ForgeTest is Test {
 
     /// @notice Test that trading fails when the desired token is not a base token.
     function test_Trade_RevertsForNonBaseDesiredToken() public {
-        // Deploy contracts
-        ERC1155Token token = new ERC1155Token(addressMain);
-        Forge forgeContract = new Forge(addressMain, address(token));
-        
-        // Transfer token ownership to forge and accept it
-        token.transferOwnership(address(forgeContract));
-        forgeContract.acceptTokenOwnership();
+        (ERC1155Token token, Forge forgeContract) = setupContracts();
 
         vm.startPrank(addressMain);
 
@@ -202,13 +204,7 @@ contract ForgeTest is Test {
 
     /// @notice Test that trading the same token for itself fails
     function test_Trade_RevertsForSameToken() public {
-        // Deploy contracts
-        ERC1155Token token = new ERC1155Token(addressMain);
-        Forge forgeContract = new Forge(addressMain, address(token));
-        
-        // Transfer token ownership to forge and accept it
-        token.transferOwnership(address(forgeContract));
-        forgeContract.acceptTokenOwnership();
+        (ERC1155Token token, Forge forgeContract) = setupContracts();
 
         vm.startPrank(addressMain);
 

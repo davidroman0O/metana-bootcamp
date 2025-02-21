@@ -307,9 +307,11 @@ export function useToken(): UseTokenReturn {
           {
             onSuccess: async (data: any) => {
               await refreshAllData()
+              console.log('Free mint success:', data)
               resolve(data)
             },
             onError: (error: any) => {
+              console.log('Error in freeMint:', error)
               reject(error)
             },
           }

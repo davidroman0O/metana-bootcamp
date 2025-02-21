@@ -11,7 +11,7 @@ all: deploy
 .PHONY: anvil
 anvil:
 	@echo "Starting Anvil... (Press Ctrl+C to stop)"
-	anvil -vvvv
+	anvil -vvvv 
 
 # Deploy Contracts (requires Anvil to be running)
 .PHONY: deploy

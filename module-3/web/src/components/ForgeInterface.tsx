@@ -65,6 +65,7 @@ const ForgeInterface: React.FC<ForgeInterfaceProps> = ({
   };
 
   const handleTrade = async (tokenId: bigint) => {
+    console.log('handleTrade called with tokenId:', tokenId); // Debug log
     try {
       const isApproved = await isApprovedForAll(forgeContract.address);
       if (!isApproved) {
@@ -84,14 +85,21 @@ const ForgeInterface: React.FC<ForgeInterfaceProps> = ({
     setProcessingTokenId(tradingTokenId);
     try {
       await trade(BigInt(tradingTokenId), baseTokenId);
-      setTradeModalOpen(false);
     } catch (error) {
       console.error('Trade failed:', error);
     } finally {
       setProcessingTokenId(null);
       setTradingTokenId(null);
       setIsApproving(false);
+      setTradeModalOpen(false); // Make sure modal closes on both success and failure
     }
+  };
+
+  const handleCloseModal = () => {
+    setTradeModalOpen(false);
+    setTradingTokenId(null);
+    setProcessingTokenId(null);
+    setIsApproving(false);
   };
 
   const balanceMap = tokens.reduce((acc, token) => {
@@ -114,7 +122,7 @@ const ForgeInterface: React.FC<ForgeInterfaceProps> = ({
                   balance={tokens.find(t => t.tokenId === BigInt(tokenId))?.balance || BigInt(0)}
                   onMint={handleFreeMint}
                   onTrade={handleTrade}
-                  disabled={!!txHash || isApproving}
+                  disabled={!!txHash || isApproving || isLoading}
                   countdown={countdown}
                   isLoading={isLoading && processingTokenId === tokenId}
                   allBalances={balanceMap}
@@ -128,16 +136,16 @@ const ForgeInterface: React.FC<ForgeInterfaceProps> = ({
             <h2 className="text-xl font-bold mb-4">Forge Equipment</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {[3, 4, 5, 6].map((tokenId) => (
-                <div key={tokenId} className="flex flex-col">
-                  <NFTCard
-                    tokenId={tokenId}
-                    balance={tokens.find(t => t.tokenId === BigInt(tokenId))?.balance || BigInt(0)}
-                    onForge={handleForge}
-                    disabled={!!txHash || isApproving}
-                    isLoading={isLoading && processingTokenId === tokenId}
-                    allBalances={balanceMap}
-                  />
-                </div>
+                <NFTCard
+                  key={tokenId}
+                  tokenId={tokenId}
+                  balance={tokens.find(t => t.tokenId === BigInt(tokenId))?.balance || BigInt(0)}
+                  onForge={handleForge}
+                  onTrade={handleTrade}
+                  disabled={!!txHash || isApproving || isLoading}
+                  isLoading={isLoading && processingTokenId === tokenId}
+                  allBalances={balanceMap}
+                />
               ))}
             </div>
           </div>
@@ -146,10 +154,7 @@ const ForgeInterface: React.FC<ForgeInterfaceProps> = ({
 
       <TradeModal
         isOpen={tradeModalOpen}
-        onClose={() => {
-          setTradeModalOpen(false);
-          setTradingTokenId(null);
-        }}
+        onClose={handleCloseModal}
         onTrade={handleTradeConfirm}
         tradingTokenId={tradingTokenId}
         allBalances={balanceMap}

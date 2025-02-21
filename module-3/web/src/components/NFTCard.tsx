@@ -50,67 +50,58 @@ const NFTCard: React.FC<NFTCardProps> = ({
   };
 
   const renderButton = () => {
-    if (isLoading) {
-      return (
-        <Button disabled className="w-full">
-          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-          Processing...
+      if (isLoading) {
+        return (
+          <Button disabled className="w-full">
+            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            Processing...
+          </Button>
+        );
+      }
+
+      // Common trade button since it's used in both cases
+      const TradeButton = () => (
+        <Button 
+          onClick={() => {
+            console.log('Trade clicked for token:', tokenId); // Debug log
+            onTrade?.(BigInt(tokenId));
+          }}
+          className="bg-blue-500 hover:bg-blue-600 text-white"
+          disabled={disabled}
+        >
+          Trade
         </Button>
       );
-    }
 
-    // For base materials (tokens 0-1-2)
-    if (isBase) {
-      // If already owned, disable minting completely
-      if (owned) {
-        // Check if we can trade
-        const otherBaseMaterialsAvailable = Object.entries(allBalances)
-          .some(([id, balance]) => {
-            const thisTokenId = parseInt(id);
-            return thisTokenId < 3 && thisTokenId !== tokenId && balance === BigInt(0);
-          });
-
+      // For base materials (tokens 0-2)
+      if (isBase) {
         return (
           <div className="flex gap-2">
-            <Button disabled className="w-full">
-              Already Minted
+            <Button 
+              disabled={disabled || (typeof countdown === 'number' && countdown > 0)}
+              onClick={() => onMint?.(BigInt(tokenId))}
+              className="flex-1"
+            >
+              {countdown && countdown > 0 ? `Wait ${countdown}s` : "Mint"}
             </Button>
-            {otherBaseMaterialsAvailable && (
-              <Button 
-                onClick={() => onTrade?.(BigInt(tokenId))}
-                className="bg-blue-500 hover:bg-blue-600 text-white"
-                disabled={disabled}
-              >
-                Trade
-              </Button>
-            )}
+            {owned && <TradeButton />}
           </div>
         );
       }
 
-      // If not owned, show mint button
+      // For equipment (tokens 3-6)
       return (
-        <Button 
-          disabled={disabled || (typeof countdown === 'number' && countdown > 0)}
-          onClick={() => onMint?.(BigInt(tokenId))}
-          className="w-full"
-        >
-          {countdown && countdown > 0 ? `Wait ${countdown}s` : "Mint"}
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            disabled={disabled || !canForge()}
+            onClick={() => onForge?.(BigInt(tokenId))}
+            className="flex-1"
+          >
+            {canForge() ? (owned ? "Forge More" : "Forge") : "Missing Materials"}
+          </Button>
+          {owned && <TradeButton />}
+        </div>
       );
-    }
-
-    // For equipment (tokens 3-4-5-6)
-    const hasRequiredMaterials = canForge();
-    return (
-      <Button 
-        disabled={disabled || !hasRequiredMaterials}
-        onClick={() => onForge?.(BigInt(tokenId))}
-        className="w-full"
-      >
-        {hasRequiredMaterials ? (owned ? "Forge More" : "Forge") : "Missing Materials"}
-      </Button>
-    );
   };
 
   if (loading || !metadata) {
@@ -154,9 +145,7 @@ const NFTCard: React.FC<NFTCardProps> = ({
               {rarity}
             </span>
           </div>
-          {!isBase && (
-            <p className="text-sm text-gray-600">Amount: {balance.toString()}</p>
-          )}
+          <p className="text-sm text-gray-600">Amount: {balance.toString()}</p>
           {isBase && element && (
             <p className="text-sm text-gray-600">{element}</p>
           )}

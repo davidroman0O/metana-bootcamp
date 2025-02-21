@@ -21,10 +21,10 @@ export const getContractAddress = (addresses: Record<number, string>) => {
 // Contract addresses
 export const TOKEN_ADDRESSES = getContractAddress({
   [polygon.id]: '0xCc98b21E56b4062d4C45F3D2254688447E827b74',
-  [anvil.id]: import.meta.env.VITE_TOKEN_ADDRESS || ANVIL_TOKEN_ADDRESS,
+  [anvil.id]: ANVIL_TOKEN_ADDRESS,
 })
 
 export const FORGE_ADDRESSES = getContractAddress({
   [polygon.id]: '0x90b4153CC409588dcdDC0c0D1CA873829a75e444',
-  [anvil.id]: import.meta.env.VITE_FORGE_ADDRESS || ANVIL_FORGE_ADDRESS,
+  [anvil.id]: ANVIL_FORGE_ADDRESS,
 })

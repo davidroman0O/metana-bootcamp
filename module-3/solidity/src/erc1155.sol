@@ -15,6 +15,7 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable2Step, ReentrancyGuard
 
     /// Cooldown period (in seconds) between free mints.
     uint256 public constant COOLDOWN = 1 minutes;
+    // uint256 public constant COOLDOWN = 10 seconds;
   
     // this fix the unit test ownership issue
     constructor(address initialOwner) Ownable(initialOwner) ERC1155("ipfs://bafybeihx2hcoh5pfuth7jw3winzc7l727zpieftswqibutaepwk6nbqsn4/") {}

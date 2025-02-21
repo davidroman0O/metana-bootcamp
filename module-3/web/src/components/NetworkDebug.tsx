@@ -3,6 +3,7 @@ import { useForgeContract } from '@/hooks/use-forge-contract';
 import { useTokenContract } from '@/hooks/use-token-contract';
 import { useToken } from '@/hooks/use-token';
 import { polygon } from 'wagmi/chains';
+const isProd = import.meta.env.MODE === 'production'
 
 const EnhancedDebug = () => {
   const { address } = useAccount();
@@ -28,6 +29,7 @@ const EnhancedDebug = () => {
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-gray-900 text-white p-4 font-mono text-sm">
       <div className="max-w-4xl mx-auto space-y-1">
+        <div>Prod: {isProd?.toString()}</div>
         <div>Chain ID: {chainId} {chainId === polygon.id ? '(Polygon)' : ''}</div>
         <div>Block: {blockNumber?.toString()}</div>
         <div>Wallet: {address || 'Not connected'}</div>

@@ -17,7 +17,7 @@ const Notification = ({ message }: { message: string }) => (
 export function NetworkSwitcher() {
   const { switchChain, isPending, chains: configuredChains } = useSwitchChain()
   const { chain } = useAccount()
-  const block = useBlockProvider()
+  // const block = useBlockProvider()
   const chainId = useChainId()
   const [showNotification, setShowNotification] = useState(false);
   
@@ -73,7 +73,7 @@ export function NetworkSwitcher() {
     [configuredChains]
   )
 
-  const isInitializing = !block 
+  // const isInitializing = !block 
 
   if (!chain) return null
 
@@ -90,7 +90,7 @@ export function NetworkSwitcher() {
         <SelectTrigger className="max-w-auto lt-sm:hidden">
           <SelectValue>
             <span className="flex items-center">
-              {(isPending || isInitializing) && (
+              {(isPending ) && (
                 <span className="i-line-md:loading-twotone-loop mr-1 h-4 w-4 inline-flex text-primary" />
               )}
               {' '}
