@@ -19,18 +19,13 @@ export function useForge({ onSuccess, onTxHash }: UseForgeConfig = {}) {
     contracts: [
       {
         ...forgeContract,
-        functionName: 'getAddress',
-      },
-      {
-        ...forgeContract,
         functionName: 'owner',
       },
     ],
   })
 
   return {
-    tokenAddress: data?.[0].result?.toString() ?? undefined,
-    owner: data?.[1].result?.toString() ?? undefined,
+    owner: data?.[0].result?.toString() ?? undefined,
     
     trade: async (tokenIDToTrade: bigint, tokenIDToReceive: bigint): Promise<`0x${string}`> => {
       return new Promise((resolve, reject) => {

@@ -268,6 +268,7 @@ function Home() {
             <div className="text-center">
               <h1 className="text-3xl font-bold mb-4">Not Found or not accessible</h1>
               <p className="text-lg text-gray-500">It seems the contract address is the wrong one or simply doesn't exists or not accessible</p>
+              <div data-exists={exists} data-connections={connections.length} />
             </div>
           </div>
         ) 

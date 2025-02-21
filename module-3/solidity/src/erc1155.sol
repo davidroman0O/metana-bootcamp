@@ -1,22 +1,42 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20; // slither says the 0.8.0 had known severe issues
 
 // Import OpenZeppelin’s ERC1155 base, burnable extension and Ownable.
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 
-
-contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable {
+contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable2Step, ReentrancyGuard {
     
     /// Mapping to track the timestamp of the last free mint per address.
     mapping(address => uint256) public lastMintTime;
 
     /// Cooldown period (in seconds) between free mints.
     uint256 public constant COOLDOWN = 1 minutes;
-    // uint256 public constant COOLDOWN = 5 seconds;
   
-    constructor() Ownable(msg.sender) ERC1155("ipfs://bafybeihx2hcoh5pfuth7jw3winzc7l727zpieftswqibutaepwk6nbqsn4/{id}") {}
+    // this fix the unit test ownership issue
+    constructor(address initialOwner) Ownable(initialOwner) ERC1155("ipfs://bafybeihx2hcoh5pfuth7jw3winzc7l727zpieftswqibutaepwk6nbqsn4/") {}
+
+    // We're not allowing money to flow in anyway, the tokens are free, thus we cannot lock funds
+    fallback() external payable  {
+        revert("You can't send ether with data on that contract");
+    }
+
+    // We're not allowing money to flow in anyway, the tokens are free, thus we cannot lock funds
+    receive() external payable {
+        revert("You can't send ether on that contract");
+    }
+
+    function uri(uint256 tokenId) public view override returns (string memory) {
+        return string(
+            abi.encodePacked(
+                super.uri(tokenId),
+                Strings.toString(tokenId) // Convert token ID to a string
+            )
+        );
+    }
 
     function canMint() public view returns (bool) {
         return block.timestamp >= lastMintTime[msg.sender] + COOLDOWN;
@@ -50,16 +70,17 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable {
         return block.timestamp >= lastMintTime[account] + COOLDOWN;
     }
     
-    function freeMint(uint256 id) external {
+    function freeMint(uint256 id) external nonReentrant {
         require(id < 3, "Free mint only allowed for tokens 0-2");
         require(
             block.timestamp >= lastMintTime[msg.sender] + COOLDOWN,
             "Cooldown active: wait 1 minute between mints"
         );
-        require(
-            balanceOf(msg.sender, id) == 0,
-            "was already minted"
-        );
+        // We used to have that but the requirements says "free minting with 1 minute cooldown" and doesn't enforce the "only once" rule.
+        // require(
+        //     balanceOf(msg.sender, id) == 0,
+        //     "was already minted"
+        // );
         lastMintTime[msg.sender] = block.timestamp;
         _mint(msg.sender, id, 1, "");
     }
@@ -69,8 +90,7 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable {
         uint256 id,
         uint256 amount
     ) external onlyOwner {
-        require(owner() == msg.sender, "Only forging contract can mint tokens");
-        require(id < 7, "Token id must be between 0 and 6");
+        require(id <= 6, "Invalid token id: must be 0 to 6");
         _mint(to, id, amount, "");
     }
 
@@ -84,4 +104,16 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable {
     {
         return super.supportsInterface(interfaceId);
     }
+
+    function batchBurn(
+        address account, 
+        uint256[] calldata ids, 
+        uint256[] calldata amounts
+    ) public virtual onlyOwner {
+        require(ids.length == amounts.length, "Length mismatch");
+        for(uint256 i = 0; i < ids.length; i++) {
+            _burn(account, ids[i], amounts[i]);
+        }
+    }
+
 }

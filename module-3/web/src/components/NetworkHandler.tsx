@@ -9,7 +9,7 @@ const NetworkHandler = () => {
   const { isConnected } = useAccount();
 
   const connections = useConnections()
-  // console.log('connections', connections)
+  console.log('connections', connections)
 
   const isValidNetwork = () => {
     if (!chainId) return false;
@@ -22,7 +22,7 @@ const NetworkHandler = () => {
     })
   };
 
-  // console.log('isValidNetwork', isValidNetwork());
+  console.log('isValidNetwork', isValidNetwork());
 
   // Automatically switch to the correct network when connected
   useEffect(() => {
@@ -32,7 +32,7 @@ const NetworkHandler = () => {
     }
   }, [isConnected, chainId, isPending]);
 
-  // console.log('chainId', chainId);
+  console.log('chainId', chainId);
 
   if (!chainId || isValidNetwork()) return null;
 
@@ -40,7 +40,6 @@ const NetworkHandler = () => {
     console.log('No connections found');
     return null;
   }
-
 
   return (
     <div className="fixed inset-x-0 top-0 z-50 p-4">

@@ -87,9 +87,12 @@ export function useContractAvailability(
   }, [contractAddress])
 
   const isValid = useCallback(() => {
+    console.log('Contract data:', { data, isError, error })
     // Contract is valid if we can call functions on it (got data or specific error)
     return !isError || error?.message?.includes('user rejected')
   }, [isError, error])
+
+  console.log('Contract availability:', { isAvailable: isAvailable(), isValid: isValid() })
 
   const exists = isAvailable() && isValid()
 
