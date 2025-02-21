@@ -13,7 +13,7 @@
 # M3:
     [x] - **ERC1155**
     [x] - **Forge**
-        [ ] - Unlimited mint 0-2
+        [x] - Unlimited mint 0-2
 
 Once done, re-deploy the contracts, re-deploy the web app and add the trading on any token to 0-2 tokens
 
@@ -30,5 +30,5 @@ Once done, re-deploy the contracts, re-deploy the web app and add the trading on
 [ ] - Do a write-up of errors you discovered. If none, pick 3 false positives and describe why they are false positives.
 [ ] - Show the github commit that adds the unit tests.
 [ ] - Run mutation testing on the assignment that has 100% coverage. Did you discover any faulty tests?
-[ ] - re-deploy forge + add the all trading to 0-2 feature on the web app
+[x] - re-deploy forge + add the all trading to 0-2 feature on the web app
 
