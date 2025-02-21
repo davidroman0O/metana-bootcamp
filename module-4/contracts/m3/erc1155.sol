@@ -76,10 +76,11 @@ contract ERC1155Token is ERC1155, ERC1155Burnable, Ownable2Step, ReentrancyGuard
             block.timestamp >= lastMintTime[msg.sender] + COOLDOWN,
             "Cooldown active: wait 1 minute between mints"
         );
-        require(
-            balanceOf(msg.sender, id) == 0,
-            "was already minted"
-        );
+        // We used to have that but the requirements says "free minting with 1 minute cooldown" and doesn't enforce the "only once" rule.
+        // require(
+        //     balanceOf(msg.sender, id) == 0,
+        //     "was already minted"
+        // );
         lastMintTime[msg.sender] = block.timestamp;
         _mint(msg.sender, id, 1, "");
     }
