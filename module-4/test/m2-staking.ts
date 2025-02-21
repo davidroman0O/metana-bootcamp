@@ -415,6 +415,16 @@ describe("VisageStaking", function () {
             expect(await token.owner()).to.equal(await staking.getAddress());
             expect(await nft.owner()).to.equal(await staking.getAddress());
         });
+        it("Should reject non-owner accept nft ownership", async function () {
+            const { staking, otherAccount } = await loadFixture(deployFixture);
+            await expect(staking.connect(otherAccount).acceptNftOwnership())
+                .to.be.revertedWithCustomError(staking, "OwnableUnauthorizedAccount");
+        });
+        it("Should reject non-owner accept token ownership", async function () {
+            const { staking, otherAccount } = await loadFixture(deployFixture);
+            await expect(staking.connect(otherAccount).acceptTokenOwnership())
+                .to.be.revertedWithCustomError(staking, "OwnableUnauthorizedAccount");
+        });
     });
 
     describe("NFT Minting", function () {
@@ -453,7 +463,7 @@ describe("VisageStaking", function () {
     });
 
     describe("Staking", function () {
-        it("Should emit NFTStaked event when staking", async function () {
+        it("Should emit Staked event when staking", async function () {
             const { staking, token, nft, otherAccount } = await loadFixture(deployFixture);
             
             // Mint NFT first
@@ -473,7 +483,7 @@ describe("VisageStaking", function () {
                     await staking.getAddress(),
                     1
                 )
-            ).to.emit(staking, "NFTStaked")
+            ).to.emit(staking, "Staked")
              .withArgs(otherAccount.address, 1);
         });
 
@@ -645,21 +655,23 @@ describe("VisageStaking", function () {
 
             // Approve and stake NFT
             await nft.connect(otherAccount).approve(await staking.getAddress(), 1);
-            await nft.connect(otherAccount)["safeTransferFrom(address,address,uint256)"](
-                otherAccount.address,
-                await staking.getAddress(),
-                1
-            );
+            expect(
+                nft.connect(otherAccount)["safeTransferFrom(address,address,uint256)"](
+                    otherAccount.address,
+                    await staking.getAddress(),
+                    1
+                )
+            ).to.emit(staking, "Staked")
 
             // Advance time
             await time.increase(time.duration.hours(25));
 
+            // Check rewards were received
+            expect(await staking.getRewardBalanceOf(ethers.toBigInt(1)))
+                .to.greaterThan(ethers.parseUnits("10", 18));
+
             // Unstake
             await staking.connect(otherAccount).unstakeNFT(1);
-
-            // Check rewards were received
-            expect(await staking.balanceOf(otherAccount.address))
-                .to.equal(ethers.parseUnits("10", 18));
 
             // Check NFT was returned
             expect(await nft.ownerOf(1)).to.equal(otherAccount.address);
@@ -768,6 +780,72 @@ describe("VisageStaking", function () {
             await expect(
                 staking.connect(otherAccount).unstakeNFT(1)
             ).to.be.reverted;
+        });
+    });
+
+
+    describe("Withdrawal", function () {
+        it("Should allow owner to withdraw through staking contract", async function () {
+            const { staking, token, owner } = await loadFixture(deployFixture);
+            
+            // Fund token contract
+            await ethers.provider.send("hardhat_setBalance", [
+                await token.getAddress(),
+                ethers.toBeHex(ethers.parseEther("1"))
+            ]);
+
+            await token.connect(owner).withdraw();
+            
+            // Verify token contract balance is 0
+            expect(await ethers.provider.getBalance(await token.getAddress()))
+                .to.equal(0);
+        });
+
+        it("Should prevent non-owner from withdrawing", async function () {
+            const { token, otherAccount } = await loadFixture(deployFixture);
+            
+            await expect(token.connect(otherAccount).withdraw())
+                .to.be.revertedWithCustomError(token, "OwnableUnauthorizedAccount");
+        });
+    });
+
+    describe("Token Allowance", function () {
+        it("Should return correct allowance amount", async function () {
+            const { staking, token, otherAccount } = await loadFixture(deployFixture);
+            
+            // Initial allowance should be 0
+            expect(await token.allowance(otherAccount.address, await staking.getAddress()))
+                .to.equal(0);
+
+            // Set allowance
+            const allowanceAmount = ethers.parseUnits("100", 18);
+            await token.connect(otherAccount).approve(
+                await staking.getAddress(),
+                allowanceAmount
+            );
+
+            // Check allowance through staking contract
+            expect(await token.allowance(otherAccount.address, await staking.getAddress()))
+                .to.equal(allowanceAmount);
+        });
+    });
+
+    describe("Balance Checking", function () {
+        it("Should return correct token balance", async function () {
+            const { staking, token, otherAccount } = await loadFixture(deployFixture);
+            
+            // Initial balance should be 0
+            expect(await token.balanceOf(otherAccount.address))
+                .to.equal(0);
+
+            // Mint some tokens
+            await staking.connect(otherAccount).mintToken({
+                value: ethers.parseEther("1")
+            });
+
+            // Check balance through staking contract
+            expect(await token.balanceOf(otherAccount.address))
+                .to.equal(ethers.parseUnits("10", 18));
         });
     });
 });
