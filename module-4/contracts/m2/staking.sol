@@ -15,17 +15,15 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 /// Fake the time obviously
 /// Do not force people to withdraw NFT to get token, just let's them get their money
 
-event Received(address indexed sender, uint256 value);
-event Mint(address indexed sender, uint256 ethSent, uint256 tokensMinted, uint256 totalSupplyBefore);
-event Staked(address indexed staker, uint256 tokenID);
-event Unstaked(address indexed staker, uint256 tokenID);
-event RewardClaimed(address indexed staker, uint256 tokenID, uint256 amount);
 
 contract StakingVisageToken is ERC20("Visage Token", "VSG"), Ownable2Step, ReentrancyGuard {
     
     uint256 public constant TOKENS_PER_ETH = 10  * 1e18;
 
     constructor(address deployer) Ownable(deployer) {}
+
+    event Received(address indexed sender, uint256 value);
+    event Mint(address indexed sender, uint256 ethSent, uint256 tokensMinted, uint256 totalSupplyBefore);
 
     fallback() external payable { revert(); }
 
@@ -106,6 +104,10 @@ contract VisageStaking is Ownable2Step, ReentrancyGuard, IERC721Receiver {
         _token = StakingVisageToken(payable(token));
         _nft = StakingVisageNFT(payable(nft));
     }
+
+    event Staked(address indexed staker, uint256 tokenID);
+    event Unstaked(address indexed staker, uint256 tokenID);
+    event RewardClaimed(address indexed staker, uint256 tokenID, uint256 amount);
 
     fallback() external payable { revert(); }
     receive() external payable { revert(); }
