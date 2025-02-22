@@ -1,0 +1,15 @@
+{
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts": "^5.2.0",
+    "hardhat": "^2.22.18"
+  },
+  "scripts": {
+    "coverage": "open ./coverage/index.html",
+    "slither": "slither $1 --solc-remaps '@openzeppelin=node_modules/@openzeppelin'",
+    "triage": "slither $1 --solc-remaps '@openzeppelin=node_modules/@openzeppelin' --triage-mode"
+  },
+  "dependencies": {
+    "@morenabarboni/sumo": "^2.5.4"
+  }
+}
