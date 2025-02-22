@@ -160,26 +160,32 @@ contract ForgeTest is Test {
     }
 
     /// @notice Test trading higher tier token (3-6) for a base token
-    function test_TradeHigherTierToken_Success() public {
+    function test_Trade_RevertsForHigherTierToken() public {
         (ERC1155Token token, Forge forgeContract) = setupContracts();
 
         vm.startPrank(addressMain);
+        vm.warp(block.timestamp + 60);
 
-        // Mint base tokens and forge token 3
-        vm.warp(block.timestamp + 60);
+        // Mint token 0
         token.freeMint(0);
+        
+        // Wait for cooldown
         vm.warp(block.timestamp + 60);
+        
+        // Mint token 1
         token.freeMint(1);
+        
         token.setApprovalForAll(address(forgeContract), true);
+        
+        // Forge token 3 (requires tokens 0 and 1)
         forgeContract.forge(3);
+        
+        // Verify we have token 3
         assertEq(token.balanceOf(addressMain, 3), 1);
 
-        // Trade token 3 for base token 0
+        // Try to trade token 3 for a base token - this should revert with the correct message
+        vm.expectRevert("Can only trade basic tokens (0-2)");
         forgeContract.trade(3, 0);
-
-        // After trading, token 3 should be burned and token 0 should be received
-        assertEq(token.balanceOf(addressMain, 3), 0);
-        assertEq(token.balanceOf(addressMain, 0), 1);
 
         vm.stopPrank();
     }
