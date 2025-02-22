@@ -1,5 +1,5 @@
 import { shorten } from '@did-network/dapp-sdk'
-import { useAccount,useConnections, useWaitForTransactionReceipt } from 'wagmi'
+import { useAccount, useConnections, useWaitForTransactionReceipt } from 'wagmi'
 import { useState, useCallback, useEffect, memo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Header } from '@/components/layout/Header'
@@ -15,6 +15,9 @@ import NetworkHandler from '@/components/NetworkHandler'
 import NetworkDebug from '@/components/NetworkDebug'
 import { useNotifications } from '@/hooks/use-notification'
 import { AppNotification } from '@/components/NotificationBanner';
+import { useForgeContract } from '@/hooks/use-forge-contract';
+import { waitForTransactionReceipt } from 'wagmi/actions';
+import {wagmiConfig} from "@/wagmi.config"
 
 const HeaderActions = memo(() => {
   const { address } = useAccount()
@@ -57,7 +60,6 @@ StableHeader.displayName = 'StableHeader'
 
 const DEBUG = false
 
-
 const MainContent = ({
   exists,
   initialized,
@@ -75,6 +77,13 @@ const MainContent = ({
   onDismissNotification,
   refreshData,
   setTxHash,  
+  openModal,
+  from,
+  to,
+  handleForge,
+  handleTrade,
+  handleTradeApproval,
+  handleCancelTrade,
 }: {
   exists: boolean;
   initialized: boolean;
@@ -92,35 +101,15 @@ const MainContent = ({
   onDismissNotification: (id: string) => void;
   refreshData: () => Promise<void>;
   setTxHash: (hash: `0x${string}` | null) => void;
+  openModal: boolean;
+  from: bigint;
+  to: bigint;
+  handleForge: (tokenId: bigint) => Promise<void>;
+  handleTradeApproval: (tokenId: bigint) => Promise<void>;
+  handleTrade: (tokenId: bigint) => Promise<void>;
+  handleCancelTrade: () => void;
 }) => {
-  const forge = useForge({
-    onSuccess: async () => {
-      console.log('Transaction successful, refreshing data...')
-      await refreshData()
-    },
-    onTxHash: (hash) => {
-      console.log('Got transaction hash:', hash)
-      setTxHash(hash)
-    }
-  });
-
-  const handleTrade = useCallback(async (tokenIDToTrade: bigint, tokenIDToReceive: bigint) => {
-    try {
-      const hash = await forge.trade(tokenIDToTrade, tokenIDToReceive)
-      console.log('Trade transaction submitted:', hash)
-    } catch (error) {
-      console.error('Trade failed:', error)
-    }
-  }, [forge]);
-
-  const handleForge = useCallback(async (tokenID: bigint) => {
-    try {
-      const hash = await forge.forge(tokenID)
-      console.log('Forge transaction submitted:', hash)
-    } catch (error) {
-      console.error('Forge failed:', error)
-    }
-  }, [forge]);
+  
 
   return exists ? (
     <>
@@ -148,6 +137,13 @@ const MainContent = ({
               txHash={txHash}
               freeMint={handleFreeMint}
               countdown={countdown}
+              openModal={openModal}
+              from={from}
+              to={to}
+              handleTradeApproval={handleTradeApproval}
+              handleTrade={handleTrade}
+              handleForge={handleForge}
+              handleCancelTrade={handleCancelTrade}
             />
           </div>
         </div>
@@ -156,14 +152,14 @@ const MainContent = ({
   ) : null;
 };
 
-
-
 function Home() {
   const { address } = useAccount();
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>("");
   const { notifications, addNotification, removeNotification, clearAllNotifications } = useNotifications();
-  
+  const [ openModal, setModal ] = useState<boolean>(false);
+  const [ fromToken, setFromToken ] = useState<bigint>(BigInt(0));
+  const [ toToken, setToToken ] = useState<bigint>(BigInt(0));
   const connections = useConnections()
 
   const { 
@@ -184,21 +180,48 @@ function Home() {
     pollingInterval: 1000,
   });
 
+  const forgeContract = useForgeContract();
+  const { setApprovalForAll, isApprovedForAll } = useToken();
+  const forge = useForge({
+    onSuccess: async () => {
+      console.log('Transaction successful, refreshing data...')
+      await refreshData()
+    },
+    onTxHash: (hash) => {
+      console.log('Got transaction hash:', hash)
+      setTxHash(hash)
+    }
+  });
+
   // Watch for transaction states
   useEffect(() => {
     if (txHash) {
-      if (isLoading) {
+      if (isError) {
+        console.error('Transaction error:', txHash);
+        // Clear existing notifications for this hash
+        notifications
+          .filter(n => n.txHash === txHash)
+          .forEach(n => removeNotification(n.id));
+        addNotification('Transaction failed', 'error', txHash);
+        setTxHash(null); // Stop watching failed transaction
+      } else if (isLoading) {
+        // Clear existing notifications for this hash
+        notifications
+          .filter(n => n.txHash === txHash)
+          .forEach(n => removeNotification(n.id));
         addNotification('Transaction is pending...', 'info', txHash);
       } else if (isSuccess) {
+        // Clear existing notifications for this hash
+        notifications
+          .filter(n => n.txHash === txHash)
+          .forEach(n => removeNotification(n.id));
         addNotification('Transaction confirmed!', 'success', txHash);
         refreshData();
         setTxHash(null);
         setErrorMessage("");
-      } else if (isError) {
-        addNotification('Transaction failed. Please try again.', 'error', txHash);
       }
     }
-  }, [txHash, isLoading, isSuccess, isError, addNotification, refreshData]);
+  }, [txHash, isLoading, isSuccess, isError, addNotification, refreshData, removeNotification, notifications]);
 
   // Reset notifications when switching accounts or networks
   useEffect(() => {
@@ -214,9 +237,108 @@ function Home() {
     }
   }, [isError]);
 
+  const handleForge = useCallback(async (tokenId: bigint) => {
+    try {
+      const hash = await forge.forge(tokenId);
+      console.log('Forge transaction submitted:', hash);
+    } catch (error) {
+      console.error('Forge failed:', error);
+    }
+  }, [forge]);
+
+  const handleCancelTrade = useCallback(() => {
+    setModal(false);
+  }, [])
+
+  const handleTradeApproval = useCallback(async (tokenId: bigint) => {
+    try {
+      const isApproved = await isApprovedForAll(forgeContract.address);
+      console.log('Trade preparation:', {
+        tokenId: tokenId.toString(),
+        forgeContract: forgeContract.address,
+        isApproved,
+      });
+
+      if (!isApproved) {
+        console.log('Setting approval for forge contract...');
+        const approvalHash = await setApprovalForAll(forgeContract.address);
+
+        addNotification('Approval transaction submitted', 'info', approvalHash);
+        console.log('Approval transaction hash:', approvalHash);
+        
+        // Wait for the approval transaction to be mined
+        try {
+          var data = await waitForTransactionReceipt(wagmiConfig, {
+            hash: approvalHash,
+          });
+          if (data.status === "reverted") {
+            console.log('Approval transaction reverted', data);
+            throw new Error('Approval transaction failed');
+          }
+          addNotification('Approval transaction confirmed', 'success', approvalHash);
+          console.log('Approval transaction confirmed', data);
+        } catch (error) {
+          setErrorMessage("Failed to confirm approval transaction");
+          addNotification('Approval transaction failed', 'error', approvalHash);
+          console.error('Approval confirmation failed:', error);
+          return;
+        }
+      }
+      
+      setFromToken(tokenId);
+      setModal(true);
+    } catch (error) {
+      console.error("Error in handleTrade:", error);
+      if (error instanceof Error) {
+        console.error("Error details:", {
+          message: error.message,
+          name: error.name,
+          stack: error.stack
+        });
+      }
+      setModal(false);
+    }
+  }, [])
+
+  const handleTradeConfirm = useCallback(async (from: bigint, to: bigint) => {
+    if (from === null) {
+      console.error("Invalid trading token ID:", from);
+      addNotification('Invalid trading token ID', 'error');
+      setModal(false);
+      return;
+    }
+    setToToken(from);
+    try {
+      const hash = await forge.trade(from, to);
+      addNotification('Trade transaction submitted', 'info', hash);
+      console.log('Trade transaction submitted:', hash);
+      setModal(false);
+      try {
+        var data = await waitForTransactionReceipt(wagmiConfig, {
+          hash: hash,
+        });
+        if (data.status === "reverted") {
+          console.log('Trade transaction reverted', data);
+          throw new Error('Trade transaction failed');
+        }
+        addNotification('Trade transaction confirmed', 'success', hash);
+        console.log('Trade transaction confirmed', data);
+      } catch (error) {
+        addNotification('Trade transaction failed', 'error');
+        console.error('Trade failed:', error);
+      }
+    } catch (error) {
+      addNotification('Trade transaction failed', 'error');
+      console.error('Trade failed:', error);
+    } finally {
+      setModal(false);
+      setToToken(BigInt(0));
+      setFromToken(BigInt(0));
+    }
+  }, []);
+
   const handleFreeMint = useCallback(
     async (tokenID: bigint) => {
-      // Clear any existing error state
       setErrorMessage("");
       
       if (txHash) {
@@ -245,11 +367,9 @@ function Home() {
           } else if (error.message.includes("Cooldown active")) {
             message = "Please wait for cooldown to finish before minting again";
           } else {
-            // Clean up the error message by taking only the first part before any parentheses
             message = error.message.split('(')[0].trim();
           }
         }
-        // Only set the error message, don't add it as a notification
         setErrorMessage(message);
         setTxHash(null);
       }
@@ -300,6 +420,13 @@ function Home() {
         onDismissNotification={removeNotification}
         refreshData={refreshData}
         setTxHash={setTxHash}
+        openModal={openModal}
+        from={fromToken}
+        to={toToken}
+        handleForge={(tokenId: bigint) => handleForge(tokenId)}
+        handleTradeApproval={(tokenId: bigint) => handleTradeApproval(tokenId)}
+        handleTrade={(tokenId: bigint) => handleTradeConfirm(fromToken, tokenId)}
+        handleCancelTrade={handleCancelTrade}
       />
     </div>
   );

@@ -63,12 +63,8 @@ const NFTCard: React.FC<NFTCardProps> = ({
     if (isBase) {
       // For owned base materials, show both mint and trade options
       if (owned) {
-        // Check if we can trade with other base materials (0-2)
-        const otherBaseMaterialsAvailable = Object.entries(allBalances)
-          .some(([id, balance]) => {
-            const thisTokenId = parseInt(id);
-            return thisTokenId < 3 && thisTokenId !== tokenId && balance === BigInt(0);
-          });
+        // Check if there are other base materials that exist - we can always trade between 0-2
+        const canTradeWith = [0, 1, 2].filter(id => id !== tokenId);
 
         return (
           <div className="flex gap-2">
@@ -79,15 +75,13 @@ const NFTCard: React.FC<NFTCardProps> = ({
             >
               {countdown && countdown > 0 ? `Wait ${countdown}s` : "Mint More"}
             </Button>
-            {otherBaseMaterialsAvailable && (
-              <Button 
-                onClick={() => onTrade?.(BigInt(tokenId))}
-                className="bg-blue-500 hover:bg-blue-600 text-white"
-                disabled={disabled}
-              >
-                Trade
-              </Button>
-            )}
+            <Button 
+              onClick={() => onTrade?.(BigInt(tokenId))}
+              className="bg-blue-500 hover:bg-blue-600 text-white"
+              disabled={disabled}
+            >
+              Trade
+            </Button>
           </div>
         );
       }

@@ -3,6 +3,9 @@ import NFTCard from './NFTCard';
 import TradeModal from './TradeModal';
 import { useForgeContract } from '@/hooks/use-forge-contract';
 import { useToken } from '@/hooks/use-token';
+import { waitForTransactionReceipt } from 'wagmi/actions';
+import { usePublicClient } from "wagmi";
+import {wagmiConfig} from "@/wagmi.config"
 
 interface Token {
   tokenId: bigint;
@@ -17,6 +20,13 @@ interface ForgeInterfaceProps {
   isLoading: boolean;
   txHash: string | null;
   countdown?: number;
+  openModal: boolean;
+  from: bigint;
+  to: bigint;
+  handleForge: (tokenId: bigint) => Promise<void>;
+  handleTradeApproval: (tokenId: bigint) => Promise<void>;
+  handleTrade: (tokenId: bigint) => Promise<void>;
+  handleCancelTrade: () => void;
 }
 
 const ForgeInterface: React.FC<ForgeInterfaceProps> = ({
@@ -26,15 +36,19 @@ const ForgeInterface: React.FC<ForgeInterfaceProps> = ({
   freeMint,
   isLoading,
   txHash,
-  countdown
+  countdown,
+  openModal,
+  from,
+  to,
+  handleForge,
+  handleTrade,
+  handleTradeApproval,
+  handleCancelTrade
 }) => {
   const [processingTokenId, setProcessingTokenId] = useState<number | null>(null);
-  const [tradeModalOpen, setTradeModalOpen] = useState(false);
   const [tradingTokenId, setTradingTokenId] = useState<number | null>(null);
   const [isApproving, setIsApproving] = useState(false);
-
-  const forgeContract = useForgeContract();
-  const { setApprovalForAll, isApprovedForAll } = useToken();
+  const [isBusy, setIsBusy] = useState(false);
 
   const handleFreeMint = async (tokenId: bigint) => {
     setProcessingTokenId(Number(tokenId));
@@ -47,56 +61,8 @@ const ForgeInterface: React.FC<ForgeInterfaceProps> = ({
     }
   };
 
-  const handleForge = async (tokenId: bigint) => {
-    setProcessingTokenId(Number(tokenId));
-    try {
-      const isApproved = await isApprovedForAll(forgeContract.address);
-      if (!isApproved) {
-        setIsApproving(true);
-        await setApprovalForAll(forgeContract.address);
-      }
-      await forge(tokenId);
-    } catch (error) {
-      console.error('Forging failed:', error);
-    } finally {
-      setProcessingTokenId(null);
-      setIsApproving(false);
-    }
-  };
-
-  const handleTrade = async (tokenId: bigint) => {
-    console.log('handleTrade called with tokenId:', tokenId); // Debug log
-    try {
-      const isApproved = await isApprovedForAll(forgeContract.address);
-      if (!isApproved) {
-        setIsApproving(true);
-        await setApprovalForAll(forgeContract.address);
-      }
-      setTradingTokenId(Number(tokenId));
-      setTradeModalOpen(true);
-    } catch (error) {
-      console.error("Error in handleTrade:", error);
-      setIsApproving(false);
-    }
-  };
-
-  const handleTradeConfirm = async (baseTokenId: bigint) => {
-    if (tradingTokenId === null) return;
-    setProcessingTokenId(tradingTokenId);
-    try {
-      await trade(BigInt(tradingTokenId), baseTokenId);
-    } catch (error) {
-      console.error('Trade failed:', error);
-    } finally {
-      setProcessingTokenId(null);
-      setTradingTokenId(null);
-      setIsApproving(false);
-      setTradeModalOpen(false); // Make sure modal closes on both success and failure
-    }
-  };
-
   const handleCloseModal = () => {
-    setTradeModalOpen(false);
+    handleCancelTrade();
     setTradingTokenId(null);
     setProcessingTokenId(null);
     setIsApproving(false);
@@ -120,9 +86,23 @@ const ForgeInterface: React.FC<ForgeInterfaceProps> = ({
                   key={tokenId}
                   tokenId={tokenId}
                   balance={tokens.find(t => t.tokenId === BigInt(tokenId))?.balance || BigInt(0)}
-                  onMint={handleFreeMint}
-                  onTrade={handleTrade}
-                  disabled={!!txHash || isApproving || isLoading}
+                  onMint={async (tokenId: bigint) => {
+                    setIsBusy(true);
+                    try {
+                      await handleFreeMint(tokenId);
+                    } finally {
+                      setIsBusy(false);
+                    }
+                  }}
+                  onTrade={async (tokenId: bigint) => {
+                    setIsBusy(true);
+                    try {
+                      await handleTradeApproval(tokenId);
+                    } finally {
+                      setIsBusy(false);
+                    }
+                  }}
+                  disabled={!!txHash || isApproving || isBusy}
                   countdown={countdown}
                   isLoading={isLoading && processingTokenId === tokenId}
                   allBalances={balanceMap}
@@ -136,16 +116,23 @@ const ForgeInterface: React.FC<ForgeInterfaceProps> = ({
             <h2 className="text-xl font-bold mb-4">Forge Equipment</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {[3, 4, 5, 6].map((tokenId) => (
-                <NFTCard
-                  key={tokenId}
-                  tokenId={tokenId}
-                  balance={tokens.find(t => t.tokenId === BigInt(tokenId))?.balance || BigInt(0)}
-                  onForge={handleForge}
-                  onTrade={handleTrade}
-                  disabled={!!txHash || isApproving || isLoading}
-                  isLoading={isLoading && processingTokenId === tokenId}
-                  allBalances={balanceMap}
-                />
+                <div key={tokenId} className="flex flex-col">
+                  <NFTCard
+                    tokenId={tokenId}
+                    balance={tokens.find(t => t.tokenId === BigInt(tokenId))?.balance || BigInt(0)}
+                    onForge={async (tokenId: bigint) => {
+                      setIsBusy(true);
+                      try {
+                        await handleForge(tokenId);
+                      } finally {
+                        setIsBusy(false);
+                      }
+                    }}
+                    disabled={!!txHash || isApproving || isBusy}
+                    isLoading={isLoading && processingTokenId === tokenId}
+                    allBalances={balanceMap}
+                  />
+                </div>
               ))}
             </div>
           </div>
@@ -153,10 +140,18 @@ const ForgeInterface: React.FC<ForgeInterfaceProps> = ({
       </div>
 
       <TradeModal
-        isOpen={tradeModalOpen}
+        isOpen={openModal}
         onClose={handleCloseModal}
-        onTrade={handleTradeConfirm}
-        tradingTokenId={tradingTokenId}
+        disabled={isBusy}
+        onTrade={async (baseTokenId: bigint) => {
+          setIsBusy(true);
+          try {
+            await handleTrade(baseTokenId);
+          } finally {
+            setIsBusy(false);
+          }
+        }}
+        tradingTokenId={from}
         allBalances={balanceMap}
       />
     </>

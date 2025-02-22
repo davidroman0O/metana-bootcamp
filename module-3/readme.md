@@ -35,3 +35,11 @@ Verifyied https://polygonscan.com/address/0x042397d98fa5CcDAd97F79De0b686f2F9EBA
 
 TODO: fix the cooldown, we don't need to watch the blocks anymore since we know the timestamp when the cooldown will ends
 
+
+
+
+[x] - when trading, it is filtering on those owned
+[x] - when closing the trading modal, everything is disabled
+[x] - approval should display the transaction, once confirmed then display the modal and display transaction if selected one 
+[x] - minting and trade must work independendly
+

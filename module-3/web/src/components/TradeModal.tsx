@@ -7,8 +7,9 @@ interface TradeModalProps {
   isOpen: boolean;
   onClose: () => void;
   onTrade: (baseTokenId: bigint) => Promise<void>;
-  tradingTokenId: number | null;
+  tradingTokenId: bigint | null;
   allBalances: Record<string, bigint>; 
+  disabled: boolean;
 }
 
 const TradeModal: React.FC<TradeModalProps> = ({
@@ -17,37 +18,40 @@ const TradeModal: React.FC<TradeModalProps> = ({
   onTrade,
   tradingTokenId,
   allBalances,
+  disabled,
 }) => {
   const [isLoading, setIsLoading] = React.useState(false);
   
-  if (!isOpen || tradingTokenId === null) return null;
+  if (!isOpen) return null;
+
+  // Ensure we're only trading base materials (0-2)
+  if (tradingTokenId === null || tradingTokenId >= 3) {
+    console.error("Invalid trading token ID:", tradingTokenId);
+    onClose();
+    return null;
+  }
 
   const baseMaterials = [
-    { id: 0, name: "Molten Core Ingot" },
-    { id: 1, name: "Refined Obsidian Shard" },
-    { id: 2, name: "Raw Etherium Ore" }
-  ].filter(material => {
-    // Can't trade for the same token
-    if (material.id === tradingTokenId) return false;
+    { id: BigInt(0), name: "Molten Core Ingot" },
+    { id: BigInt(1), name: "Refined Obsidian Shard" },
+    { id: BigInt(2), name: "Raw Etherium Ore" }
+  ].filter(material => 
+    // Only allow trading between base materials (0-2) and not for itself
+    material.id !== tradingTokenId && 
+    material.id < 3 
+  );
 
-    // For tokens 3-6, show all base materials
-    if (tradingTokenId >= 3) return true;
-    
-    // For tokens 0-2, show all other base materials
-    return true;
-  });
-
-  const handleTrade = async (baseTokenId: number) => {
-    setIsLoading(true);
-    try {
-      await onTrade(BigInt(baseTokenId));
-      onClose();
-    } catch (error) {
-      console.error('Trade failed:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // const handleTrade = async (baseTokenId: number) => {
+  //   setIsLoading(true);
+  //   try {
+  //     await onTrade(BigInt(baseTokenId));
+  //     onClose();
+  //   } catch (error) {
+  //     console.error('Trade failed:', error);
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -70,8 +74,8 @@ const TradeModal: React.FC<TradeModalProps> = ({
           {baseMaterials.map((material) => (
             <Button
               key={material.id}
-              onClick={() => handleTrade(material.id)}
-              disabled={isLoading}
+              onClick={() => onTrade(material.id)}
+              disabled={isLoading || disabled}
               className="w-full flex items-center justify-between"
             >
               <span>Trade for {material.name}</span>
