@@ -82,11 +82,12 @@ const NotificationBanner: React.FC<NotificationBannerProps> = ({
 
   return (
     <>
-      {/* Stackable Notifications Container */}
-      <div className="fixed inset-x-0 bottom-0 z-50 space-y-4 pb-14">
+      {/* Stackable Notifications Container - pointer-events-none */}
+      <div className="fixed inset-x-0 bottom-0 z-50 space-y-4 pb-14 pointer-events-none">
         {allNotifications.map((notification) => (
           <div key={notification.id} className="flex justify-center px-4">
-            <div className={`w-full max-w-2xl border rounded-lg p-4 ${getNotificationStyle(notification.type)}`}>
+            {/* Individual notification container - restore pointer events */}
+            <div className={`w-full max-w-2xl border rounded-lg p-4 pointer-events-auto ${getNotificationStyle(notification.type)}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-start gap-3 min-w-0">
                   {getIcon(notification.type)}
