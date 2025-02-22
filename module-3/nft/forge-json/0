@@ -1,0 +1,10 @@
+{
+  "name": "Molten Core Ingot",
+  "description": "A blazing ingot infused with molten energy, etched with dwarven runes and radiating intense heat. Essential for forging powerful dwarven equipment.",
+  "image": "ipfs://bafybeigcnwbpiclny2vodrr2dq5nq2kqn6wj775yl5k2u7xm5r3ylizg7y/0.png",
+  "attributes": [
+    { "trait_type": "Type", "value": "Material" },
+    { "trait_type": "Element", "value": "Fire" },
+    { "trait_type": "Rarity", "value": "Common" }
+  ]
+}

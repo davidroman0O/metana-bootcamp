@@ -1,3 +1,9 @@
+module-3/solidity/out
+module-3/solidity/cache
+
+.DS_Store
+.vercel
+
 **/node_modules
 .env
 

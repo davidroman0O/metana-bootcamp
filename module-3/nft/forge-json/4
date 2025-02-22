@@ -1,0 +1,10 @@
+{
+  "name": "Runestone Bulwark",
+  "description": "A massive dwarven shield crafted from obsidian and etherium, imbued with protective runes. A bastion of magical resilience.",
+  "image": "ipfs://bafybeigcnwbpiclny2vodrr2dq5nq2kqn6wj775yl5k2u7xm5r3ylizg7y/4.png",
+  "attributes": [
+    { "trait_type": "Type", "value": "Equipment" },
+    { "trait_type": "Forged From", "value": "Refined Obsidian Shard + Raw Etherium Ore" },
+    { "trait_type": "Rarity", "value": "Rare" }
+  ]
+}

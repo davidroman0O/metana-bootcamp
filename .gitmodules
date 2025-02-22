@@ -1,0 +1,9 @@
+[submodule "module-3/sol/lib/forge-std"]
+	path = module-3/sol/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "module-3/solidity/lib/openzeppelin-contracts"]
+	path = module-3/solidity/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "module-3/solidity/lib/forge-std"]
+	path = module-3/solidity/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std

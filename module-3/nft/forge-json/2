@@ -1,0 +1,10 @@
+{
+  "name": "Raw Etherium Ore",
+  "description": "A rugged, unrefined chunk of rare ore with glowing metallic veins. Provides durability and structure in dwarven equipment.",
+  "image": "ipfs://bafybeigcnwbpiclny2vodrr2dq5nq2kqn6wj775yl5k2u7xm5r3ylizg7y/2.png",
+  "attributes": [
+    { "trait_type": "Type", "value": "Material" },
+    { "trait_type": "Element", "value": "Earth" },
+    { "trait_type": "Rarity", "value": "Common" }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "Crown of the Forge King",
+  "description": "A majestic dwarven crown forged from molten ingot, obsidian, and etherium. Embodies the peak of dwarven craftsmanship and power.",
+  "image": "ipfs://bafybeigcnwbpiclny2vodrr2dq5nq2kqn6wj775yl5k2u7xm5r3ylizg7y/6.png",
+  "attributes": [
+    { "trait_type": "Type", "value": "Equipment" },
+    { "trait_type": "Forged From", "value": "Molten Core Ingot + Refined Obsidian Shard + Raw Etherium Ore" },
+    { "trait_type": "Rarity", "value": "Legendary" }
+  ]
+}
