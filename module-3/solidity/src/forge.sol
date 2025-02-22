@@ -81,7 +81,7 @@ contract Forge is Ownable2Step, ReentrancyGuard {
     // `nonReentrant` is to prevent myself from reentrancy attacks.
     function trade(uint256 tokenIdToTrade, uint256 desiredBaseTokenId) external nonReentrant { 
         require(desiredBaseTokenId < 3, "Can only trade for base tokens (0-2)");
-        require(tokenIdToTrade < 7, "Token id to trade must be between 0 and 6");
+        require(tokenIdToTrade < 3, "Can only trade basic tokens (0-2)");
         require(tokenIdToTrade != desiredBaseTokenId, "Cannot trade token for itself");
         
         // Burn the token provided by the user.
