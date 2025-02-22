@@ -150,41 +150,46 @@ contract VisageStaking is Ownable2Step, ReentrancyGuard, IERC721Receiver {
             return 0;
         }
         uint256 timeElapsed = block.timestamp - stakeInfo.lastClaim;
-        return (timeElapsed * REWARD_RATE) / REWARD_INTERVAL; // slither says it more precise that way (no loss of decimal)
+        uint256 intervals = timeElapsed / REWARD_INTERVAL;
+        return intervals;
     }
 
     function unstakeNFT(uint256 tokenID) external nonReentrant {
         Stake storage stakeInfo = stakes[tokenID];
         require(stakeInfo.owner == msg.sender, "only the owner can unstake");
 
-        // Claim any pending reward for this NFT
-        uint256 reward = _calculateReward(tokenID);
-        delete stakes[tokenID]; // Check-Effects-Interaction pattern
-        if (reward > 0) {
-            // Reset lastClaim for this NFT to prevent double counting
-            stakeInfo.lastClaim = block.timestamp;
-            _token.mintToken(msg.sender, reward);
+        // Claim any pending reward for this NFT using complete intervals
+        uint256 rewardIntervals = _calculateReward(tokenID);
+        uint256 rewardTokens = rewardIntervals * REWARD_RATE;
+        if (rewardIntervals > 0) {
+            stakeInfo.lastClaim += (rewardIntervals * REWARD_INTERVAL);
+            _token.mintToken(msg.sender, rewardTokens);
         }
 
+        // Remove staking record before transferring NFT back to the owner
+        delete stakes[tokenID];
         _nft.safeTransferFrom(address(this), msg.sender, tokenID);
         emit Unstaked(msg.sender, tokenID);
     }
 
     function getRewardBalanceOf(uint256 tokenID) external view returns (uint256) {
         require(stakes[tokenID].whenStaked > 0, "NFT not staked");
-        return _calculateReward(tokenID);
+        uint256 intervals = _calculateReward(tokenID);
+        return intervals * REWARD_RATE;
     }
 
     function withdrawReward(uint256 tokenID) public nonReentrant {
         Stake storage stakeInfo = stakes[tokenID];
         require(stakeInfo.owner == msg.sender, "only the owner can withdraw rewards");
-        
-        uint256 reward = _calculateReward(tokenID);
-        require(reward > 0, "no rewards to claim");
-        uint256 timeElapsed = block.timestamp - stakes[tokenID].lastClaim;
-        stakes[tokenID].lastClaim += (timeElapsed * REWARD_INTERVAL) / REWARD_INTERVAL; // slither says it more precise that way (no loss of decimal)
-        _token.mintToken(msg.sender, reward);
-        emit RewardClaimed(msg.sender, tokenID, reward);
+
+        uint256 rewardIntervals = _calculateReward(tokenID);
+        require(rewardIntervals > 0, "no rewards to claim");
+
+        // Update the lastClaim time by the number of full intervals claimed
+        stakes[tokenID].lastClaim += (rewardIntervals * REWARD_INTERVAL);
+        uint256 rewardTokens = rewardIntervals * REWARD_RATE;
+        _token.mintToken(msg.sender, rewardTokens);
+        emit RewardClaimed(msg.sender, tokenID, rewardTokens);
     }
 
     function mintNFT() external payable {
