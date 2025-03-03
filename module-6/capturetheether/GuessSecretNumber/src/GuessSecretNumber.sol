@@ -31,6 +31,15 @@ contract ExploitContract {
 
     function Exploiter() public view returns (uint8) {
         uint8 n;
+        // ok so
+        // - secret NUMBER so it's a number
+        // - uint8 so 255
+        // - just need to match the hash
+        for(n = 0; n < 256; n++) {
+            if(keccak256(abi.encodePacked(n)) == answerHash) {
+                return n;
+            }
+        }
         return n;
     }
 }
