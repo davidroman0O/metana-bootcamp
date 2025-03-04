@@ -24,6 +24,9 @@ contract TokenWhaleTest is Test {
     function testExploit() public {
         // Put your solution here
 
+        tokenWhale.approve(address(exploitContract), 1_000_000);
+        exploitContract.attack(address(this));
+
         _checkSolved();
     }
 
