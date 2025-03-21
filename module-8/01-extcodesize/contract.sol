@@ -1,80 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/utils/Address.sol";
-
-// Main contract to demonstrate security checks
-contract SecurityDemo {
-    using Address for address;
-    
-    // Results of our tests
-    bool public extcodesizeBypassedInConstructor;
-    bool public txOriginBlockedConstructorCall;
-    
-    // Events to log test results
-    event ExtcodesizeTest(address caller, bool wasDetectedAsContract, uint256 codeSize);
-    event TxOriginTest(address msgSender, address txOrigin, bool wasDetectedAsContract);
-    
-    // Function to run the demonstration
-    function runDemo() external {
-        // Reset results
-        extcodesizeBypassedInConstructor = false;
-        txOriginBlockedConstructorCall = false;
-        
-        // Deploy the attacker contract
-        new ConstructorAttacker(address(this));
-        
-        // After tests are complete, check the state variables to see results
-        emit ExtcodesizeTest(address(0), extcodesizeBypassedInConstructor, 0);
-        emit TxOriginTest(address(0), address(0), txOriginBlockedConstructorCall);
-    }
-    
-    // Test if code size check can detect a contract in its constructor
-    function testExtcodesize() external {
-        // Check code size of the caller
-        uint256 codeSize = address(msg.sender).code.length;
-        bool hasNoCode = (codeSize == 0);
-        
-        // Log the results
-        emit ExtcodesizeTest(msg.sender, !hasNoCode, codeSize);
-        
-        // If we get here and hasNoCode is true, 
-        // it means extcodesize failed to detect the contract
-        extcodesizeBypassedInConstructor = hasNoCode;
-    }
-    
-    // Test if tx.origin can detect a contract in its constructor
-    function testTxOrigin() external {
-        // Check if the caller is an EOA
-        bool isEOA = (msg.sender == tx.origin);
-        
-        // Log the results
-        emit TxOriginTest(msg.sender, tx.origin, !isEOA);
-        
-        // If we get here and isEOA is false,
-        // it means tx.origin correctly identified a contract call
-        txOriginBlockedConstructorCall = !isEOA;
-    }
-}
-
-// Contract that tests both protections from its constructor
-contract ConstructorAttacker {
-    using Address for address;
-    
-    // Event to signal constructor execution
-    event AttackerDeployed(address target);
-    
-    constructor(address target) {
-        // Log that we're deploying
-        emit AttackerDeployed(target);
-        
-        SecurityDemo demo = SecurityDemo(target);
-        
-        // Test both protections from the constructor
-        demo.testExtcodesize();
-        demo.testTxOrigin();
-    }
-}
+import "@openzeppelin/contracts/utils/Address.sol"; 
 
 /*
 
@@ -129,3 +56,68 @@ This demonstration shows why checking msg.sender == tx.origin is more reliable t
 While code size checks can be circumvented during contract construction, the tx.origin check is effective at all times.
 
 */
+
+// Main contract to demonstrate security checks
+contract SecurityDemo {
+    using Address for address;
+    
+    bool public extcodesizeBypassedInConstructor;
+    bool public txOriginBlockedConstructorCall;
+    
+    event ExtcodesizeTest(address caller, bool wasDetectedAsContract, uint256 codeSize);
+    event TxOriginTest(address msgSender, address txOrigin, bool wasDetectedAsContract);
+    
+    function runDemo() external {
+        // Reset results
+        extcodesizeBypassedInConstructor = false;
+        txOriginBlockedConstructorCall = false;
+        
+        new ConstructorAttacker(address(this));
+        
+        // After tests are complete, check the state variables to see results (e.g. i checked on Remix)
+        emit ExtcodesizeTest(address(0), extcodesizeBypassedInConstructor, 0);
+        emit TxOriginTest(address(0), address(0), txOriginBlockedConstructorCall);
+    }
+    
+    // Test if code size check can detect a contract in its constructor
+    function testExtcodesize() external {
+        // Check code size of the caller
+        uint256 codeSize = address(msg.sender).code.length;
+        bool hasNoCode = (codeSize == 0);
+        
+        emit ExtcodesizeTest(msg.sender, !hasNoCode, codeSize);
+        
+        // If we get here and hasNoCode is true, 
+        // it means extcodesize failed to detect the contract
+        extcodesizeBypassedInConstructor = hasNoCode;
+    }
+    
+    // Test if tx.origin can detect a contract in its constructor
+    function testTxOrigin() external {
+        // Check if the caller is an EOA
+        bool isEOA = (msg.sender == tx.origin);
+        
+        emit TxOriginTest(msg.sender, tx.origin, !isEOA);
+        
+        // If we get here and isEOA is false,
+        // it means tx.origin correctly identified a contract call
+        txOriginBlockedConstructorCall = !isEOA;
+    }
+}
+
+contract ConstructorAttacker {
+    using Address for address;
+    
+    event AttackerDeployed(address target);
+    
+    constructor(address target) {
+
+        emit AttackerDeployed(target);
+        
+        SecurityDemo demo = SecurityDemo(target);
+        
+        // Test both protections from the constructor
+        demo.testExtcodesize();
+        demo.testTxOrigin();
+    }
+}
