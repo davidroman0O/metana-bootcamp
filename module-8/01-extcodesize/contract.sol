@@ -66,18 +66,7 @@ contract SecurityDemo {
     
     event ExtcodesizeTest(address caller, bool wasDetectedAsContract, uint256 codeSize);
     event TxOriginTest(address msgSender, address txOrigin, bool wasDetectedAsContract);
-    
-    function runDemo() external {
-        // Reset results
-        extcodesizeBypassedInConstructor = false;
-        txOriginBlockedConstructorCall = false;
-        
-        new ConstructorAttacker(address(this));
-        
-        // After tests are complete, check the state variables to see results (e.g. i checked on Remix)
-        emit ExtcodesizeTest(address(0), extcodesizeBypassedInConstructor, 0);
-        emit TxOriginTest(address(0), address(0), txOriginBlockedConstructorCall);
-    }
+
     
     // Test if code size check can detect a contract in its constructor
     function testExtcodesize() external {
