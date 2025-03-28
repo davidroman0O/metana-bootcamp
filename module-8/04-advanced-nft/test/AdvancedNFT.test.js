@@ -49,7 +49,7 @@ describe("AdvancedNFT", function () {
     advancedNFT = await AdvancedNFT.deploy(
       "AdvancedNFT",
       "ANFT",
-      "https://example.com/api/token/"
+      "https://whocares.wtf/api/token/"
     );
     await advancedNFT.deployed();
     
@@ -168,7 +168,7 @@ describe("AdvancedNFT", function () {
       const advancedNFT2 = await AdvancedNFT.deploy(
         "AdvancedNFT",
         "ANFT",
-        "https://example.com/api/token/"
+        "https://whocares.wtf/api/token/"
       );
       await advancedNFT2.deployed();
       
@@ -240,7 +240,7 @@ describe("AdvancedNFT", function () {
     
     it("Should return unrevealed tokenURI before reveal", async function () {
       const tokenURI = await advancedNFT.tokenURI(0);
-      expect(tokenURI).to.equal("https://example.com/api/token/unrevealed");
+      expect(tokenURI).to.equal("https://whocares.wtf/api/token/unrevealed");
     });
     
     it("Should allow submitting a commit", async function () {
@@ -274,7 +274,7 @@ describe("AdvancedNFT", function () {
       const mockNFT = await AdvancedNFTMock.deploy(
         "MockNFT",
         "MNFT",
-        "https://example.com/api/token/"
+        "https://whocares.wtf/api/token/"
       );
       await mockNFT.deployed();
       
