@@ -25,7 +25,7 @@ async function main() {
   const advancedNFT = await AdvancedNFT.deploy(
     "Advanced NFT",
     "ANFT",
-    "https://example.com/api/token/"
+    "https://whocares.wtf/api/token/"
   );
   
   await advancedNFT.deployed();

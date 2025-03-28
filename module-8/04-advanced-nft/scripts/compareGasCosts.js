@@ -28,7 +28,7 @@ async function main() {
   const bitmapContract = await AdvancedNFT.deploy(
     "Bitmap NFT",
     "BNFT",
-    "https://example.com/api/token/"
+    "https://whocaresbro.wtf/api/token/"
   );
   await bitmapContract.deployed();
   
@@ -36,7 +36,7 @@ async function main() {
   const mappingContract = await AdvancedNFT.deploy(
     "Mapping NFT",
     "MNFT",
-    "https://example.com/api/token/"
+    "https://whocaresbro.wtf/api/token/"
   );
   await mappingContract.deployed();
   
@@ -96,7 +96,7 @@ async function main() {
   const multiContract = await AdvancedNFT.deploy(
     "Multi NFT",
     "MNFT",
-    "https://example.com/api/token/"
+    "https://whocaresbro.wtf/api/token/"
   );
   await multiContract.deployed();
   
