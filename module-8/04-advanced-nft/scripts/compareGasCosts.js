@@ -28,7 +28,8 @@ async function main() {
   const bitmapContract = await AdvancedNFT.deploy(
     "Bitmap NFT",
     "BNFT",
-    "https://whocaresbro.wtf/api/token/"
+    "https://whocaresbro.wtf/api/token/",
+    root
   );
   await bitmapContract.deployed();
   
@@ -36,15 +37,13 @@ async function main() {
   const mappingContract = await AdvancedNFT.deploy(
     "Mapping NFT",
     "MNFT",
-    "https://whocaresbro.wtf/api/token/"
+    "https://whocaresbro.wtf/api/token/",
+    root
   );
   await mappingContract.deployed();
   
-  await bitmapContract.setMerkleRoot(root);
-  await mappingContract.setMerkleRoot(root);
-  
-  await bitmapContract.setState(1);
-  await mappingContract.setState(1);
+  await bitmapContract.setState(1); // Set to PrivateSale
+  await mappingContract.setState(1); // Set to PrivateSale
   
   console.log("\nMeasuring gas for first-time mints:");
   
@@ -53,10 +52,9 @@ async function main() {
     const user = await ethers.getSigner(whitelistAddresses[i]);
     const proof = merkleTree.getHexProof(leaves[i]);
     
-    const tx = await bitmapContract.connect(user).presaleMintWithBitmap(
+    const tx = await bitmapContract.connect(user).claimWithBitmap(
       i,
-      proof,
-      { value: ethers.utils.parseEther("0.05") }
+      proof
     );
     
     const receipt = await tx.wait();
@@ -70,10 +68,9 @@ async function main() {
     const user = await ethers.getSigner(whitelistAddresses[i]);
     const proof = merkleTree.getHexProof(leaves[i]);
     
-    const tx = await mappingContract.connect(user).presaleMintWithMapping(
+    const tx = await mappingContract.connect(user).claimWithMapping(
       i,
-      proof,
-      { value: ethers.utils.parseEther("0.05") }
+      proof
     );
     
     const receipt = await tx.wait();
@@ -96,12 +93,12 @@ async function main() {
   const multiContract = await AdvancedNFT.deploy(
     "Multi NFT",
     "MNFT",
-    "https://whocaresbro.wtf/api/token/"
+    "https://whocaresbro.wtf/api/token/",
+    root
   );
   await multiContract.deployed();
   
-  await multiContract.setMerkleRoot(root);
-  await multiContract.setState(1);
+  await multiContract.setState(1); // Set to PrivateSale
   
   const bitmapScaling = [];
   const mappingScaling = [];
@@ -111,10 +108,9 @@ async function main() {
     const proof = merkleTree.getHexProof(leaves[i]);
     
     if (i < 3) {
-      const tx = await multiContract.connect(user).presaleMintWithBitmap(
+      const tx = await multiContract.connect(user).claimWithBitmap(
         i,
-        proof,
-        { value: ethers.utils.parseEther("0.05") }
+        proof
       );
       
       const receipt = await tx.wait();
@@ -122,10 +118,9 @@ async function main() {
       
       console.log(`Bitmap mint #${i+1}: ${receipt.gasUsed.toString()} gas used`);
     } else {
-      const tx = await multiContract.connect(user).presaleMintWithMapping(
+      const tx = await multiContract.connect(user).claimWithMapping(
         i,
-        proof,
-        { value: ethers.utils.parseEther("0.05") }
+        proof
       );
       
       const receipt = await tx.wait();

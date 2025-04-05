@@ -25,15 +25,18 @@ async function main() {
   const advancedNFT = await AdvancedNFT.deploy(
     "Advanced NFT",
     "ANFT",
-    "https://whocares.wtf/api/token/"
+    "https://whocares.wtf/api/token/",
+    root
   );
   
   await advancedNFT.deployed();
   
   console.log("AdvancedNFT deployed to:", advancedNFT.address);
+  console.log("Merkle root:", root);
   
-  await advancedNFT.setMerkleRoot(root);
-  console.log("Merkle root set to:", root);
+  // Set initial state to PrivateSale
+  await advancedNFT.setState(1);
+  console.log("State set to PrivateSale");
   
   const firstAddr = whitelistAddresses[0];
   const firstIndex = 0;

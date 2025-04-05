@@ -8,259 +8,267 @@ import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/structs/BitMaps.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/Multicall.sol";
 
-
-// I didn't knew if i have to make many contracts or not, so i made one contract for this assignment
-contract AdvancedNFT is ERC721Enumerable, Ownable, ReentrancyGuard {
+contract AdvancedNFT is ERC721Enumerable, Ownable, ReentrancyGuard, Multicall {
     using Strings for uint256;
     using BitMaps for BitMaps.BitMap;
 
     enum State {
         Inactive,
-        PresaleActive,
-        PublicSaleActive,
+        PrivateSale,
+        PublicSale,
         SoldOut,
         Revealed
     }
-
-    State public currentState = State.Inactive;
+    State public state = State.Inactive;
 
     uint256 public constant MAX_SUPPLY = 10000;
-    uint256 public constant PRESALE_PRICE = 0.05 ether;
-    uint256 public constant PUBLIC_PRICE = 0.08 ether;
     uint256 public constant BLOCKS_FOR_REVEAL = 10;
+    uint256 private _mintCounter;
+    uint256 public privateSalePrice = 0.05 ether;
+    uint256 public publicSalePrice = 0.08 ether;
     
-    string private _baseTokenURI;
-    
-    // For commit-reveal scheme
-    bytes32 public commitHash;
-    uint256 public commitBlock;
-    uint256 public randomSeed;
-    
-    // For merkle tree airdrop
-    bytes32 public merkleRoot;
-    
-    // Option 1: Bitmap for tracking claimed airdrops (more gas efficient) - See report.md 
-    BitMaps.BitMap private claimedBitmap;
-    
-    // Option 2: Mapping for tracking claimed airdrops (for comparison) - See report.md 
-    mapping(address => bool) private claimedMapping;
-    
-    struct Contributor {
-        address payable addr;
-        uint256 share; // Share in basis points (1/100 of a percent) - 10000 = 100%
+    struct Commitment {
+        bool isRevealed;
+        bytes32 commit;
+        uint256 block;
     }
     
+    bytes32 public immutable merkleRoot;
+    BitMaps.BitMap private claimedBitMap;
+    mapping(address => bool) private claimedMapping; 
+    
+    // For commit-reveal
+    mapping(address => Commitment) public commitments;
+    
+    // For pull pattern withdrawals
+    struct Contributor {
+        address payable addr;
+        uint256 share; // In basis points (100 = 1%)
+    }
     Contributor[] public contributors;
     uint256 public totalShares;
     mapping(address => uint256) public pendingWithdrawals;
-
-    event StateChanged(State previousState, State newState);
-    event CommitSubmitted(bytes32 commitHash, uint256 commitBlock);
-    event Revealed(uint256 randomSeed);
-    event PaymentsWithdrawn(address to, uint256 amount);
-    event ContributorAdded(address contributor, uint256 share);
-    event ContributorRemoved(address contributor);
-
-
-    constructor(
-        string memory name_,
-        string memory symbol_,
-        string memory baseURI_
-    ) ERC721(name_, symbol_) {
-        _baseTokenURI = baseURI_;
+    
+    string private _baseTokenURI;
+    
+    // Events
+    event StateChanged(State prevState, State newState);
+    event Committed(address indexed user, bytes32 commitment);
+    event TokenMinted(address indexed to, uint256 indexed tokenId);
+    event PaymentWithdrawn(address indexed to, uint256 amount);
+    event ContributorAdded(address indexed contributor, uint256 share);
+    event ContributorRemoved(address indexed contributor);
+    event GasUsed(string method, uint256 gasUsed);
+    
+    constructor(string memory name, string memory symbol, string memory baseURI, bytes32 _merkleRoot) 
+        ERC721(name, symbol) 
+    {
+        _baseTokenURI = baseURI;
+        merkleRoot = _merkleRoot;
         
-        // Add contract deployer as default contributor with 50% share instead of 100%
-        // so we have room to add more contributors in tests
-        _addContributor(payable(msg.sender), 5000);
+        _addContributor(payable(msg.sender), 10000); // 100% share initially
     }
-
-    modifier inState(State state_) {
-        require(currentState == state_, "Invalid contract state");
+    
+    // State machine modifier
+    modifier inState(State _state) {
+        require(state == _state, "Invalid state");
         _;
     }
-
-    function setMerkleRoot(bytes32 root) external onlyOwner {
-        merkleRoot = root;
-    }
-
-    function setState(State newState) external onlyOwner {
-        State previousState = currentState;
-        require(newState != previousState, "Already in this state");
+    
+    // State transitions
+    function setState(State _state) external onlyOwner {
+        State prevState = state;
+        require(_state != prevState, "Already in this state");
         
-        // Make sure state transitions are valid
-        if (newState == State.SoldOut) {
-            require(totalSupply() >= MAX_SUPPLY, "Supply not sold out yet");
-        } else if (newState == State.Revealed) {
-            require(randomSeed != 0, "Random seed not set yet");
+        if (_state == State.SoldOut) {
+            require(_mintCounter >= MAX_SUPPLY, "Supply not sold out");
         }
         
-        currentState = newState;
-        emit StateChanged(previousState, newState);
+        state = _state;
+        emit StateChanged(prevState, _state);
     }
-
-    function setBaseURI(string memory baseURI_) external onlyOwner {
-        _baseTokenURI = baseURI_;
-    }
-
+    
     function _baseURI() internal view override returns (string memory) {
         return _baseTokenURI;
     }
-
-    function submitCommit(bytes32 commit) external onlyOwner {
-        require(commit != bytes32(0), "Invalid commit");
-        commitHash = commit;
-        commitBlock = block.number;
-        emit CommitSubmitted(commitHash, commitBlock);
-    }
-
-    function reveal(uint256 nonce) external onlyOwner {
-        require(commitHash != bytes32(0), "No commit to reveal");
-        require(block.number >= commitBlock + BLOCKS_FOR_REVEAL, "Too early to reveal");
+    
+    // ============ Merkle Tree Airdrop Functions ============
+    
+    // Option 1: Using BitMap (more gas efficient)
+    function claimWithBitmap(uint256 index, bytes32[] calldata proof) external inState(State.PrivateSale) {
+        uint256 startGas = gasleft();
         
-        // For testing, we use a direct hash of the nonce for deterministic outcome
-        // In production, we'd use blockhash(commitBlock) for randomness
-        bytes32 revealHash;
-        if (block.chainid == 1337 || block.chainid == 31337) {
-            // Testing environment, use a deterministic hash
-            revealHash = keccak256(abi.encodePacked(nonce, commitHash));
-        } else {
-            // Production environment, use real blockhash
-            revealHash = keccak256(abi.encodePacked(nonce, blockhash(commitBlock)));
-        }
+        require(!claimedBitMap.get(index), "Already claimed");
         
-        // Verification is relaxed in test environment
-        if (block.chainid != 1337 && block.chainid != 31337) {
-            require(revealHash == commitHash, "Invalid reveal");
-        }
-        
-        randomSeed = uint256(revealHash);
-        emit Revealed(randomSeed);
-        
-        // Optionally switch to revealed state
-        if (currentState != State.Revealed) {
-            State previousState = currentState;
-            currentState = State.Revealed;
-            emit StateChanged(previousState, State.Revealed);
-        }
-    }
-
-    function presaleMintWithBitmap(uint256 index, bytes32[] calldata proof) 
-        external 
-        payable 
-        inState(State.PresaleActive) 
-        nonReentrant 
-    {
-        require(msg.value >= PRESALE_PRICE, "Insufficient payment");
-        require(totalSupply() < MAX_SUPPLY, "Max supply reached");
-        
-        // Verify merkle proof and check bitmap
+        // Verify merkle proof
         bytes32 leaf = keccak256(abi.encodePacked(msg.sender, index));
         require(MerkleProof.verify(proof, merkleRoot, leaf), "Invalid proof");
-        require(!claimedBitmap.get(index), "Already claimed");
         
-        claimedBitmap.set(index);
-        _safeMint(msg.sender, totalSupply());
+        // Mark as claimed and mint
+        claimedBitMap.set(index);
+        uint256 tokenId = _mintCounter;
+        _safeMint(msg.sender, tokenId);
+        _mintCounter++;
         
-        if (totalSupply() >= MAX_SUPPLY) {
-            currentState = State.SoldOut;
-            emit StateChanged(State.PresaleActive, State.SoldOut);
+        // Check if sold out
+        if (_mintCounter >= MAX_SUPPLY && state != State.SoldOut) {
+            State prevState = state;
+            state = State.SoldOut;
+            emit StateChanged(prevState, State.SoldOut);
         }
-    }
-
-    function presaleMintWithMapping(uint256 index, bytes32[] calldata proof) 
-        external 
-        payable 
-        inState(State.PresaleActive) 
-        nonReentrant 
-    {
-        require(msg.value >= PRESALE_PRICE, "Insufficient payment");
-        require(totalSupply() < MAX_SUPPLY, "Max supply reached");
         
-        // Verify merkle proof and check mapping
-        bytes32 leaf = keccak256(abi.encodePacked(msg.sender, index));
-        require(MerkleProof.verify(proof, merkleRoot, leaf), "Invalid proof");
+        // Report gas used
+        uint256 gasUsed = startGas - gasleft();
+        emit GasUsed("claimWithBitmap", gasUsed);
+        emit TokenMinted(msg.sender, tokenId);
+    }
+    
+    // Option 2: Using Mapping (for comparison)
+    function claimWithMapping(uint256 index, bytes32[] calldata proof) external inState(State.PrivateSale) {
+        uint256 startGas = gasleft();
+        
         require(!claimedMapping[msg.sender], "Already claimed");
         
-        claimedMapping[msg.sender] = true;
-        _safeMint(msg.sender, totalSupply());
+        // Verify
+        bytes32 leaf = keccak256(abi.encodePacked(msg.sender, index));
+        require(MerkleProof.verify(proof, merkleRoot, leaf), "Invalid proof");
         
-        if (totalSupply() >= MAX_SUPPLY) {
-            currentState = State.SoldOut;
-            emit StateChanged(State.PresaleActive, State.SoldOut);
+        // Mark as claimed and mint
+        claimedMapping[msg.sender] = true;
+        uint256 tokenId = _mintCounter;
+        _safeMint(msg.sender, tokenId);
+        _mintCounter++;
+        
+        // Check if sold out
+        if (_mintCounter >= MAX_SUPPLY && state != State.SoldOut) {
+            State prevState = state;
+            state = State.SoldOut;
+            emit StateChanged(prevState, State.SoldOut);
         }
+        
+        // Report gas used
+        uint256 gasUsed = startGas - gasleft();
+        emit GasUsed("claimWithMapping", gasUsed);
+        emit TokenMinted(msg.sender, tokenId);
     }
-
-    function publicMint(uint256 quantity) 
-        external 
-        payable 
-        inState(State.PublicSaleActive) 
-        nonReentrant 
-    {
+    
+    // ============ Commit-Reveal Functions ============
+    
+    function commit(bytes32 payload) external {
+        require(commitments[msg.sender].commit == 0, "Already committed");
+        
+        commitments[msg.sender] = Commitment({
+            isRevealed: false,
+            commit: payload,
+            block: block.number
+        });
+        
+        emit Committed(msg.sender, payload);
+    }
+    
+    function reveal(bytes32 secret) external {
+        require(commitments[msg.sender].commit != 0, "Not committed");
+        require(!commitments[msg.sender].isRevealed, "Already revealed");
+        require(
+            keccak256(abi.encodePacked(msg.sender, secret)) == commitments[msg.sender].commit,
+            "Invalid secret"
+        );
+        require(
+            block.number - commitments[msg.sender].block >= BLOCKS_FOR_REVEAL,
+            "Not enough blocks passed"
+        );
+        require(_mintCounter < MAX_SUPPLY, "Max supply reached");
+        
+        commitments[msg.sender].isRevealed = true;
+        
+        // found that way of doing "random" on multiple forums
+        uint256 tokenId = uint256(
+            keccak256(
+                abi.encodePacked(
+                    msg.sender,
+                    secret,
+                    blockhash(commitments[msg.sender].block)
+                )
+            )
+        ) % MAX_SUPPLY;
+        
+        // with that piece to make it there isn't collision
+        while(_exists(tokenId)) {
+            tokenId = (tokenId + 1) % MAX_SUPPLY;
+        }
+        
+        _safeMint(msg.sender, tokenId);
+        _mintCounter++;
+        
+        // Check if we need to transition to revealed state
+        if (state != State.Revealed) {
+            State prevState = state;
+            state = State.Revealed;
+            emit StateChanged(prevState, State.Revealed);
+        }
+        
+        // Check if sold out
+        if (_mintCounter >= MAX_SUPPLY && state != State.SoldOut) {
+            State prevState = state;
+            state = State.SoldOut;
+            emit StateChanged(prevState, State.SoldOut);
+        }
+        
+        emit TokenMinted(msg.sender, tokenId);
+    }
+    
+    // ============ Public Sale Functions ============
+    
+    function publicMint(uint256 quantity) external payable inState(State.PublicSale) {
         require(quantity > 0, "Must mint at least one");
-        require(totalSupply() + quantity <= MAX_SUPPLY, "Would exceed max supply");
-        require(msg.value >= PUBLIC_PRICE * quantity, "Insufficient payment");
+        require(_mintCounter + quantity <= MAX_SUPPLY, "Would exceed supply");
+        require(msg.value >= publicSalePrice * quantity, "Insufficient payment");
         
         for (uint256 i = 0; i < quantity; i++) {
-            _safeMint(msg.sender, totalSupply());
+            uint256 tokenId = _mintCounter;
+            _safeMint(msg.sender, tokenId);
+            _mintCounter++;
+            emit TokenMinted(msg.sender, tokenId);
         }
         
-        if (totalSupply() >= MAX_SUPPLY) {
-            currentState = State.SoldOut;
-            emit StateChanged(State.PublicSaleActive, State.SoldOut);
+        // Check if sold out
+        if (_mintCounter >= MAX_SUPPLY && state != State.SoldOut) {
+            State prevState = state;
+            state = State.SoldOut;
+            emit StateChanged(prevState, State.SoldOut);
         }
     }
-
+    
+    // ============ Helper Functions ============
+    
+    // multicall stuff
+    function getTransferData(address to, uint256 tokenId) external view returns (bytes memory) {
+        return abi.encodeWithSelector(
+            IERC721.transferFrom.selector,
+            msg.sender,
+            to,
+            tokenId
+        );
+    }
+    
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
         require(_exists(tokenId), "Token does not exist");
         
-        // If revealed, use the random seed to map token IDs
-        if (currentState == State.Revealed && randomSeed != 0) {
-            uint256 maxTokenId = totalSupply();
-            uint256 randomTokenId = (uint256(keccak256(abi.encodePacked(randomSeed, tokenId))) % maxTokenId);
-            return string(abi.encodePacked(_baseURI(), randomTokenId.toString()));
+        if (state == State.Revealed) {
+            return string(abi.encodePacked(_baseURI(), tokenId.toString()));
         }
         
-        // Before reveal, show a placeholder
         return string(abi.encodePacked(_baseURI(), "unrevealed"));
     }
-
-    function multicall(bytes[] calldata data) external returns (bytes[] memory results) {
-        results = new bytes[](data.length);
-        
-        for (uint256 i = 0; i < data.length; i++) {
-            // Get the function selector from the calldata
-            bytes4 selector;
-            if (data[i].length >= 4) {
-                selector = bytes4(data[i][0]) | (bytes4(data[i][1]) >> 8) | (bytes4(data[i][2]) >> 16) | (bytes4(data[i][3]) >> 24);
-            }
-            
-            // Prevent using multicall for minting functions to avoid abuse
-            if (
-                selector == this.presaleMintWithBitmap.selector ||
-                selector == this.presaleMintWithMapping.selector ||
-                selector == this.publicMint.selector
-            ) {
-                revert("Cannot use multicall for minting");
-            }
-            
-            (bool success, bytes memory result) = address(this).delegatecall(data[i]);
-            require(success, "Multicall failed");
-            results[i] = result;
-        }
-        
-        return results;
-    }
-
-    function addContributor(address payable contributor, uint256 share) external onlyOwner {
-        _addContributor(contributor, share);
-    }
+    
+    // ============ Pull Pattern Withdrawal Functions ============
     
     function _addContributor(address payable contributor, uint256 share) private {
         require(contributor != address(0), "Invalid address");
-        require(share > 0, "Share must be greater than 0");
+        require(share > 0, "Share must be positive");
         
-        // Check if contributor already exists and remove if so
         for (uint256 i = 0; i < contributors.length; i++) {
             if (contributors[i].addr == contributor) {
                 totalShares -= contributors[i].share;
@@ -272,13 +280,15 @@ contract AdvancedNFT is ERC721Enumerable, Ownable, ReentrancyGuard {
         
         contributors.push(Contributor(contributor, share));
         totalShares += share;
-        require(totalShares <= 10000, "Total shares cannot exceed 10000");
-        
         emit ContributorAdded(contributor, share);
     }
     
+    function addContributor(address payable contributor, uint256 share) external onlyOwner {
+        _addContributor(contributor, share);
+    }
+    
     function removeContributor(address contributor) external onlyOwner {
-        require(contributors.length > 1 || contributor == owner(), "Cannot remove last contributor unless it's the owner");
+        require(contributors.length > 1 || (contributor == owner() && contributors.length == 1), "Cannot remove last contributor");
         
         bool found = false;
         for (uint256 i = 0; i < contributors.length; i++) {
@@ -310,12 +320,11 @@ contract AdvancedNFT is ERC721Enumerable, Ownable, ReentrancyGuard {
         uint256 amount = pendingWithdrawals[msg.sender];
         require(amount > 0, "No funds to withdraw");
         
-        // Reset withdrawal amount before sending to prevent reentrancy
         pendingWithdrawals[msg.sender] = 0;
         
         (bool success, ) = msg.sender.call{value: amount}("");
         require(success, "Transfer failed");
         
-        emit PaymentsWithdrawn(msg.sender, amount);
+        emit PaymentWithdrawn(msg.sender, amount);
     }
-} 
+}
