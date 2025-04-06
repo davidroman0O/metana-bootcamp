@@ -1,0 +1,22 @@
+{
+  "localhost": {
+    "01-nft": {
+      "proxy": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+      "implementation": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+      "admin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "implementationV2": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
+    },
+    "02-exchange": {
+      "token": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
+      "nft": "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
+      "exchange": "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318",
+      "admin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    },
+    "03-staking": {
+      "token": "0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82",
+      "nft": "0x0B306BF915C4d645ff596e518fAf3F9669b97016",
+      "staking": "0x9A9f2CCfdE556A7E9Ff0848998Aa4a0CFD8863AE",
+      "admin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    }
+  }
+}
