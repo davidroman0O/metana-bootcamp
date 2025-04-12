@@ -58,7 +58,7 @@ contract String {
             if lt(index, length) {
                 let charPos := add(dataStart, index)
                 byteVal := mload(charPos)
-                char := byte(0, byteVal) // load the rightmost byte only
+                char := byte(0, byteVal)
             }
         }
         return bytes2(uint16(char) << 8);
