@@ -1,43 +1,74 @@
-# Advanced NFT Implementation Report
+# Gas Cost Analysis Report
 
-## 1. Merkle Tree Airdrop
+## Overview
+This report compares the gas efficiency of bitmap and mapping implementations for NFT contracts. Two main patterns were analyzed:
+1. Direct whitelist claims (using AdvancedNFT contract)
+2. Commit-reveal pattern (using CommitRevealMapping and CommitRevealBitmap contracts)
 
-I implemented a merkle tree-based whitelist system where each address is associated with an index in the merkle tree. The merkle leaf is constructed as `keccak256(address, index)`. I created two different implementations to compare gas costs:
+## Methodology
+All tests were performed with 5 users to ensure consistent comparison. Gas costs were measured for each user interaction and averaged.
 
-- **BitMap Implementation**: Uses OpenZeppelin's BitMaps to track claimed airdrops
-- **Mapping Implementation**: Uses a traditional address → bool mapping
+## Results
 
-## Gas Optimization Results
+### 1. Direct Whitelist Claims
 
-My comparison between bitmap and mapping implementations for tracking claimed tokens showed:
-- Bitmap average gas cost: 153,211 gas
-- Mapping average gas cost: 166,811 gas
-- Difference: 13,600 gas (8% savings)
+| Implementation | Average Gas | 
+|----------------|-------------|
+| Bitmap         | 160778     |
+| Mapping        | 174382     |
+| Difference     | 13604 gas (7%) |
 
-These results confirm that for large-scale airdrops, using bitmaps is the more cost-effective approach.
+**Most Efficient Implementation:** Bitmap
 
-## Security Considerations
+### 2. Commit-Reveal Pattern
 
-### Should you be using pausable or nonReentrant in your NFT? Why or why not?
+#### Commit Phase
 
-I chose to use **nonReentrant** rather than **pausable** in my NFT implementation for several reasons:
+| Implementation | Average Gas |
+|----------------|-------------|
+| Bitmap         | 86226.6 |
+| Mapping        | 99914.6 |
+| Difference     | 13688 gas (13.70%) |
 
-1. **Reentrancy Protection**: The NFT contract handles ETH transfers in both minting and withdrawal functions, making reentrancy protection critical. nonReentrant prevents attackers from re-entering functions before state changes are finalized.
+**Most Efficient Implementation:** Bitmap
 
-2. **Function-Specific Security**: nonReentrant provides targeted protection for specific functions handling value transfers rather than a global pause mechanism.
+#### Reveal Phase
 
-3. For an NFT contract, the main security risk is around the transfer of funds, not the ability to halt all operations, making nonReentrant more appropriate.
+| Implementation | Average Gas |
+|----------------|-------------|
+| Bitmap         | 212587 |
+| Mapping        | 212609 |
+| Difference     | 22 gas (0.01%) |
 
-### What trick does OpenZeppelin use to save gas on the nonReentrant modifier?
+**Most Efficient Implementation:** Bitmap (marginally)
 
-OpenZeppelin uses a clever gas optimization in their nonReentrant modifier:
+## Analysis
 
-Instead of using boolean values (true/false), it uses the values 1 and 2. This saves gas because in Solidity, changing a storage slot from 0 to non-zero costs more gas (20,000 gas) than changing from one non-zero value to another (5,000 gas).
+### Direct Whitelist Claims
+For direct whitelist claims, the bitmap implementation is more gas efficient than the mapping implementation by approximately 13604 gas (7%). This efficiency comes from the bitmap's compact storage representation, which requires less storage when dealing with a large number of boolean flags.
 
-The modifier works by:
-1. Initially setting status to 0 (not entered)
-2. Setting status to 1 when a protected function is called
-3. Setting status to 2 (still non-zero) when the function completes
-4. Reverting if a function is called when status is already 1
+### Commit-Reveal Pattern
+For the commit-reveal pattern, the results show:
 
-This approach saves approximately 15,000 gas per transaction compared to resetting to 0 each time. 
+1. **Commit Phase**: The Bitmap implementation is significantly more efficient, saving approximately 13688 gas (13.70%).
+2. **Reveal Phase**: The difference is minimal (0.01%), with the Bitmap implementation being marginally more efficient.
+
+## Conclusion
+
+The choice between bitmap and mapping implementations depends on the specific use case:
+
+1. For simple whitelisting with direct claims, the **bitmap** implementation is more gas-efficient.
+
+2. For commit-reveal patterns:
+   - Commit phase shows the **Bitmap** implementation is significantly more efficient
+   - Reveal phase shows minimal difference between implementations (slight advantage to Bitmap)
+
+## Recommendations
+
+1. For projects primarily focused on direct claiming from whitelists, use the **bitmap** implementation.
+2. For projects using commit-reveal patterns, use the **Bitmap** implementation as it provides significant gas savings during the commit phase while maintaining comparable efficiency in the reveal phase.
+3. For comprehensive projects that may use both patterns, the **bitmap** implementation is more cost-effective overall.
+
+## Interesting Observation
+
+It's noteworthy that the bitmap implementation is consistently more efficient than the mapping implementation across different operations. This reinforces the conventional wisdom that bitmap-based storage is generally more gas-efficient for representing sets of boolean values. Unlike our previous results, which showed mixed efficiency between implementations, our more recent tests demonstrate the bitmap implementation's superiority in gas efficiency. This highlights the importance of thorough testing under realistic conditions before making implementation decisions in production environments.

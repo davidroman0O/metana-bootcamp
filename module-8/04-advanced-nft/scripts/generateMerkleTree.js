@@ -28,17 +28,18 @@ async function main() {
   });
   console.log("");
   
-  // Create leaf nodes by hashing address and index pairs
+  // Create leaf nodes by hashing address and index pairs using proper encoding
   const leaves = whitelistAddresses.map(entry => {
-    const leaf = ethers.utils.solidityKeccak256(
-      ["address", "uint256"],
-      [entry.address, entry.index]
+    return ethers.utils.keccak256(
+      ethers.utils.defaultAbiCoder.encode(
+        ["address", "uint256"],
+        [entry.address, entry.index]
+      )
     );
-    return leaf;
   });
   
   // Create and sort the Merkle tree
-  const merkleTree = new MerkleTree(leaves, keccak256, { sortPairs: true });
+  const merkleTree = new MerkleTree(leaves, ethers.utils.keccak256, { sortPairs: true });
   const root = merkleTree.getHexRoot();
   
   console.log("Merkle Tree Information:");
@@ -51,7 +52,12 @@ async function main() {
   console.log("Merkle Proofs for Each Address:");
   console.log("==============================");
   whitelistAddresses.forEach(entry => {
-    const leaf = ethers.utils.solidityKeccak256(["address", "uint256"], [entry.address, entry.index]);
+    const leaf = ethers.utils.keccak256(
+      ethers.utils.defaultAbiCoder.encode(
+        ["address", "uint256"],
+        [entry.address, entry.index]
+      )
+    );
     const proof = merkleTree.getHexProof(leaf);
     
     console.log(`Address #${entry.index}: ${entry.address}`);
@@ -67,8 +73,20 @@ async function main() {
     addresses: whitelistAddresses.map(entry => ({
       address: entry.address,
       index: entry.index,
-      leaf: ethers.utils.solidityKeccak256(["address", "uint256"], [entry.address, entry.index]),
-      proof: merkleTree.getHexProof(ethers.utils.solidityKeccak256(["address", "uint256"], [entry.address, entry.index]))
+      leaf: ethers.utils.keccak256(
+        ethers.utils.defaultAbiCoder.encode(
+          ["address", "uint256"],
+          [entry.address, entry.index]
+        )
+      ),
+      proof: merkleTree.getHexProof(
+        ethers.utils.keccak256(
+          ethers.utils.defaultAbiCoder.encode(
+            ["address", "uint256"],
+            [entry.address, entry.index]
+          )
+        )
+      )
     }))
   };
   
@@ -79,11 +97,12 @@ async function main() {
   
   console.log("Merkle tree data saved to 'merkle-tree-data.json'");
   console.log("\nHow to Use This Data:");
-  console.log("1. The Merkle Root should be set in the AdvancedNFT contract constructor");
-  console.log("2. For each address to claim their tokens:");
-  console.log("   - Use their assigned index from the mapping");
-  console.log("   - Use the proof provided for their address");
-  console.log("   - Call claimWithBitmap(index, proof) or claimWithMapping(index, proof)");
+  console.log("1. The Merkle Root should be set in the contract constructor");
+  console.log("2. For CommitRevealMapping or CommitRevealBitmap contracts:");
+  console.log("   - Use the assigned index from the mapping");
+  console.log("   - Use the proof provided for the address");
+  console.log("   - Call commit(commitmentHash, index, proof) with payment (min 0.05 ETH)");
+  console.log("   - Wait 10 blocks before calling reveal(secret)");
 }
 
 main()
