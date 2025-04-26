@@ -278,6 +278,8 @@ contract CommitRevealBitmap is ERC721Enumerable, Ownable, ReentrancyGuard, Multi
             tokenMatrix[random] = tokenMatrix[maxIndex - 1];
         }
 
+        // Check if MAX_SUPPLY is reached before incrementing
+        require(_tokenCount.current() < MAX_SUPPLY, "Maximum supply reached");
         // Increment count
         _tokenCount.increment();
 
