@@ -98,7 +98,11 @@ contract CommitRevealBitmap is ERC721Enumerable, Ownable, ReentrancyGuard, Multi
     }
     
     // 2. Commit (primary entry point for minting)
-    function commit(bytes32 payload, uint256 index, bytes32[] calldata proof) external payable inState(State.PrivateSale) {
+    function commit(
+        bytes32 payload, 
+        uint256 index, 
+        bytes32[] calldata proof
+    ) external payable inState(State.PrivateSale) {
         require(!claimedWhitelist.get(index), "Already claimed whitelist spot");
         require(commitments[msg.sender].commit == 0, "Already committed");
         require(msg.value >= privateSalePrice, "Insufficient payment");
@@ -219,11 +223,61 @@ contract CommitRevealBitmap is ERC721Enumerable, Ownable, ReentrancyGuard, Multi
     function multicall(bytes[] calldata data) external override returns (bytes[] memory results) {
         require(msg.sender == tx.origin, "Contracts cannot call multicall");
         results = new bytes[](data.length);
+        
+        // Define allowed function selectors
+        bytes4 transferFromSelector = bytes4(keccak256("transferFrom(address,address,uint256)"));
+        bytes4 safeTransferFromSelector1 = bytes4(keccak256("safeTransferFrom(address,address,uint256)"));
+        bytes4 safeTransferFromSelector2 = bytes4(keccak256("safeTransferFrom(address,address,uint256,bytes)"));
+        
+        // Define explicitly blocked function selectors
+        bytes4 commitSelector = bytes4(keccak256("commit(bytes32,uint256,bytes32[])"));
+        bytes4 revealSelector = bytes4(keccak256("reveal(bytes32,uint256)"));
+        bytes4 whitelistMintSelector = bytes4(keccak256("whitelistMint(uint256,bytes32[])"));
+        bytes4 publicMintSelector = bytes4(keccak256("publicMint(uint256)"));
+        
         for (uint256 i = 0; i < data.length; i++) {
+            // Require minimum length for function selector and from address
+            require(data[i].length >= 36, "Invalid calldata length"); // 4 bytes selector + 32 bytes address
+            
+            // Extract function selector (first 4 bytes)
+            bytes4 selector;
+            assembly {
+                // Get the function selector from the first 4 bytes
+                selector := shr(224, calldataload(add(data.offset, add(mul(i, 32), 36))))
+            }
+            
+            // Only allow transferFrom and safeTransferFrom functions
+            require(
+                selector == transferFromSelector || 
+                selector == safeTransferFromSelector1 || 
+                selector == safeTransferFromSelector2,
+                "Only transferFrom and safeTransferFrom functions are allowed"
+            );
+            
+            // Double-check by explicitly blocking minting functions
+            require(
+                selector != commitSelector &&
+                selector != revealSelector &&
+                selector != whitelistMintSelector &&
+                selector != publicMintSelector,
+                "Minting operations are not allowed"
+            );
+            
+            // Check if from address is zero
+            // The from address is always the first parameter at offset 4 (after selector)
+            address from;
+            assembly {
+                // Load the from address (first parameter after selector)
+                from := calldataload(add(data.offset, add(mul(i, 32), 40)))  // 36 + 4 bytes selector
+            }
+            require(from != address(0), "From address cannot be zero");
+            
+            // Execute the call
             (bool success, bytes memory result) = address(this).delegatecall(data[i]);
             require(success, "Call failed");
             results[i] = result;
         }
+        
         return results;
     }
     
@@ -331,7 +385,11 @@ contract CommitRevealBitmap is ERC721Enumerable, Ownable, ReentrancyGuard, Multi
     }
     
     function removeContributor(address contributor) external onlyOwner {
-        require(contributors.length > 1 || (contributor == owner() && contributors.length == 1), "Cannot remove last contributor");
+        bool isLastOwnerContributor = contributor == owner() && contributors.length == 1;
+        require(
+            contributors.length > 1 || isLastOwnerContributor,
+            "Cannot remove last contributor"
+        );
         
         bool found = false;
         for (uint256 i = 0; i < contributors.length; i++) {
