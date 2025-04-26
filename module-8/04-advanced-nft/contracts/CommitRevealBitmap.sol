@@ -107,9 +107,7 @@ contract CommitRevealBitmap is ERC721Enumerable, Ownable, ReentrancyGuard, Multi
         bytes32 leaf = keccak256(abi.encode(msg.sender, index));
         require(MerkleProof.verify(proof, merkleRoot, leaf), "Invalid merkle proof");
         
-        // Mark as claimed in bitmap
-        claimedWhitelist.set(index);
-        
+        // Store the index for later use during reveal
         commitments[msg.sender] = Commitment({
             isRevealed: false,
             commit: payload,
@@ -120,9 +118,9 @@ contract CommitRevealBitmap is ERC721Enumerable, Ownable, ReentrancyGuard, Multi
     }
     
     // 3. Reveal (second part of primary minting flow)
-    function reveal(bytes32 secret) external nonReentrant {
+    function reveal(bytes32 secret, uint256 index) external nonReentrant {
         require(commitments[msg.sender].commit != 0, "Not committed");
-        require(!commitments[msg.sender].isRevealed, "Already revealed");
+        require(!claimedWhitelist.get(index), "Already claimed whitelist spot");
         require(
             keccak256(abi.encodePacked(msg.sender, secret)) == commitments[msg.sender].commit,
             "Invalid secret"
@@ -133,6 +131,8 @@ contract CommitRevealBitmap is ERC721Enumerable, Ownable, ReentrancyGuard, Multi
         );
         require(tokenCount() < MAX_SUPPLY, "Max supply reached");
         
+        // Mark as claimed in bitmap when reveal is done
+        claimedWhitelist.set(index);
         commitments[msg.sender].isRevealed = true;
         
         uint256 tokenId = nextToken();
