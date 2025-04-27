@@ -1,5 +1,6 @@
 const { run, network } = require("hardhat");
 const { getAddresses } = require("../utils/addresses");
+const { withRetry } = require("../utils/retry");
 require('dotenv').config();
 
 async function main() {
@@ -98,10 +99,24 @@ async function main() {
   for (const impl of implementationsToVerify) {
     console.log(`\nVerifying ${impl.description} at ${impl.address}...`);
     try {
-      await run("verify:verify", {
-        address: impl.address,
-        contract: impl.contract
-      });
+      // Use retry logic for verification
+      await withRetry(
+        async () => {
+          await run("verify:verify", {
+            address: impl.address,
+            contract: impl.contract
+          });
+        },
+        {
+          maxRetries: 3,
+          initialDelay: 10000, // Etherscan may need more time
+          onRetry: (attempt, error) => {
+            console.log(`   ⚠️ Verification attempt ${attempt} failed: ${error.message}`);
+            console.log(`   Retrying verification...`);
+          }
+        }
+      );
+      
       console.log(`✅ ${impl.description} verified successfully`);
     } catch (error) {
       if (error.message.includes("Already Verified")) {

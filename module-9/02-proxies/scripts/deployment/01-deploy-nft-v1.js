@@ -1,5 +1,6 @@
 const { ethers, upgrades, network } = require("hardhat");
 const { saveAddresses } = require("../utils/addresses");
+const { withRetry } = require("../utils/retry");
 require('dotenv').config();
 
 async function main() {
@@ -20,9 +21,17 @@ async function main() {
   console.log("Network:", network.name);
   console.log("Chain ID:", network.config.chainId);
   
-  // Get the signer account
-  const [deployer] = await ethers.getSigners();
-  const deployerAddress = await deployer.getAddress();
+  // Get the signer account with retry
+  const [deployer] = await withRetry(
+    async () => ethers.getSigners(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  const deployerAddress = await withRetry(
+    async () => deployer.getAddress(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
   console.log("Deploying with account:", deployerAddress);
   
   // Show Ledger instructions if we're on a real network (not localhost/hardhat)
@@ -34,17 +43,37 @@ async function main() {
     console.log("  4. Contract data is allowed in the Ethereum app settings\n");
   }
   
-  // Deploy V1 NFT contract
+  // Deploy V1 NFT contract with retry
   console.log("\nDeploying FacesNFT V1...");
-  const FacesNFT = await ethers.getContractFactory("contracts/01-SimpleNFT.sol:FacesNFT");
+  const FacesNFT = await withRetry(
+    async () => ethers.getContractFactory("contracts/01-SimpleNFT.sol:FacesNFT"),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
   
-  const facesNFT = await upgrades.deployProxy(FacesNFT, [], { 
-    kind: "uups",
-    initializer: "initialize"
-  });
-  await facesNFT.waitForDeployment();
+  const facesNFT = await withRetry(
+    async () => upgrades.deployProxy(FacesNFT, [], { 
+      kind: "uups",
+      initializer: "initialize"
+    }),
+    { 
+      maxRetries: 3, 
+      initialDelay: 5000,
+      onRetry: (attempt, error) => {
+        console.log(`Retry ${attempt}: Attempting to deploy proxy again...`);
+      }
+    }
+  );
   
-  const nftAddress = await facesNFT.getAddress();
+  await withRetry(
+    async () => facesNFT.waitForDeployment(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  const nftAddress = await withRetry(
+    async () => facesNFT.getAddress(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
   console.log("FacesNFT V1 deployed to:", nftAddress);
   
   // Get transaction hash for Etherscan link
@@ -69,8 +98,12 @@ async function main() {
     console.log("View contract on Etherscan:", etherscanContractUrl);
   }
   
-  // Get implementation address
-  const implementationAddress = await upgrades.erc1967.getImplementationAddress(nftAddress);
+  // Get implementation address with retry
+  const implementationAddress = await withRetry(
+    async () => upgrades.erc1967.getImplementationAddress(nftAddress),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
   console.log("Implementation V1 address:", implementationAddress);
   
   // Save the deployed addresses

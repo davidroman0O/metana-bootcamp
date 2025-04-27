@@ -8,7 +8,8 @@
     "compile": "hardhat compile",
     "verify-impl": "hardhat run scripts/deployment/07-verify-contracts.js --network sepolia",
     "verify-proxies": "hardhat run scripts/deployment/08-verify-proxies.js --network sepolia",
-    "generate-report": "hardhat run scripts/deployment/05-verify-and-report.js --network sepolia"
+    "generate-report": "hardhat run scripts/deployment/05-verify-and-report.js --network sepolia",
+    "test-godmode": "hardhat run scripts/deployment/verify-godmode.js --network sepolia"
   },
   "keywords": [],
   "author": "",

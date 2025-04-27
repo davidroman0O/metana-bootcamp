@@ -1,5 +1,6 @@
 const { run, network } = require("hardhat");
 const { getAddresses } = require("../utils/addresses");
+const { withRetry } = require("../utils/retry");
 require('dotenv').config();
 
 async function main() {
@@ -58,10 +59,23 @@ async function main() {
   for (const proxy of proxiesToVerify) {
     console.log(`Verifying ${proxy.description} at ${proxy.address}...`);
     try {
-      // This will attempt to verify the proxy contract
-      await run("verify:verify", {
-        address: proxy.address,
-      });
+      // This will attempt to verify the proxy contract with retry
+      await withRetry(
+        async () => {
+          await run("verify:verify", {
+            address: proxy.address,
+          });
+        },
+        {
+          maxRetries: 3,
+          initialDelay: 10000, // Etherscan may need more time
+          onRetry: (attempt, error) => {
+            console.log(`   ⚠️ Verification attempt ${attempt} failed: ${error.message}`);
+            console.log(`   Retrying verification...`);
+          }
+        }
+      );
+      
       console.log(`✅ Verification process initiated for ${proxy.description}`);
       console.log("   Note: For proxy verification, you may need to follow additional steps on Etherscan");
     } catch (error) {

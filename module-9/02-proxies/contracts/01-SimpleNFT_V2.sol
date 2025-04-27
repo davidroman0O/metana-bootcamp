@@ -11,6 +11,10 @@ contract FacesNFT is Initializable, ERC721Upgradeable, OwnableUpgradeable, UUPSU
     uint16 public constant MAX_SUPPLY = 10;
     uint16 public currentTokenId;
 
+    // this is a dummy variable to avoid hardhat + openzeppelin to think the bytecode didn't change to re-use the same implementation address
+    uint256 private __gap; 
+
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -34,6 +38,11 @@ contract FacesNFT is Initializable, ERC721Upgradeable, OwnableUpgradeable, UUPSU
         _transfer(from, to, tokenId);
     }
 
+    // another dummy function, for the same reason as the __gap variable
+    function version() external pure returns (string memory) {
+        return "v2";
+    }
+
     fallback() external payable {
         revert("INFO: NFT interactions require specific function calls");
     }
@@ -47,4 +56,4 @@ contract FacesNFT is Initializable, ERC721Upgradeable, OwnableUpgradeable, UUPSU
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
-} 
+}

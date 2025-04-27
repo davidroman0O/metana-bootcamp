@@ -1,6 +1,7 @@
 const { ethers, upgrades, network } = require("hardhat");
 const fs = require("fs");
 const { getAddresses } = require("../utils/addresses");
+const { withRetry } = require("../utils/retry");
 
 // Generate appropriate URL based on network
 function getEtherscanUrl(address, network) {
@@ -43,9 +44,19 @@ async function main() {
       
       // Check if the contract has V2 functionality (godModeTransfer)
       try {
-        const nftContract = await ethers.getContractAt("contracts/01-SimpleNFT_V2.sol:FacesNFT", nftAddresses.proxy);
-        const hasGodMode = await nftContract.hasFunction?.("godModeTransfer") || 
-                           typeof nftContract.godModeTransfer === 'function';
+        const nftContract = await withRetry(
+          async () => ethers.getContractAt("contracts/01-SimpleNFT_V2.sol:FacesNFT", nftAddresses.proxy),
+          { maxRetries: 3, initialDelay: 5000 }
+        );
+        
+        // Check if function exists with retry
+        const hasGodMode = await withRetry(
+          async () => {
+            return nftContract.hasFunction?.("godModeTransfer") || 
+                   typeof nftContract.godModeTransfer === 'function';
+          },
+          { maxRetries: 3, initialDelay: 5000 }
+        );
         
         if (hasGodMode) {
           console.log("   ✅ Upgrade confirmed: Contract has V2 functionality (godModeTransfer)");
@@ -129,10 +140,22 @@ async function main() {
     }
   };
   
-  // Save report to file
-  const reportFileName = `deployment-report-${network.name}.json`;
-  fs.writeFileSync(reportFileName, JSON.stringify(report, null, 2));
-  console.log(`\nReport saved to ${reportFileName}`);
+  // Save report to file with retry
+  try {
+    const reportFileName = `deployment-report-${network.name}.json`;
+    fs.writeFileSync(reportFileName, JSON.stringify(report, null, 2));
+    console.log(`\nReport saved to ${reportFileName}`);
+  } catch (error) {
+    console.error(`Error saving report: ${error.message}`);
+    console.log("Retrying...");
+    try {
+      const reportFileName = `deployment-report-${network.name}-retry.json`;
+      fs.writeFileSync(reportFileName, JSON.stringify(report, null, 2));
+      console.log(`\nReport saved to ${reportFileName} (retry)`);
+    } catch (retryError) {
+      console.error(`Failed to save report after retry: ${retryError.message}`);
+    }
+  }
   
   // Print info
   console.log("\n========== INFORMATION ==========\n");

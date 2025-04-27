@@ -28,6 +28,10 @@ contract FacesNFT is Initializable, ERC721Upgradeable, OwnableUpgradeable, UUPSU
         currentTokenId++;
         _safeMint(msg.sender, currentTokenId);
     }
+    
+    function version() external pure returns (string memory) {
+        return "v1";
+    }
 
     fallback() external payable {
         revert("INFO: NFT interactions require specific function calls");

@@ -1,5 +1,6 @@
 const { ethers, upgrades, network } = require("hardhat");
 const { getAddresses, saveAddresses } = require("../utils/addresses");
+const { withRetry } = require("../utils/retry");
 require('dotenv').config();
 
 async function main() {
@@ -20,9 +21,17 @@ async function main() {
   console.log("Network:", network.name);
   console.log("Chain ID:", network.config.chainId);
   
-  // Get the signer account
-  const [deployer] = await ethers.getSigners();
-  const deployerAddress = await deployer.getAddress();
+  // Get the signer account - with retry
+  const [deployer] = await withRetry(
+    async () => ethers.getSigners(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  const deployerAddress = await withRetry(
+    async () => deployer.getAddress(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
   console.log("Upgrading with account:", deployerAddress);
   
   // Show Ledger instructions if we're on a real network (not localhost/hardhat)
@@ -62,7 +71,11 @@ async function main() {
     // Check if the contract has god mode function (V2 feature)
     console.log("\nVerifying V2 functionality (checking for godModeTransfer function)...");
     try {
-      const nftFactory = await ethers.getContractFactory("contracts/01-SimpleNFT_V2.sol:FacesNFT");
+      const nftFactory = await withRetry(
+        async () => ethers.getContractFactory("contracts/01-SimpleNFT_V2.sol:FacesNFT"),
+        { maxRetries: 3, initialDelay: 5000 }
+      );
+      
       const nft = nftFactory.attach(proxyAddress);
       
       // Check if the function exists by getting its signature
@@ -70,7 +83,11 @@ async function main() {
       const functionSelector = ethers.id(functionSignature).substring(0, 10); // First 4 bytes of the hash
       
       // Try to get the contract code to check if it contains the function selector
-      const code = await ethers.provider.getCode(proxyAddress);
+      const code = await withRetry(
+        async () => ethers.provider.getCode(proxyAddress),
+        { maxRetries: 3, initialDelay: 5000 }
+      );
+      
       if (code.includes(functionSelector.substring(2))) { // Remove 0x prefix when checking
         console.log("✅ V2 feature (godModeTransfer) is present in the contract.");
         console.log("\nProxy appears to be correctly upgraded to V2 already.");
@@ -87,11 +104,27 @@ async function main() {
   
   // Use the V2 contract with godModeTransfer function
   console.log("\nUpgrading to FacesNFT V2 with god mode capability...");
-  const FacesNFTv2 = await ethers.getContractFactory("contracts/01-SimpleNFT_V2.sol:FacesNFT");
+  const FacesNFTv2 = await withRetry(
+    async () => ethers.getContractFactory("contracts/01-SimpleNFT_V2.sol:FacesNFT"),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
   
-  // Perform the upgrade
-  const upgradedProxy = await upgrades.upgradeProxy(proxyAddress, FacesNFTv2);
-  await upgradedProxy.waitForDeployment();
+  // Perform the upgrade with retry
+  const upgradedProxy = await withRetry(
+    async () => upgrades.upgradeProxy(proxyAddress, FacesNFTv2),
+    { 
+      maxRetries: 3, 
+      initialDelay: 5000,
+      onRetry: (attempt, error) => {
+        console.log(`Retry ${attempt}: Attempting to upgrade proxy again...`);
+      }
+    }
+  );
+  
+  await withRetry(
+    async () => upgradedProxy.waitForDeployment(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
   
   // Try to get transaction hash if available
   let txHash = null;
@@ -137,9 +170,24 @@ async function main() {
     console.log("View contract on Etherscan:", etherscanContractUrl);
   }
   
-  // Get the new implementation address
-  const newImplementationAddress = await upgrades.erc1967.getImplementationAddress(proxyAddress);
+  // Get the new implementation address with retry
+  const newImplementationAddress = await withRetry(
+    async () => upgrades.erc1967.getImplementationAddress(proxyAddress),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
   console.log("New V2 implementation address:", newImplementationAddress);
+  
+  // Check if implementation address changed
+  if (newImplementationAddress.toLowerCase() === originalImplementation.toLowerCase()) {
+    console.log("\n⚠️ WARNING: Implementation address did not change!");
+    console.log("This could indicate one of the following issues:");
+    console.log("  1. The V2 contract might not have significant bytecode changes");
+    console.log("  2. The OpenZeppelin Upgrades plugin is reusing the same implementation");
+    console.log("\nTrying to verify V2 functionality nonetheless...");
+  } else {
+    console.log("\n✅ Implementation address changed successfully!");
+  }
   
   // Test if V2 functionality is available instead of just checking addresses
   const nft = FacesNFTv2.attach(proxyAddress);
@@ -149,7 +197,15 @@ async function main() {
     // Check if the function exists (will throw if not available)
     const hasGodModeFunction = !!nft.interface.getFunction("godModeTransfer");
     console.log("Contract has godModeTransfer function:", hasGodModeFunction);
-    v2Verified = hasGodModeFunction;
+    
+    // Check if version() function exists and returns "v2"
+    const version = await withRetry(
+      async () => nft.version(),
+      { maxRetries: 3, initialDelay: 5000 }
+    );
+    console.log("Version:", version);
+    
+    v2Verified = hasGodModeFunction && version === "v2";
   } catch (error) {
     console.log("Error checking V2 functionality:", error.message);
     v2Verified = false;

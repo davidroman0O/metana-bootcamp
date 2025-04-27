@@ -1,5 +1,6 @@
 const { ethers, upgrades, network } = require("hardhat");
 const { saveAddresses } = require("../utils/addresses");
+const { withRetry } = require("../utils/retry");
 require('dotenv').config();
 
 async function main() {
@@ -20,9 +21,17 @@ async function main() {
   console.log("Network:", network.name);
   console.log("Chain ID:", network.config.chainId);
   
-  // Get the signer account
-  const [deployer] = await ethers.getSigners();
-  const deployerAddress = await deployer.getAddress();
+  // Get the signer account with retry
+  const [deployer] = await withRetry(
+    async () => ethers.getSigners(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  const deployerAddress = await withRetry(
+    async () => deployer.getAddress(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
   console.log("Deploying with account:", deployerAddress);
   
   // Show Ledger instructions if we're on a real network (not localhost/hardhat)
@@ -36,15 +45,35 @@ async function main() {
   
   // Deploy Staking Token contract
   console.log("\nDeploying StakingVisageToken...");
-  const StakingVisageToken = await ethers.getContractFactory("StakingVisageToken");
-  const stakingToken = await upgrades.deployProxy(
-    StakingVisageToken, 
-    [deployerAddress], 
-    { kind: "uups" }
+  const StakingVisageToken = await withRetry(
+    async () => ethers.getContractFactory("StakingVisageToken"),
+    { maxRetries: 3, initialDelay: 5000 }
   );
-  await stakingToken.waitForDeployment();
-  const stakingTokenAddress = await stakingToken.getAddress();
-  const tokenImplAddress = await upgrades.erc1967.getImplementationAddress(stakingTokenAddress);
+  
+  const stakingToken = await withRetry(
+    async () => upgrades.deployProxy(
+      StakingVisageToken, 
+      [deployerAddress], 
+      { kind: "uups" }
+    ),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  await withRetry(
+    async () => stakingToken.waitForDeployment(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  const stakingTokenAddress = await withRetry(
+    async () => stakingToken.getAddress(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  const tokenImplAddress = await withRetry(
+    async () => upgrades.erc1967.getImplementationAddress(stakingTokenAddress),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
   console.log("StakingVisageToken deployed to:", stakingTokenAddress);
   console.log("Implementation address:", tokenImplAddress);
   
@@ -57,15 +86,35 @@ async function main() {
 
   // Deploy Staking NFT contract
   console.log("\nDeploying StakingVisageNFT...");
-  const StakingVisageNFT = await ethers.getContractFactory("StakingVisageNFT");
-  const stakingNFT = await upgrades.deployProxy(
-    StakingVisageNFT, 
-    [deployerAddress], 
-    { kind: "uups" }
+  const StakingVisageNFT = await withRetry(
+    async () => ethers.getContractFactory("StakingVisageNFT"),
+    { maxRetries: 3, initialDelay: 5000 }
   );
-  await stakingNFT.waitForDeployment();
-  const stakingNFTAddress = await stakingNFT.getAddress();
-  const nftImplAddress = await upgrades.erc1967.getImplementationAddress(stakingNFTAddress);
+  
+  const stakingNFT = await withRetry(
+    async () => upgrades.deployProxy(
+      StakingVisageNFT, 
+      [deployerAddress], 
+      { kind: "uups" }
+    ),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  await withRetry(
+    async () => stakingNFT.waitForDeployment(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  const stakingNFTAddress = await withRetry(
+    async () => stakingNFT.getAddress(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  const nftImplAddress = await withRetry(
+    async () => upgrades.erc1967.getImplementationAddress(stakingNFTAddress),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
   console.log("StakingVisageNFT deployed to:", stakingNFTAddress);
   console.log("Implementation address:", nftImplAddress);
   
@@ -78,19 +127,39 @@ async function main() {
 
   // Deploy Staking contract
   console.log("\nDeploying VisageStaking...");
-  const VisageStaking = await ethers.getContractFactory("VisageStaking");
-  const staking = await upgrades.deployProxy(
-    VisageStaking, 
-    [
-      deployerAddress,
-      stakingTokenAddress,
-      stakingNFTAddress
-    ], 
-    { kind: "uups" }
+  const VisageStaking = await withRetry(
+    async () => ethers.getContractFactory("VisageStaking"),
+    { maxRetries: 3, initialDelay: 5000 }
   );
-  await staking.waitForDeployment();
-  const stakingAddress = await staking.getAddress();
-  const stakingImplAddress = await upgrades.erc1967.getImplementationAddress(stakingAddress);
+  
+  const staking = await withRetry(
+    async () => upgrades.deployProxy(
+      VisageStaking, 
+      [
+        deployerAddress,
+        stakingTokenAddress,
+        stakingNFTAddress
+      ], 
+      { kind: "uups" }
+    ),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  await withRetry(
+    async () => staking.waitForDeployment(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  const stakingAddress = await withRetry(
+    async () => staking.getAddress(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  const stakingImplAddress = await withRetry(
+    async () => upgrades.erc1967.getImplementationAddress(stakingAddress),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
   console.log("VisageStaking deployed to:", stakingAddress);
   console.log("Implementation address:", stakingImplAddress);
   
@@ -103,10 +172,22 @@ async function main() {
 
   // Transfer ownership of the NFT and token to the staking contract
   console.log("\nTransferring staking token ownership to staking contract...");
-  const tokenTx = await stakingToken.transferOwnership(stakingAddress);
+  const tokenTx = await withRetry(
+    async () => stakingToken.transferOwnership(stakingAddress),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
   console.log("Transferring staking NFT ownership to staking contract...");
-  const nftTx = await stakingNFT.transferOwnership(stakingAddress);
-  await Promise.all([tokenTx.wait(), nftTx.wait()]);
+  const nftTx = await withRetry(
+    async () => stakingNFT.transferOwnership(stakingAddress),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  await Promise.all([
+    withRetry(async () => tokenTx.wait(), { maxRetries: 3, initialDelay: 5000 }),
+    withRetry(async () => nftTx.wait(), { maxRetries: 3, initialDelay: 5000 })
+  ]);
+  
   console.log("✅ Ownership transferred to staking contract");
   
   // Show ownership transfer transactions on Etherscan

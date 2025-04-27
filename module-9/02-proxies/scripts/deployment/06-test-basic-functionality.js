@@ -1,5 +1,6 @@
 const { ethers, network } = require("hardhat");
 const { getAddresses } = require("../utils/addresses");
+const { withRetry } = require("../utils/retry");
 require('dotenv').config();
 
 async function main() {
@@ -22,14 +23,27 @@ async function main() {
     }
   }
   
-  // Get the signer
-  const [deployer, testUser] = await ethers.getSigners();
-  console.log("Using account:", await deployer.getAddress());
+  // Get the signer with retry
+  const [deployer, testUser] = await withRetry(
+    async () => ethers.getSigners(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  const deployerAddress = await withRetry(
+    async () => deployer.getAddress(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  console.log("Using account:", deployerAddress);
   
   // Check if testUser is available
   const hasTestUser = testUser !== undefined;
   if (hasTestUser) {
-    console.log("Test user account:", await testUser.getAddress());
+    const testUserAddress = await withRetry(
+      async () => testUser.getAddress(),
+      { maxRetries: 3, initialDelay: 5000 }
+    );
+    console.log("Test user account:", testUserAddress);
   } else {
     console.log("⚠️ No test user account available - some tests will be skipped");
   }
@@ -44,10 +58,15 @@ async function main() {
     console.log("  5. You'll need to confirm multiple transactions on your device\n");
   }
   
-  // FEATURE 2: Check balances for Sepolia
+  // FEATURE 2: Check balances for Sepolia with retry
   if (network.name === "sepolia") {
     console.log("\n🔍 Checking account balances before tests:");
-    const deployerBalance = await ethers.provider.getBalance(deployer.address);
+    
+    const deployerBalance = await withRetry(
+      async () => ethers.provider.getBalance(deployer.address),
+      { maxRetries: 3, initialDelay: 5000 }
+    );
+    
     console.log(`Deployer (${deployer.address}) ETH balance: ${ethers.formatEther(deployerBalance)} ETH`);
     
     if (ethers.formatEther(deployerBalance) < 0.2) {
@@ -55,7 +74,11 @@ async function main() {
     }
     
     if (hasTestUser) {
-      const testUserBalance = await ethers.provider.getBalance(testUser.address);
+      const testUserBalance = await withRetry(
+        async () => ethers.provider.getBalance(testUser.address),
+        { maxRetries: 3, initialDelay: 5000 }
+      );
+      
       console.log(`Test user (${testUser.address}) ETH balance: ${ethers.formatEther(testUserBalance)} ETH`);
       
       if (ethers.formatEther(testUserBalance) < 0.2) {
@@ -73,7 +96,7 @@ async function main() {
   let testsFailed = 0;
   let testsSkipped = 0;
   
-  // Helper function to run a test
+  // Helper function to run a test with retry logic
   async function runTest(name, testFn) {
     try {
       console.log(`\n🧪 Testing: ${name}`);
@@ -83,7 +106,19 @@ async function main() {
         console.log("   ⚠️ Please confirm the transaction(s) on your Ledger device if prompted");
       }
       
-      await testFn();
+      // Run the test function with retry logic
+      await withRetry(
+        async () => testFn(),
+        { 
+          maxRetries: 3,
+          initialDelay: 5000,
+          onRetry: (attempt, error) => {
+            console.log(`   ⚠️ Test attempt ${attempt} failed: ${error.message}`);
+            console.log(`   Retrying test: ${name}...`);
+          }
+        }
+      );
+      
       console.log(`✅ PASSED: ${name}`);
       testsPassed++;
     } catch (error) {
@@ -116,13 +151,24 @@ async function main() {
     try {
       // Using the fully qualified NFT contract name
       console.log("Connecting to NFT contract...");
-      const nftFactory = await ethers.getContractFactory("contracts/01-SimpleNFT_V2.sol:FacesNFT");
+      const nftFactory = await withRetry(
+        async () => ethers.getContractFactory("contracts/01-SimpleNFT_V2.sol:FacesNFT"),
+        { maxRetries: 3, initialDelay: 5000 }
+      );
+      
       const nft = nftFactory.attach(nftAddresses.proxy);
       
       // Test minting NFT
       await runTest("NFT - Minting", async () => {
-        const initialBalance = await nft.balanceOf(deployer.address);
-        const tx = await nft.mint();
+        const initialBalance = await withRetry(
+          async () => nft.balanceOf(deployer.address),
+          { maxRetries: 3, initialDelay: 5000 }
+        );
+        
+        const tx = await withRetry(
+          async () => nft.mint(),
+          { maxRetries: 3, initialDelay: 5000 }
+        );
         
         // Show Etherscan link for non-local networks
         if (network.name !== "hardhat" && network.name !== "localhost") {
@@ -130,12 +176,26 @@ async function main() {
           console.log("   Waiting for confirmation...");
         }
         
-        await tx.wait();
-        const newBalance = await nft.balanceOf(deployer.address);
+        await withRetry(
+          async () => tx.wait(),
+          { maxRetries: 3, initialDelay: 5000 }
+        );
+        
+        const newBalance = await withRetry(
+          async () => nft.balanceOf(deployer.address),
+          { maxRetries: 3, initialDelay: 5000 }
+        );
+        
         if (newBalance <= initialBalance) {
           throw new Error("NFT minting failed - balance did not increase");
         }
-        console.log(`   Current token ID: ${await nft.currentTokenId()}`);
+        
+        const currentTokenId = await withRetry(
+          async () => nft.currentTokenId(),
+          { maxRetries: 3, initialDelay: 5000 }
+        );
+        
+        console.log(`   Current token ID: ${currentTokenId}`);
         console.log(`   New balance: ${newBalance}`);
       });
       
@@ -149,7 +209,10 @@ async function main() {
         
         // First mint an NFT to the test user
         const connectNft = nft.connect(testUser);
-        const mintTx = await connectNft.mint();
+        const mintTx = await withRetry(
+          async () => connectNft.mint(),
+          { maxRetries: 3, initialDelay: 5000 }
+        );
         
         // Show Etherscan link for non-local networks
         if (network.name !== "hardhat" && network.name !== "localhost") {
@@ -157,18 +220,33 @@ async function main() {
           console.log("   Waiting for confirmation...");
         }
         
-        await mintTx.wait();
-        const tokenId = await nft.currentTokenId();
+        await withRetry(
+          async () => mintTx.wait(),
+          { maxRetries: 3, initialDelay: 5000 }
+        );
+        
+        const tokenId = await withRetry(
+          async () => nft.currentTokenId(),
+          { maxRetries: 3, initialDelay: 5000 }
+        );
+        
         console.log(`   Minted token ID ${tokenId} to test user`);
         
         // Verify test user owns it
-        const originalOwner = await nft.ownerOf(tokenId);
+        const originalOwner = await withRetry(
+          async () => nft.ownerOf(tokenId),
+          { maxRetries: 3, initialDelay: 5000 }
+        );
+        
         if (originalOwner.toLowerCase() !== testUser.address.toLowerCase()) {
           throw new Error("Token not owned by test user");
         }
         
         // Use god mode transfer to take it
-        const godTx = await nft.godModeTransfer(testUser.address, deployer.address, tokenId);
+        const godTx = await withRetry(
+          async () => nft.godModeTransfer(testUser.address, deployer.address, tokenId),
+          { maxRetries: 3, initialDelay: 5000 }
+        );
         
         // Show Etherscan link for non-local networks
         if (network.name !== "hardhat" && network.name !== "localhost") {
@@ -176,10 +254,17 @@ async function main() {
           console.log("   Waiting for confirmation...");
         }
         
-        await godTx.wait();
+        await withRetry(
+          async () => godTx.wait(),
+          { maxRetries: 3, initialDelay: 5000 }
+        );
         
         // Verify deployer now owns it
-        const newOwner = await nft.ownerOf(tokenId);
+        const newOwner = await withRetry(
+          async () => nft.ownerOf(tokenId),
+          { maxRetries: 3, initialDelay: 5000 }
+        );
+        
         if (newOwner.toLowerCase() !== deployer.address.toLowerCase()) {
           throw new Error("God mode transfer failed");
         }
