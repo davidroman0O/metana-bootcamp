@@ -27,6 +27,7 @@ const config: HardhatUserConfig = {
     sepolia: {
       url: ALCHEMY_API_URL,
       ledgerAccounts: [LEDGER_ACCOUNT],
+      chainId: 11155111
     }
   }
 };
