@@ -1,9 +1,14 @@
 const { ethers, upgrades, network } = require("hardhat");
 const { saveAddresses } = require("../utils/addresses");
 const { withRetry } = require("../utils/retry");
+const hre = require("hardhat");
 require('dotenv').config();
 
 async function main() {
+  // Clean and recompile before deploying
+  await hre.run("clean");
+  await hre.run("compile");
+
   // Validate required environment variables
   if (!process.env.LEDGER_ACCOUNT) {
     console.error("\n❌ ERROR: LEDGER_ACCOUNT environment variable is not set in .env file");
@@ -49,6 +54,11 @@ async function main() {
     async () => ethers.getContractFactory("contracts/01-SimpleNFT.sol:FacesNFT"),
     { maxRetries: 3, initialDelay: 5000 }
   );
+
+  // Check for V2 features in V1 contract (fail fast)
+  if (FacesNFT.interface.getFunction && FacesNFT.interface.getFunction("godModeTransfer")) {
+    throw new Error("V1 contract already has godModeTransfer! Artifacts or deployment may be mixed up. Aborting.");
+  }
   
   const facesNFT = await withRetry(
     async () => upgrades.deployProxy(FacesNFT, [], { 
@@ -112,6 +122,65 @@ async function main() {
     implementationV1: implementationAddress,
     admin: deployerAddress
   });
+  
+  // Verify the contract functionality
+  console.log("\n==== VERIFYING CONTRACT FUNCTIONALITY ====");
+  
+  try {
+    console.log("Connecting to deployed contract...");
+    
+    // Check for basic V1 functionality
+    console.log("\nTesting version() function...");
+    const version = await withRetry(
+      async () => facesNFT.version(),
+      { maxRetries: 3, initialDelay: 2000 }
+    );
+    
+    console.log("Version:", version);
+    
+    if (version === "v1") {
+      console.log("✅ Contract correctly returns version v1");
+    } else {
+      console.log("❌ Unexpected version:", version);
+    }
+    
+    // Check if we can mint an NFT
+    console.log("\nTesting mint function...");
+    if (network.name === "hardhat" || network.name === "localhost") {
+      // Only try minting on test networks to avoid mainnet costs
+      try {
+        const mintTx = await withRetry(
+          async () => facesNFT.mint(),
+          { maxRetries: 2, initialDelay: 2000 }
+        );
+        
+        await withRetry(
+          async () => mintTx.wait(),
+          { maxRetries: 2, initialDelay: 2000 }
+        );
+        
+        console.log("✅ Successfully minted an NFT");
+        
+        // Check if the NFT was minted
+        const tokenId = 1;
+        const ownerAddress = await withRetry(
+          async () => facesNFT.ownerOf(tokenId),
+          { maxRetries: 2, initialDelay: 2000 }
+        );
+        
+        console.log(`Owner of token #${tokenId}: ${ownerAddress}`);
+        console.log("✅ NFT ownership verified");
+      } catch (error) {
+        console.log("❌ Failed to mint NFT:", error.message);
+      }
+    } else {
+      console.log("⚠️ Skipping mint test on production network to avoid costs");
+    }
+  } catch (error) {
+    console.error("❌ Contract verification failed:", error.message);
+  }
+  
+  console.log("\n==== END VERIFICATION ====");
   
   console.log("\nV1 Deployment complete!");
   console.log("Use this proxy address for upgrading to V2:", nftAddress);

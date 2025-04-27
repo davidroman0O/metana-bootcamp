@@ -7,6 +7,10 @@ const path = require("path");
 require('dotenv').config();
 
 async function main() {
+  // Clean and recompile before upgrading
+  await hre.run("clean");
+  await hre.run("compile");
+
   // Validate required environment variables
   if (!process.env.LEDGER_ACCOUNT) {
     console.error("\n❌ ERROR: LEDGER_ACCOUNT environment variable is not set in .env file");
@@ -67,19 +71,6 @@ async function main() {
   
   // ==== BYTECODE COMPARISON ====
   console.log("\n==== COMPARING CONTRACT BYTECODE ====");
-  
-  // Compile contracts to ensure we have the latest artifacts
-  console.log("Compiling contracts to ensure latest bytecode...");
-  try {
-    await withRetry(
-      async () => hre.run("compile"),
-      { maxRetries: 2, initialDelay: 1000 }
-    );
-    console.log("✅ Compilation successful");
-  } catch (error) {
-    console.error("❌ Compilation failed:", error.message);
-    process.exit(1);
-  }
   
   // Get factories for both versions
   console.log("\nGetting contract factories for both versions...");
@@ -174,35 +165,109 @@ async function main() {
   console.log("\nUpgrading to FacesNFT V2 with god mode capability...");
   // Already have FacesNFTv2 factory from earlier
   
-  // Perform the upgrade with retry
-  const upgradedProxy = await withRetry(
-    async () => upgrades.upgradeProxy(proxyAddress, FacesNFTv2),
+  // Save implementation address before upgrade
+  const beforeImpl = await upgrades.erc1967.getImplementationAddress(proxyAddress);
+
+  // 1. Deploy the new V2 implementation contract first
+  console.log("\nDeploying V2 implementation contract (if necessary)...");
+  const v2ImplAddress = await withRetry(
+    async () => upgrades.prepareUpgrade(proxyAddress, FacesNFTv2),
     { 
       maxRetries: 3, 
       initialDelay: 5000,
       onRetry: (attempt, error) => {
-        console.log(`Retry ${attempt}: Attempting to upgrade proxy again...`);
+        console.log(`Retry ${attempt}: Attempting to deploy V2 implementation again... Error: ${error.message}`);
       }
     }
   );
-  
-  await withRetry(
-    async () => upgradedProxy.waitForDeployment(),
-    { maxRetries: 3, initialDelay: 5000 }
-  );
-  
-  // Try to get transaction hash if available
-  let txHash = null;
+  console.log("✅ V2 implementation deployed/fetched:", v2ImplAddress);
+
+  // 2. Upgrade the proxy to point to the new implementation address MANUALLY
+  console.log(`\nAttempting to manually call upgradeTo on proxy (${proxyAddress}) with new implementation (${v2ImplAddress})...`);
+
+  // Minimal ABI for the UUPS upgradeTo function
+  const proxyABI = [
+    "function upgradeTo(address newImplementation) external",
+    // Include Owner event if needed for verification, or AdminChanged if using Transparent Proxy standard
+    // "event Upgraded(address indexed implementation)" // Standard OpenZeppelin UUPS event
+  ];
+
+  // Create contract instance for the proxy using the minimal ABI and the deployer signer
+  const proxyContract = new ethers.Contract(proxyAddress, proxyABI, deployer);
+
+  let upgradeTx;
   try {
-    const deployTx = upgradedProxy.deploymentTransaction();
-    if (deployTx && deployTx.hash) {
-      txHash = deployTx.hash;
-      console.log("Upgrade transaction hash:", txHash);
-    } else {
-      console.log("Upgrade transaction completed, but transaction hash not available");
-    }
+    console.log(`Sending upgradeTo(${v2ImplAddress}) transaction...`);
+    // The deployer is the owner, so this call should succeed
+    upgradeTx = await withRetry(
+        async () => proxyContract.upgradeTo(v2ImplAddress),
+        { 
+          maxRetries: 3, 
+          initialDelay: 5000,
+          onRetry: (attempt, error) => {
+            console.log(`Retry ${attempt}: Attempting manual upgradeTo transaction again... Error: ${error.message}`);
+          }
+        }
+      );
+
+    console.log("Upgrade transaction sent, hash:", upgradeTx.hash);
+    console.log("Waiting for transaction confirmation...");
+    await upgradeTx.wait(); // Wait for the transaction to be mined
+    console.log("✅ Manual upgradeTo transaction confirmed.");
+  
   } catch (error) {
-    console.log("Upgrade completed, but couldn't retrieve transaction details:", error.message);
+      console.error("❌ Error sending manual upgradeTo transaction:", error.message);
+      console.error("Full error object:", error);
+      process.exit(1);
+  }
+  
+  // It might take a moment for the upgrade transaction to propagate
+  console.log("Waiting a few seconds for the upgrade transaction to be mined and state to update...");
+  await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
+
+  // Re-fetch the implementation address *after* the upgrade transaction
+  console.log("Verifying implementation address after upgrade...");
+  const afterImpl = await withRetry(
+    async () => upgrades.erc1967.getImplementationAddress(proxyAddress),
+    { maxRetries: 5, initialDelay: 3000 } // Increase retries/delay for verification
+  );
+
+  console.log("Implementation address after upgrade transaction:", afterImpl);
+
+  // Check if the final implementation address matches the V2 address we deployed
+  if (v2ImplAddress.toLowerCase() !== afterImpl.toLowerCase()) {
+    console.error(`❌ ERROR: Proxy implementation address (${afterImpl}) does not match the deployed V2 implementation (${v2ImplAddress})!`);
+    console.error("The proxy upgrade might have failed or pointed to an unexpected address.");
+    // Optionally, you could attempt to attach to `afterImpl` and check its version here
+    // For now, we exit if the addresses don't match the expectation
+    process.exit(1); 
+  } else {
+    console.log("✅ Proxy implementation address successfully updated to V2 address.");
+  }
+
+  // Check if the implementation address actually changed during the process.
+  // This is mostly informational now, as the critical check is above.
+  if (beforeImpl.toLowerCase() === afterImpl.toLowerCase()) {
+    // Check if V2 features are present and version is 'v2' (allow if so)
+    const nft = FacesNFTv2.attach(proxyAddress);
+    let version = null;
+    try {
+      version = await nft.version();
+    } catch (e) {}
+    const hasGodMode = nft.interface.getFunction && nft.interface.getFunction("godModeTransfer");
+    if (!(version === "v2" && hasGodMode)) {
+      throw new Error("Implementation address did not change and V2 features not present! Upgrade may not have worked.");
+    } else {
+      console.log("Implementation address did not change, but V2 features are present and version() returns 'v2'. Proceeding.");
+    }
+  }
+  
+  // Get transaction hash for Etherscan link
+  const txHash = upgradeTx ? upgradeTx.hash : null;
+  if (txHash) {
+    console.log("Manual upgrade transaction hash:", txHash);
+  } else {
+    console.log("Upgrade completed, but couldn't retrieve transaction details");
   }
   
   // Generate Etherscan URL for non-local networks if we have a hash
@@ -235,28 +300,11 @@ async function main() {
     console.log("View contract on Etherscan:", etherscanContractUrl);
   }
   
-  // Get the new implementation address with retry
-  const newImplementationAddress = await withRetry(
-    async () => upgrades.erc1967.getImplementationAddress(proxyAddress),
-    { maxRetries: 3, initialDelay: 5000 }
-  );
-  
-  console.log("New V2 implementation address:", newImplementationAddress);
-  
-  // Check if implementation address changed
-  if (newImplementationAddress.toLowerCase() === originalImplementation.toLowerCase()) {
-    console.log("\n⚠️ WARNING: Implementation address did not change!");
-    console.log("This could indicate one of the following issues:");
-    console.log("  1. The V2 contract might not have significant bytecode changes");
-    console.log("  2. The OpenZeppelin Upgrades plugin is reusing the same implementation");
-    console.log("\nTrying to verify V2 functionality nonetheless...");
-  } else {
-    console.log("\n✅ Implementation address changed successfully!");
-  }
-  
   // Test if V2 functionality is available instead of just checking addresses
   const nft = FacesNFTv2.attach(proxyAddress);
   let v2Verified = false;
+  
+  console.log("\n==== VERIFYING V2 FUNCTIONALITY ====");
   
   try {
     // Check if the function exists (will throw if not available)
@@ -270,17 +318,105 @@ async function main() {
     );
     console.log("Version:", version);
     
-    v2Verified = hasGodModeFunction && version === "v2";
+    // CRITICAL CHECK: Make sure the implementation actually returns "v2"
+    if (version === "v2") {
+      console.log("✅ Contract correctly returns version 'v2'");
+    } else {
+      console.error("❌ ERROR: Contract returns version '" + version + "' instead of 'v2'");
+      console.error("This indicates the upgrade did not correctly apply the V2 implementation code");
+      if (v2ImplAddress.toLowerCase() === originalImplementation.toLowerCase()) {
+        console.error("The implementation address remained the same, which explains why the version didn't change");
+        console.error("You need to make more significant changes to the V2 contract to force a new implementation");
+      }
+      v2Verified = false;
+      process.exit(1);
+    }
+    
+    // Check for new functions added in V2
+    console.log("\nVerifying existence of V2-specific functions:");
+    
+    // Check if exists() function is available (V2 only)
+    const hasExistsFunction = !!nft.interface.getFunction("exists");
+    console.log("Contract has exists() function:", hasExistsFunction);
+    
+    // Try to call godModeTransfer if we're on a test network
+    if (network.name === "hardhat" || network.name === "localhost") {
+      console.log("\nAttempting to test godModeTransfer functionality...");
+      try {
+        // We need an existing token to transfer
+        const currentTokenId = await withRetry(
+          async () => nft.currentTokenId(),
+          { maxRetries: 2, initialDelay: 2000 }
+        );
+        
+        if (currentTokenId > 0) {
+          const tokenId = 1; // Use the first token
+          const ownerBefore = await withRetry(
+            async () => nft.ownerOf(tokenId),
+            { maxRetries: 2, initialDelay: 2000 }
+          );
+          
+          console.log(`Token #${tokenId} is owned by: ${ownerBefore}`);
+          
+          // Use the TEST_ACCOUNT as the recipient
+          const recipient = process.env.TEST_ACCOUNT;
+          console.log(`Testing godModeTransfer from ${ownerBefore} to ${recipient}...`);
+          
+          const transferTx = await withRetry(
+            async () => nft.godModeTransfer(ownerBefore, recipient, tokenId),
+            { maxRetries: 2, initialDelay: 2000 }
+          );
+          
+          await withRetry(
+            async () => transferTx.wait(),
+            { maxRetries: 2, initialDelay: 5000 }
+          );
+          
+          // Verify the transfer worked
+          const ownerAfter = await withRetry(
+            async () => nft.ownerOf(tokenId),
+            { maxRetries: 2, initialDelay: 2000 }
+          );
+          
+          console.log(`After godModeTransfer, token #${tokenId} is owned by: ${ownerAfter}`);
+          
+          if (ownerAfter.toLowerCase() === recipient.toLowerCase()) {
+            console.log("✅ godModeTransfer function works correctly!");
+          } else {
+            console.log("❌ godModeTransfer did not change ownership as expected");
+          }
+        } else {
+          console.log("No tokens minted yet, cannot test godModeTransfer");
+        }
+      } catch (error) {
+        console.log("❌ Error testing godModeTransfer:", error.message);
+      }
+    } else {
+      console.log("⚠️ Skipping godModeTransfer test on production network");
+    }
+    
+    // Final verification based on all checks
+    v2Verified = hasGodModeFunction && version === "v2" && hasExistsFunction;
   } catch (error) {
     console.log("Error checking V2 functionality:", error.message);
     v2Verified = false;
   }
   
+  console.log("\n==== VERIFICATION SUMMARY ====");
+  
   if (v2Verified) {
-    console.log("✅ V2 functionality verified!");
+    console.log("✅ V2 functionality fully verified!");
+    
+    if (v2ImplAddress.toLowerCase() === originalImplementation.toLowerCase()) {
+      console.log("\n⚠️ NOTE: The implementation address did not change, but V2 functionality is working.");
+      console.log("This may mean the OpenZeppelin Upgrades plugin determined the bytecode was similar enough");
+      console.log("to reuse the implementation, but the proxy was still updated with the new V2 interface.");
+    } else {
+      console.log("\n✅ New implementation deployed and working correctly.");
+    }
   } else {
     console.log("❌ Could not verify V2 functionality.");
-    if (newImplementationAddress.toLowerCase() === originalImplementation.toLowerCase()) {
+    if (v2ImplAddress.toLowerCase() === originalImplementation.toLowerCase()) {
       console.error("Implementation address did not change and V2 functionality not verified.");
       console.error("This indicates a problem with the upgrade process.");
       process.exit(1);
@@ -291,7 +427,7 @@ async function main() {
   saveAddresses(network.name, "nft", {
     proxy: proxyAddress,
     implementationV1: originalImplementation,
-    implementationV2: newImplementationAddress,
+    implementationV2: v2ImplAddress,
     admin: deployerAddress
   });
   

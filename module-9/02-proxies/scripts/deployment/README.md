@@ -209,3 +209,46 @@ To ensure proper deployment:
 - The test script uses proper contract references to avoid "UnrecognizedContract" issues.
 - Run the functionality tests to verify that deployed contracts work as expected.
 - All scripts automatically detect when they're running on a real network and provide hardware wallet instructions. 
+- I had to change to a manual upgrade on the 01 and 02 because i had issues with same bytecode
+
+## Troubleshooting the V1 -> V2 Upgrade with Ledger
+
+So, while getting the V1 to V2 upgrade working, I ran into a weird issue specifically when using the Hardhat Upgrades plugin with a Ledger.
+
+**Background: How the Plugin Handles Upgrades**
+
+Normally, the OpenZeppelin Hardhat Upgrades plugin checks the bytecode of your new contract (V2) against the old one (V1).
+*   If they're the same (or very similar, with no storage changes), it might just reuse the V1 implementation address to save gas.
+*   If they're different enough, it deploys the V2 contract logic as a new implementation.
+
+In this project, the V1 and V2 bytecode *were* different. The first step, deploying the new V2 logic using `upgrades.prepareUpgrade`, worked fine.
+
+**The Problem: `upgradeProxy` + Ledger = Error**
+
+The hiccup happened when trying to tell the proxy contract to actually *use* the new V2 implementation address. Calling the standard `upgrades.upgradeProxy(proxyAddress, V2ImplementationAddress)` function (where the second argument is the address of the V2 contract we just deployed) kept failing when it came time to sign with the Ledger. The error was a `TypeError: Cannot read properties of undefined (reading 'encodeDeploy')`.
+
+It seems like the `upgradeProxy` helper function got confused when using the Ledger signer and being given an address instead of a contract factory, maybe mistaking the address string for something else internally.
+
+**The Fix: Calling `upgradeTo` Directly**
+
+I worked around this by skipping the `upgradeProxy` helper for that step and just calling the proxy's own `upgradeTo` function directly (which is standard for UUPS proxies):
+
+1.  **Deploy V2 Logic:** Still used the plugin for this, as it worked:
+    ```javascript
+    // Deploys V2 implementation logic, returns its address
+    const v2ImplAddress = await upgrades.prepareUpgrade(proxyAddress, FacesNFTv2);
+    ```
+
+2.  **Update Proxy Manually:** Instead of `upgrades.upgradeProxy`, I did this:
+    ```javascript
+    // ABI just needs the upgradeTo function signature
+    const proxyABI = ["function upgradeTo(address newImplementation) external"];
+    // Get an ethers contract instance for the proxy
+    const proxyContract = new ethers.Contract(proxyAddress, proxyABI, deployer);
+    // Call upgradeTo directly, signed by Ledger
+    const upgradeTx = await proxyContract.upgradeTo(v2ImplAddress);
+    await upgradeTx.wait(); // Wait for confirmation
+    ```
+
+Calling the proxy's function directly like this worked perfectly. So, heads up: if you're doing UUPS upgrades with a Ledger and separating the `prepareUpgrade` from the actual proxy update, you might need to call `upgradeTo` manually instead of relying on `upgrades.upgradeProxy(proxyAddress, implementationAddress)`. I really started to question my life choices.
+

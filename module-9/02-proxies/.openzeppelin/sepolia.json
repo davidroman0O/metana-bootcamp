@@ -2,130 +2,45 @@
   "manifestVersion": "3.2",
   "proxies": [
     {
-      "address": "0x7C188654206836Cc037411665A820c72B7d596ac",
-      "txHash": "0xb8028fd822cbb4f07cc96adad072cbdc74c3574c75b6aa3a52bbe748c2f221b6",
+      "address": "0xdfb63E4641678C08C9301692e1D120AD332eAD94",
+      "txHash": "0x3762d4a499e21cefa347b9f5524918408c2797faae5797f6e5af81a234938c52",
       "kind": "uups"
     },
     {
-      "address": "0x3a54B754e847e1e27c47896aC242f27e2eCBBa9B",
-      "txHash": "0x76fc4615093fb9e9eb92391bad399c950a7633ab98b35fced356430fea4e2e7b",
+      "address": "0x849d54845a08322503E8Ea6c12da5bf9BAE9686D",
+      "txHash": "0x1a98f77f54ab5406d471d0b6a968195ccb4b2f12533115c3984bc3b897be5084",
       "kind": "uups"
     },
     {
-      "address": "0xcB1bE17ca10eB4F1b6F49F7beF09276460507232",
-      "txHash": "0xa6f663c9568b0c5b88cefd915917167f7809596b3decbb1271bdb094d3db26af",
+      "address": "0xc658f5ffFfBA1F2b8A94548C31efeA40164cE8d7",
+      "txHash": "0x63443aa5a95e87fe41e94fd9604e189934fbe3103d8329184a24fe66135f94b9",
       "kind": "uups"
     },
     {
-      "address": "0x232015B7ACC7BABE186264bC3D85E946C633799a",
-      "txHash": "0x9b0a8ecd3dde5c8141e97de5b786b590ab46dcfa08c2dc9599a1883c1219659f",
+      "address": "0x69e986Cd150edE063bF4c7B1fbe77343fE546C55",
+      "txHash": "0xefe3b2261914dc107ee40531365f6a57dae8a43067e52bd6a48dea966a3360b7",
       "kind": "uups"
     },
     {
-      "address": "0xE3Ab47a7Bed1D260b78ae1F42AFD402b5B995a8b",
-      "txHash": "0x05a5a3011483dab01c3f1cdd77a71663d27a47ee7c69fe056cf3c29fc03087c9",
+      "address": "0x91dD2cc96106175D88D3AD002975825E686A0a84",
+      "txHash": "0x78563f20f1ad62a1dfdd4ae5358677d0b242a349cbbfb27f47f9ef7bf3a8ff45",
       "kind": "uups"
     },
     {
-      "address": "0x13A45176d1E2a02e160294EEC2674fFf148389DC",
-      "txHash": "0x706173d699c0b269b50dd43eac464760596cc06d09bc35924b9d9b3bab5bbb14",
+      "address": "0x24a2F6B1a64d47e490125F7693aaAB4bb1674283",
+      "txHash": "0x0e4354bb03cf8ccca352a46de40174b4ef8d311bcf9f71b7a95c239d22de25b1",
       "kind": "uups"
     },
     {
-      "address": "0xf35Cdb63f1584Ee4a8fEC300905CCb1915B8cE75",
-      "txHash": "0xe92fc2d43698fe35486f2e19e1f8577befedfad7b8ae0a1c55354fad77c16cdd",
-      "kind": "uups"
-    },
-    {
-      "address": "0xb59CbF629798a3B97ac02E44ED28DAF7D5A716c9",
-      "txHash": "0x65d9238321a11cf4bd28f1e8641c7557f103b6bd856911313e150c7e626317d4",
-      "kind": "uups"
-    },
-    {
-      "address": "0xd42dd12FA398ECFB9A7b152D639DeBB9fe99080D",
-      "txHash": "0x7d488b6d6f41117956fd97210cfe5d48ce7651d8ee9a787fafc60c7ec6658045",
-      "kind": "uups"
-    },
-    {
-      "address": "0x171AaC6c9472b1f885Be8df218E9526C4F277F1d",
-      "txHash": "0xd760651d1a3d0e29ce6db1d83e16cc53e2794818fd5eae042fafc8e85f005fc7",
-      "kind": "uups"
-    },
-    {
-      "address": "0x628450C97fBb6E9b5b8a3c3061b40Fa9af7362df",
-      "txHash": "0x6cb43687b6690e6cb56a6fe1ee19d71c5ae8e8636a4f671e0fcbc129142a4f7f",
-      "kind": "uups"
-    },
-    {
-      "address": "0x30C9C013B4aEb5924dB2B4f0082E32cc817e5a13",
-      "txHash": "0x6f03adee47d77c0db29ad45447ba2ff6d634958c8b8995a1ec30aaf71ed994fa",
-      "kind": "uups"
-    },
-    {
-      "address": "0x32785D5D41cD40dB0D5706bb375EeAA96ce87455",
-      "txHash": "0x409758d7a3654a826eb59fccaceedc1fec1a395a9b3a09dc35885bc9e3505dcc",
-      "kind": "uups"
-    },
-    {
-      "address": "0x481e787152Cb9520b2B94d61A04C16b29CE6dfd1",
-      "txHash": "0x3773774700f143d6824d713f0fe6b535be1eb2014dec104690b8ef2693a724a6",
-      "kind": "uups"
-    },
-    {
-      "address": "0xda5485daBD2954D774B5b72f9948E68491069EcA",
-      "txHash": "0xf5a6ebd74b8fe0c4484e695efa3b9147f9c58d93fda9bf747e93587fe9f89ce4",
-      "kind": "uups"
-    },
-    {
-      "address": "0x23574Ce1d68d6dF0e4bD40c22Fb0cBe11f76ac0b",
-      "txHash": "0xdc174b775f0bd8627673a45976105acff83af91e08aa8bbe8422e7cb9e7063ad",
-      "kind": "uups"
-    },
-    {
-      "address": "0x42018373859BFB03967Ea52fe9ceBC3ef7dB336a",
-      "txHash": "0x438ac616032f493276d0a3496594457bbcc3ced30767b8ee552aad23a58ec9e3",
-      "kind": "uups"
-    },
-    {
-      "address": "0xac7A8f474a30aC464A92dbC0C9Ca5a9082f84f39",
-      "txHash": "0x5189d63088787aab9fc5d75cd2157c41c59db7a8272c22d4fa3cf7c5ccc83953",
-      "kind": "uups"
-    },
-    {
-      "address": "0x907ea2115E239E9AE0CdB847d97F8cdB47e02E44",
-      "txHash": "0xf510bb01c541aca44c54cfec48d33e17425c638a400cb09712929eadb5dd3db0",
-      "kind": "uups"
-    },
-    {
-      "address": "0x1e3892B5e996888d3C824F4bcDEE7cE983Dc6B7c",
-      "txHash": "0x65955f5d90b5509a4d956c2e30557073e72ad9fa72b23cf6ac354db73532ec1e",
-      "kind": "uups"
-    },
-    {
-      "address": "0x588E1F78bBd7383FFE5f981DdF0909b246315B4f",
-      "txHash": "0x35505e8bca168fe176e6de0b41c582a7b4eb7efadf4742d30d87fe28948bda09",
-      "kind": "uups"
-    },
-    {
-      "address": "0xcc2f02F2933407BdCBe65b0352A0E6B8525CE225",
-      "txHash": "0xbcf7e0c437137cd26a2d8f73a6a98027c62fd97ad2ebe44eb540357904765080",
-      "kind": "uups"
-    },
-    {
-      "address": "0x6E4B921233DE01Fb1AbAe5F9422f3bD2a48D69a6",
-      "txHash": "0x2c3c2c6107cb8f652989e73a024a51b68a3c5fa3c5e36e768388092d198404d1",
-      "kind": "uups"
-    },
-    {
-      "address": "0x42b6E5ea598Cd7FAeaE5D4c0b2ccD268D0f8c4Ed",
-      "txHash": "0xcb2c7b4b4e5c4e5d39fdd2d2948411b123ff73f8d5d3ccd84200e8d351dca439",
+      "address": "0xEd27C2fe9310a728dFE1ff0dD19EB2FC820bD9F8",
+      "txHash": "0xac46d5e41ca2e54025400ed51ab85e6d403f3f7e080f84caa55afefa32e53766",
       "kind": "uups"
     }
   ],
   "impls": {
-    "99910f42e0aaf413471d08e4184761b23e7bc46d58cddc1b1ede293f060bc099": {
-      "address": "0xa74995359704872D0Fb9daEbb49e478bc3F8BC26",
-      "txHash": "0x3a2b78772b056ddb36097c50a5f4c81e56ca4fc969554d65ae7868cc901f9612",
+    "ea63ffaa3e6452034df25e5e00af4d6b36cc69212d95878f38a58a24702ac4fc": {
+      "address": "0xA141C58f8289c47c0D55737357885D8eA60934d4",
+      "txHash": "0x8859fe513a9c40206ea4d6f213c08b3059b5139be2fbb27ace7edbf7ea7fa352",
       "layout": {
         "solcVersion": "0.8.20",
         "storage": [
@@ -316,9 +231,9 @@
         "namespaces": {}
       }
     },
-    "0a53a93823fb5a154ebebaca943c71ea4c80feae9eacad3b5b00d4b82c248cd8": {
-      "address": "0xD6D279f4CD6DF75a62519423e51e06C4b42D82F7",
-      "txHash": "0x3250c0e9acaaf71bc79bdd43a7ef0056a3fc513d52af34a2890cbef430bbeb6c",
+    "9f37694df550f11d2d0bc901fc79b009c74e99132f6a06a711f96fda74ec0c1e": {
+      "address": "0x2301736ab6Aa37C32AF02C669991F9421D15DA4B",
+      "txHash": "0xd72b671d076ae07030483629f750cf1b1a6dc149c53ee1daa76cf2234a284e25",
       "layout": {
         "solcVersion": "0.8.20",
         "storage": [
@@ -450,6 +365,46 @@
             "type": "t_uint16",
             "contract": "FacesNFT",
             "src": "contracts/01-SimpleNFT_V2.sol:12"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "302",
+            "type": "t_uint256",
+            "contract": "FacesNFT",
+            "src": "contracts/01-SimpleNFT_V2.sol:15"
+          },
+          {
+            "label": "__gap2",
+            "offset": 0,
+            "slot": "303",
+            "type": "t_uint256",
+            "contract": "FacesNFT",
+            "src": "contracts/01-SimpleNFT_V2.sol:16"
+          },
+          {
+            "label": "__gap3",
+            "offset": 0,
+            "slot": "304",
+            "type": "t_uint256",
+            "contract": "FacesNFT",
+            "src": "contracts/01-SimpleNFT_V2.sol:17"
+          },
+          {
+            "label": "__gap4",
+            "offset": 0,
+            "slot": "305",
+            "type": "t_uint256",
+            "contract": "FacesNFT",
+            "src": "contracts/01-SimpleNFT_V2.sol:18"
+          },
+          {
+            "label": "__gap5",
+            "offset": 0,
+            "slot": "306",
+            "type": "t_uint256",
+            "contract": "FacesNFT",
+            "src": "contracts/01-SimpleNFT_V2.sol:19"
           }
         ],
         "types": {
@@ -510,8 +465,8 @@
       }
     },
     "2247012e7df8826762ac5efc5bcc65cd1d777ae130feb05af4f2e50bea68ddde": {
-      "address": "0x9f3f250F8a90df801cC93017a327e1DAC76AE990",
-      "txHash": "0x900748ea97a3cfd2f296e2acc6d403f26f1b0c4d63761a348e3ff461d6c54efa",
+      "address": "0xC7B5a7Fc49e31A77854C4dcf3Bbb442d01b4d190",
+      "txHash": "0x1f947a4c6706fc48f5ca1c848ce6b84518eacad442eb43c2b85ff33da9de6038",
       "layout": {
         "solcVersion": "0.8.20",
         "storage": [
@@ -683,8 +638,8 @@
       }
     },
     "bc37ab652157681530193e38e167f1da8992bc762861d9c57388bd3f58da0ca6": {
-      "address": "0x7e596af8F9A0e867084a16b82Fdec9dC07dF9d8B",
-      "txHash": "0x7c2f1e8f437309eabcaa290ae73940a3e3992e9a86e166400e641dbe55541845",
+      "address": "0xCf8aED3dc26e10603717c9f13200a3dB27421255",
+      "txHash": "0xce3748344d24a50fda4506503a32dca3c54f3128bd647dab47209861d616e209",
       "layout": {
         "solcVersion": "0.8.20",
         "storage": [
@@ -888,8 +843,8 @@
       }
     },
     "445ace485080a4490ce2985b2725e712764bf3a657d47c4a12fb6ad819b29961": {
-      "address": "0xB26aEc377CF85e70aC89bE1edaD8bAa97F9b3DAb",
-      "txHash": "0x487b5eb2f59cc8025a319064c551a1e708a91e1bb47a6e49a481faf7c844ef7e",
+      "address": "0xA48132e8Af02133193a71519C9dB0498C2D8C38f",
+      "txHash": "0x320608b726d3fab863d900a394b1dc724d2e3038e38fa38b061cbdd5c95b9cdc",
       "layout": {
         "solcVersion": "0.8.20",
         "storage": [
@@ -954,7 +909,7 @@
             "label": "token",
             "offset": 0,
             "slot": "201",
-            "type": "t_contract(ExchangeVisageToken)4877",
+            "type": "t_contract(ExchangeVisageToken)4947",
             "contract": "VisageExchange",
             "src": "contracts/02-Exchange.sol:123"
           },
@@ -962,7 +917,7 @@
             "label": "nft",
             "offset": 0,
             "slot": "202",
-            "type": "t_contract(ExchangeVisageNFT)4988",
+            "type": "t_contract(ExchangeVisageNFT)5058",
             "contract": "VisageExchange",
             "src": "contracts/02-Exchange.sol:124"
           }
@@ -984,11 +939,11 @@
             "label": "bool",
             "numberOfBytes": "1"
           },
-          "t_contract(ExchangeVisageNFT)4988": {
+          "t_contract(ExchangeVisageNFT)5058": {
             "label": "contract ExchangeVisageNFT",
             "numberOfBytes": "20"
           },
-          "t_contract(ExchangeVisageToken)4877": {
+          "t_contract(ExchangeVisageToken)4947": {
             "label": "contract ExchangeVisageToken",
             "numberOfBytes": "20"
           },
@@ -1005,8 +960,8 @@
       }
     },
     "bbf78152722722df86fff974db1e5241ceadeedc075c20459188dc562d28757e": {
-      "address": "0xD9086F6a2ACb789b72Dac140C957BD7a76E726c3",
-      "txHash": "0xc3ff3c60728ecabb019844bc0103da3b153cce9b416ebe962923cfc8e78ac1e9",
+      "address": "0x9fF719C09e2CDBDaD227ea68D14040438f4daC4F",
+      "txHash": "0xb9985450245869e1edfb65c459fc62ea4b181b387277f6bf9f17188d6a2c85ef",
       "layout": {
         "solcVersion": "0.8.20",
         "storage": [
@@ -1178,8 +1133,8 @@
       }
     },
     "343618a254825bf13c3ac6df45d0ca36f617b1493090951113a24e4b5e6bf8f1": {
-      "address": "0xC86897A781C1a6f1C2ba801dAbbB43227825776B",
-      "txHash": "0x2e509bc6ac406b8141b100de80674ad9fa93d61f864f7e92cd4a4dd4c353cc24",
+      "address": "0xC5a6e088dDd13AB8D2A5A44e4Fbe383eeEa5c1cA",
+      "txHash": "0x3f1f6673394616a9f6b24ef212af6d652d9f418f146ccfc0a9d1b8e7e82754b3",
       "layout": {
         "solcVersion": "0.8.20",
         "storage": [
@@ -1383,8 +1338,8 @@
       }
     },
     "5fafd612e4017daf8c07349089adcb022483a891e8d902b59231a45d122d5623": {
-      "address": "0xC9e108FE04120cC3da6e40e83a12251C2b54A984",
-      "txHash": "0xcc8c312a0a8990f056ada1c66eddf6c7983aab855ce841a8804c5bb6bf164a0b",
+      "address": "0x64eb00e73a5F7A257F3bAEbDa644fA356442084d",
+      "txHash": "0x75c3d560e20161e9ff558a1a6f2c3ff069d6eaedbd261a2221fa120857ee57f1",
       "layout": {
         "solcVersion": "0.8.20",
         "storage": [
@@ -1465,7 +1420,7 @@
             "label": "stakes",
             "offset": 0,
             "slot": "251",
-            "type": "t_mapping(t_uint256,t_struct(Stake)5630_storage)",
+            "type": "t_mapping(t_uint256,t_struct(Stake)5700_storage)",
             "contract": "VisageStaking",
             "src": "contracts/03-Staking.sol:123"
           },
@@ -1473,7 +1428,7 @@
             "label": "_nft",
             "offset": 0,
             "slot": "252",
-            "type": "t_contract(StakingVisageNFT)5613",
+            "type": "t_contract(StakingVisageNFT)5683",
             "contract": "VisageStaking",
             "src": "contracts/03-Staking.sol:129"
           },
@@ -1481,7 +1436,7 @@
             "label": "_token",
             "offset": 0,
             "slot": "253",
-            "type": "t_contract(StakingVisageToken)5496",
+            "type": "t_contract(StakingVisageToken)5566",
             "contract": "VisageStaking",
             "src": "contracts/03-Staking.sol:130"
           }
@@ -1503,19 +1458,19 @@
             "label": "bool",
             "numberOfBytes": "1"
           },
-          "t_contract(StakingVisageNFT)5613": {
+          "t_contract(StakingVisageNFT)5683": {
             "label": "contract StakingVisageNFT",
             "numberOfBytes": "20"
           },
-          "t_contract(StakingVisageToken)5496": {
+          "t_contract(StakingVisageToken)5566": {
             "label": "contract StakingVisageToken",
             "numberOfBytes": "20"
           },
-          "t_mapping(t_uint256,t_struct(Stake)5630_storage)": {
+          "t_mapping(t_uint256,t_struct(Stake)5700_storage)": {
             "label": "mapping(uint256 => struct VisageStaking.Stake)",
             "numberOfBytes": "32"
           },
-          "t_struct(Stake)5630_storage": {
+          "t_struct(Stake)5700_storage": {
             "label": "struct VisageStaking.Stake",
             "members": [
               {
