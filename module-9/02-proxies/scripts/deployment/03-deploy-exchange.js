@@ -1,7 +1,21 @@
 const { ethers, upgrades, network } = require("hardhat");
 const { saveAddresses } = require("../utils/addresses");
+require('dotenv').config();
 
 async function main() {
+  // Validate required environment variables
+  if (!process.env.LEDGER_ACCOUNT) {
+    console.error("\n❌ ERROR: LEDGER_ACCOUNT environment variable is not set in .env file");
+    console.error("Please add LEDGER_ACCOUNT=0xYourLedgerAddress to your .env file");
+    process.exit(1);
+  }
+  
+  if (!process.env.TEST_ACCOUNT) {
+    console.error("\n❌ ERROR: TEST_ACCOUNT environment variable is not set in .env file");
+    console.error("Please add TEST_ACCOUNT=0xYourSecondAddress to your .env file");
+    process.exit(1);
+  }
+
   console.log("Deploying Exchange system");
   console.log("Network:", network.name);
   console.log("Chain ID:", network.config.chainId);

@@ -1,0 +1,26 @@
+{
+  "nft": {
+    "proxy": "0xac7A8f474a30aC464A92dbC0C9Ca5a9082f84f39",
+    "implementationV1": "0xa74995359704872D0Fb9daEbb49e478bc3F8BC26",
+    "admin": "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86",
+    "implementationV2": "0xa74995359704872D0Fb9daEbb49e478bc3F8BC26"
+  },
+  "exchange": {
+    "token": "0x907ea2115E239E9AE0CdB847d97F8cdB47e02E44",
+    "tokenImpl": "0x9f3f250F8a90df801cC93017a327e1DAC76AE990",
+    "nft": "0x1e3892B5e996888d3C824F4bcDEE7cE983Dc6B7c",
+    "nftImpl": "0x7e596af8F9A0e867084a16b82Fdec9dC07dF9d8B",
+    "exchange": "0x588E1F78bBd7383FFE5f981DdF0909b246315B4f",
+    "exchangeImpl": "0xB26aEc377CF85e70aC89bE1edaD8bAa97F9b3DAb",
+    "admin": "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86"
+  },
+  "staking": {
+    "token": "0xcc2f02F2933407BdCBe65b0352A0E6B8525CE225",
+    "tokenImpl": "0xD9086F6a2ACb789b72Dac140C957BD7a76E726c3",
+    "nft": "0x6E4B921233DE01Fb1AbAe5F9422f3bD2a48D69a6",
+    "nftImpl": "0xC86897A781C1a6f1C2ba801dAbbB43227825776B",
+    "staking": "0x42b6E5ea598Cd7FAeaE5D4c0b2ccD268D0f8c4Ed",
+    "stakingImpl": "0xC9e108FE04120cC3da6e40e83a12251C2b54A984",
+    "admin": "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86"
+  }
+}

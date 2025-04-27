@@ -19,6 +19,8 @@ The project involves three main systems:
 - `04-XX` - Staking system scripts
 - `05-XX` - Verification scripts
 - `06-XX` - Testing scripts
+- `07-XX` - Etherscan implementation verification scripts
+- `08-XX` - Etherscan proxy verification scripts
 
 ## Improved Deployment Workflow
 
@@ -122,6 +124,41 @@ The same scripts work for Sepolia deployments with Ledger wallets! The scripts a
    npx hardhat run scripts/deployment/06-test-basic-functionality.js --network sepolia
    ```
 
+## Etherscan Verification
+
+To verify your contracts on Etherscan, follow these steps:
+
+1. Make sure you have an Etherscan API key and add it to your `.env` file:
+   ```
+   ETHERSCAN_API_KEY=your_api_key_here
+   ```
+
+2. First, verify all implementation contracts:
+   ```
+   npx hardhat run scripts/deployment/07-verify-contracts.js --network sepolia
+   ```
+
+3. Then initiate proxy verification:
+   ```
+   npx hardhat run scripts/deployment/08-verify-proxies.js --network sepolia
+   ```
+
+4. Follow the instructions in the script output to complete proxy verification on Etherscan:
+   - Go to the proxy contract address on Etherscan
+   - Click on "More Options" > "Is this a proxy?" > "Verify"
+   - If the implementation is properly verified, Etherscan will recognize it
+   - You'll now be able to read and interact with the proxy's functions correctly
+
+### Troubleshooting Verification
+
+If you encounter issues with proxy verification on Etherscan:
+
+1. Make sure ALL implementation contracts are properly verified first (using script 07)
+2. Check that you're using the correct contract names/paths in the verification script
+3. Ensure your Etherscan API key is correct and has not exceeded rate limits
+4. For manual verification, visit the proxy address on Etherscan and use the "Is this a proxy?" option
+5. If a proxy verification fails, try again later as Etherscan may have processing delays
+
 ## Hardware Wallet Support
 
 When using a Ledger or other hardware wallet with the `--network sepolia` flag, the scripts will:
@@ -162,7 +199,6 @@ To ensure proper deployment:
 - Always check the `.addresses.{network}.json` file for the deployed addresses for your specific network.
 - Use `00-init.js` when you want to start a fresh deployment from scratch.
 - The V1->V2 upgrade should show different implementation addresses in the report.
-- For the instructor, provide the deployment report with the three required contract URLs.
 - On Sepolia, you'll need to confirm each transaction on your Ledger device.
 - Deployment to Sepolia requires significant gas, ensure you have enough Sepolia ETH.
 

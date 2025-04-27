@@ -5,7 +5,10 @@
   "main": "index.js",
   "scripts": {
     "test": "hardhat test",
-    "compile": "hardhat compile"
+    "compile": "hardhat compile",
+    "verify-impl": "hardhat run scripts/deployment/07-verify-contracts.js --network sepolia",
+    "verify-proxies": "hardhat run scripts/deployment/08-verify-proxies.js --network sepolia",
+    "generate-report": "hardhat run scripts/deployment/05-verify-and-report.js --network sepolia"
   },
   "keywords": [],
   "author": "",

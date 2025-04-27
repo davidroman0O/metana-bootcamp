@@ -1,10 +1,26 @@
 const { ethers, network } = require("hardhat");
 const { getAddresses } = require("../utils/addresses");
+require('dotenv').config();
 
 async function main() {
   console.log("\nTesting basic functionality of deployed contracts");
   console.log("Network:", network.name);
   console.log("Chain ID:", network.config.chainId);
+  
+  // FEATURE 1: Check LEDGER_ACCOUNT and TEST_ACCOUNT for Sepolia
+  if (network.name === "sepolia") {
+    if (!process.env.LEDGER_ACCOUNT) {
+      console.error("\n❌ ERROR: LEDGER_ACCOUNT environment variable is not set in .env file");
+      console.error("Please add LEDGER_ACCOUNT=0xYourLedgerAddress to your .env file");
+      process.exit(1);
+    }
+    
+    if (!process.env.TEST_ACCOUNT) {
+      console.error("\n❌ ERROR: TEST_ACCOUNT environment variable is not set in .env file");
+      console.error("Please add TEST_ACCOUNT=0xYourSecondAddress to your .env file");
+      process.exit(1);
+    }
+  }
   
   // Get the signer
   const [deployer, testUser] = await ethers.getSigners();
@@ -26,6 +42,26 @@ async function main() {
     console.log("  3. The Ethereum app is open");
     console.log("  4. Contract data is allowed in the Ethereum app settings");
     console.log("  5. You'll need to confirm multiple transactions on your device\n");
+  }
+  
+  // FEATURE 2: Check balances for Sepolia
+  if (network.name === "sepolia") {
+    console.log("\n🔍 Checking account balances before tests:");
+    const deployerBalance = await ethers.provider.getBalance(deployer.address);
+    console.log(`Deployer (${deployer.address}) ETH balance: ${ethers.formatEther(deployerBalance)} ETH`);
+    
+    if (ethers.formatEther(deployerBalance) < 0.2) {
+      console.log("⚠️ WARNING: Deployer account has less than 0.2 ETH. Tests might fail due to insufficient funds.");
+    }
+    
+    if (hasTestUser) {
+      const testUserBalance = await ethers.provider.getBalance(testUser.address);
+      console.log(`Test user (${testUser.address}) ETH balance: ${ethers.formatEther(testUserBalance)} ETH`);
+      
+      if (ethers.formatEther(testUserBalance) < 0.2) {
+        console.log("⚠️ WARNING: Test user account has less than 0.2 ETH. Tests requiring this account might fail.");
+      }
+    }
   }
   
   // Get all addresses
@@ -205,6 +241,16 @@ async function main() {
       await runTest("Exchange - Mint NFT", async () => {
         const initialNftBalance = await nft.balanceOf(deployer.address);
         
+        // FEATURE 3: Check token balance before purchasing NFT
+        const tokenBalance = await token.balanceOf(deployer.address);
+        console.log(`   Current token balance: ${ethers.formatEther(tokenBalance)}`);
+        
+        if (Number(tokenBalance) < ethers.parseEther("10")) {
+          console.log("   ⚠️ Skipping test: not enough tokens (needs 10)");
+          testsSkipped++;
+          return;
+        }
+        
         // Approve tokens for the purchase (hardcoding price to 10 tokens as in contract)
         const nftPrice = ethers.parseEther("10");
         const approveTx = await token.approve(exchange.target, nftPrice);
@@ -278,6 +324,16 @@ async function main() {
         // Connect testUser to exchange and token contracts
         const connectExchange = exchange.connect(testUser);
         const connectToken = token.connect(testUser);
+        
+        // FEATURE 3: Check token balance before purchasing NFT
+        const tokenBalance = await connectToken.balanceOf(testUser.address);
+        console.log(`   Test user current token balance: ${ethers.formatEther(tokenBalance)}`);
+        
+        if (Number(tokenBalance) < ethers.parseEther("10")) {
+          console.log("   ⚠️ Skipping test: test user doesn't have enough tokens (needs 10)");
+          testsSkipped++;
+          return;
+        }
         
         // Approve tokens for the NFT purchase
         const nftPrice = ethers.parseEther("10"); // Default price
@@ -355,6 +411,16 @@ async function main() {
       // Test NFT minting through staking
       await runTest("Staking - Mint NFT", async () => {
         const initialNftBalance = await nft.balanceOf(deployer.address);
+        
+        // FEATURE 3: Check token balance before purchasing NFT
+        const tokenBalance = await token.balanceOf(deployer.address);
+        console.log(`   Current token balance: ${ethers.formatEther(tokenBalance)}`);
+        
+        if (Number(tokenBalance) < ethers.parseEther("10")) {
+          console.log("   ⚠️ Skipping test: not enough tokens (needs 10)");
+          testsSkipped++;
+          return;
+        }
         
         // Need to approve tokens for NFT
         const nftPrice = ethers.parseEther("10"); // Using 10 tokens as default

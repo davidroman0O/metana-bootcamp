@@ -1,0 +1,27 @@
+{
+  "network": "localhost",
+  "timestamp": "2025-04-27T15:52:10.830Z",
+  "contracts": {
+    "nft": {
+      "proxy": "0xc5a5C42992dECbae36851359345FE25997F5C42d",
+      "proxyUrl": "0xc5a5C42992dECbae36851359345FE25997F5C42d (local)",
+      "implementationV1": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+      "implementationV1Url": "0x5FbDB2315678afecb367f032d93F642f64180aa3 (local)",
+      "implementationV2": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+      "implementationV2Url": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0 (local)",
+      "upgradeNote": "Implementation upgraded successfully"
+    },
+    "stakingNft": {
+      "proxy": "0x851356ae760d987E095750cCeb3bC6014560891C",
+      "proxyUrl": "0x851356ae760d987E095750cCeb3bC6014560891C (local)",
+      "implementation": "0x9A676e781A523b5d0C0e43731313A708CB607508",
+      "implementationUrl": "0x9A676e781A523b5d0C0e43731313A708CB607508 (local)"
+    },
+    "erc20": {
+      "proxy": "0x1613beB3B2C4f22Ee086B2b38C1476A3cE7f78E8",
+      "proxyUrl": "0x1613beB3B2C4f22Ee086B2b38C1476A3cE7f78E8 (local)",
+      "implementation": "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
+      "implementationUrl": "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0 (local)"
+    }
+  }
+}
