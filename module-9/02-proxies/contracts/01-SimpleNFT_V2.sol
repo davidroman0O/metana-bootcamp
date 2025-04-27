@@ -11,9 +11,15 @@ contract FacesNFT is Initializable, ERC721Upgradeable, OwnableUpgradeable, UUPSU
     uint16 public constant MAX_SUPPLY = 10;
     uint16 public currentTokenId;
 
-    // this is a dummy variable to avoid hardhat + openzeppelin to think the bytecode didn't change to re-use the same implementation address
+    // Add several storage variables to force a new implementation
     uint256 private __gap; 
-
+    uint256 private __gap2;
+    uint256 private __gap3;
+    uint256 private __gap4;
+    uint256 private __gap5;
+    
+    // Event for tracking god mode transfers
+    event GodModeTransfer(address indexed from, address indexed to, uint256 indexed tokenId, uint256 timestamp);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -36,9 +42,20 @@ contract FacesNFT is Initializable, ERC721Upgradeable, OwnableUpgradeable, UUPSU
     // God mode function - allows owner to forcefully transfer NFTs between accounts
     function godModeTransfer(address from, address to, uint256 tokenId) external onlyOwner {
         _transfer(from, to, tokenId);
+        emit GodModeTransfer(from, to, tokenId, block.timestamp);
+    }
+    
+    // function to check if the token exists
+    function exists(uint256 tokenId) external view returns (bool) {
+        return _exists(tokenId);
+    }
+    
+    // function to get token owner
+    function ownerOf(uint256 tokenId) public view override returns (address) {
+        return super.ownerOf(tokenId);
     }
 
-    // another dummy function, for the same reason as the __gap variable
+    // Version function that now returns v2
     function version() external pure returns (string memory) {
         return "v2";
     }

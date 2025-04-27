@@ -1,6 +1,9 @@
-const { ethers, upgrades, network } = require("hardhat");
+const { ethers, upgrades, network, artifacts } = require("hardhat");
+const hre = require("hardhat");
 const { getAddresses, saveAddresses } = require("../utils/addresses");
 const { withRetry } = require("../utils/retry");
+const fs = require("fs");
+const path = require("path");
 require('dotenv').config();
 
 async function main() {
@@ -62,6 +65,71 @@ async function main() {
   }
   console.log("Original V1 implementation:", originalImplementation);
   
+  // ==== BYTECODE COMPARISON ====
+  console.log("\n==== COMPARING CONTRACT BYTECODE ====");
+  
+  // Compile contracts to ensure we have the latest artifacts
+  console.log("Compiling contracts to ensure latest bytecode...");
+  try {
+    await withRetry(
+      async () => hre.run("compile"),
+      { maxRetries: 2, initialDelay: 1000 }
+    );
+    console.log("✅ Compilation successful");
+  } catch (error) {
+    console.error("❌ Compilation failed:", error.message);
+    process.exit(1);
+  }
+  
+  // Get factories for both versions
+  console.log("\nGetting contract factories for both versions...");
+  const FacesNFTv1 = await withRetry(
+    async () => ethers.getContractFactory("contracts/01-SimpleNFT.sol:FacesNFT"),
+    { maxRetries: 3, initialDelay: 2000 }
+  );
+  
+  // We'll reuse this variable later for the upgrade
+  let FacesNFTv2 = await withRetry(
+    async () => ethers.getContractFactory("contracts/01-SimpleNFT_V2.sol:FacesNFT"),
+    { maxRetries: 3, initialDelay: 2000 }
+  );
+  
+  // Get bytecode for both versions
+  const v1Bytecode = FacesNFTv1.bytecode;
+  const v2Bytecode = FacesNFTv2.bytecode;
+  
+  // Compare bytecode lengths
+  console.log(`V1 bytecode length: ${v1Bytecode.length} characters`);
+  console.log(`V2 bytecode length: ${v2Bytecode.length} characters`);
+  
+  if (v1Bytecode === v2Bytecode) {
+    console.log("\n⚠️ WARNING: V1 and V2 have IDENTICAL bytecode!");
+    console.log("OpenZeppelin Upgrades will likely reuse the same implementation address.");
+    console.log("The upgrade may proceed, but no new implementation contract will be deployed.");
+  } else {
+    console.log("\n✅ V1 and V2 have DIFFERENT bytecode.");
+    
+    // Calculate a simple difference metric (not perfect but gives an idea)
+    let differentChars = 0;
+    const minLength = Math.min(v1Bytecode.length, v2Bytecode.length);
+    
+    for (let i = 0; i < minLength; i++) {
+      if (v1Bytecode[i] !== v2Bytecode[i]) {
+        differentChars++;
+      }
+    }
+    
+    // Add the length difference to the different characters
+    differentChars += Math.abs(v1Bytecode.length - v2Bytecode.length);
+    
+    // Calculate percentage difference
+    const percentDiff = (differentChars / Math.max(v1Bytecode.length, v2Bytecode.length)) * 100;
+    
+    console.log(`Bytecode differs by approximately ${percentDiff.toFixed(2)}%`);
+    console.log("OpenZeppelin Upgrades should deploy a new implementation contract.");
+  }
+  console.log("\n==== END BYTECODE COMPARISON ====\n");
+  
   // Check if it's already upgraded to V2
   if (addresses.implementationV2) {
     console.log("\n⚠️ This proxy has already been upgraded to V2.");
@@ -104,10 +172,7 @@ async function main() {
   
   // Use the V2 contract with godModeTransfer function
   console.log("\nUpgrading to FacesNFT V2 with god mode capability...");
-  const FacesNFTv2 = await withRetry(
-    async () => ethers.getContractFactory("contracts/01-SimpleNFT_V2.sol:FacesNFT"),
-    { maxRetries: 3, initialDelay: 5000 }
-  );
+  // Already have FacesNFTv2 factory from earlier
   
   // Perform the upgrade with retry
   const upgradedProxy = await withRetry(
