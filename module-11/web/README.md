@@ -65,26 +65,6 @@ The project uses environment variables for sensitive data and configuration:
    - JSON-RPC communication: Direct implementation without library abstractions
    - Network interaction: Manually constructs and submits RPC calls
 
-## Test Suite
-
-The project includes several test files to verify different aspects of the wallet implementation:
-
-### Core Test Files
-
-- `wallet.assignment.test.ts`: Comprehensive test demonstrating all required functionality
-- `simple.transfer.test.ts`: A simple test to verify address derivation and transaction sending
-- `wallet.encoding.test.ts`: Tests for RLP encoding and transaction signing with known values
-- `wallet.rpc.test.ts`: Tests for RPC interactions with mocked network responses
-- `wallet.transaction.test.ts`: Tests for transaction preparation and signing
-- `wallet.smalltransfer.test.ts`: Detailed test focusing specifically on 0.00001 ETH self-transfers
-
-### Utility Test Files
-
-- `wallet.fundcheck.js`: Simple script to check wallet balance
-- `wallet.debug.js`: Debugging script for wallet implementation issues
-- `wallet.directsend.js`: Script for sending very small transactions
-- `test-wallet.ts`: Address derivation and verification tests
-
 ### Running Tests
 
 #### Setup
@@ -164,17 +144,3 @@ cp .env.example .env
 npm start
 ```
 
-## Security Notice
-
-- This wallet is for educational purposes only
-- All tests should use Sepolia testnet addresses only
-- Never use your real private keys with this implementation
-- Always store private keys in the `.env` file, never in source code
-
-## Assignment Compliance
-
-This implementation strictly follows the assignment requirements by:
-1. Not using existing wallet libraries for account management or transaction handling
-2. Manually implementing nonce management, gas estimation, and transaction construction
-3. Using only allowed cryptographic libraries for hashing and signing operations
-4. Testing on a testnet (Sepolia) 
