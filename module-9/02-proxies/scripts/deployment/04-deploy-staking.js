@@ -1,0 +1,238 @@
+const { ethers, upgrades, network } = require("hardhat");
+const { saveAddresses } = require("../utils/addresses");
+const { withRetry } = require("../utils/retry");
+require('dotenv').config();
+
+async function main() {
+  // Validate required environment variables
+  if (!process.env.LEDGER_ACCOUNT) {
+    console.error("\n❌ ERROR: LEDGER_ACCOUNT environment variable is not set in .env file");
+    console.error("Please add LEDGER_ACCOUNT=0xYourLedgerAddress to your .env file");
+    process.exit(1);
+  }
+  
+  if (!process.env.TEST_ACCOUNT) {
+    console.error("\n❌ ERROR: TEST_ACCOUNT environment variable is not set in .env file");
+    console.error("Please add TEST_ACCOUNT=0xYourSecondAddress to your .env file");
+    process.exit(1);
+  }
+
+  console.log("Deploying Staking system");
+  console.log("Network:", network.name);
+  console.log("Chain ID:", network.config.chainId);
+  
+  // Get the signer account with retry
+  const [deployer] = await withRetry(
+    async () => ethers.getSigners(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  const deployerAddress = await withRetry(
+    async () => deployer.getAddress(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  console.log("Deploying with account:", deployerAddress);
+  
+  // Show Ledger instructions if we're on a real network (not localhost/hardhat)
+  if (network.name !== "hardhat" && network.name !== "localhost") {
+    console.log("\n⚠️ IMPORTANT: If using a Ledger or other hardware wallet, please ensure:");
+    console.log("  1. Your device is connected via USB");
+    console.log("  2. The device is unlocked");
+    console.log("  3. The Ethereum app is open");
+    console.log("  4. Contract data is allowed in the Ethereum app settings\n");
+  }
+  
+  // Deploy Staking Token contract
+  console.log("\nDeploying StakingVisageToken...");
+  const StakingVisageToken = await withRetry(
+    async () => ethers.getContractFactory("StakingVisageToken"),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  const stakingToken = await withRetry(
+    async () => upgrades.deployProxy(
+      StakingVisageToken, 
+      [deployerAddress], 
+      { kind: "uups" }
+    ),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  await withRetry(
+    async () => stakingToken.waitForDeployment(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  const stakingTokenAddress = await withRetry(
+    async () => stakingToken.getAddress(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  const tokenImplAddress = await withRetry(
+    async () => upgrades.erc1967.getImplementationAddress(stakingTokenAddress),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  console.log("StakingVisageToken deployed to:", stakingTokenAddress);
+  console.log("Implementation address:", tokenImplAddress);
+  
+  // Get token transaction hash for Etherscan link
+  const tokenDeployTx = stakingToken.deploymentTransaction();
+  if (network.name !== "hardhat" && network.name !== "localhost") {
+    const tokenEtherscanUrl = getEtherscanUrl(network.name, "tx", tokenDeployTx.hash);
+    console.log("View transaction on Etherscan:", tokenEtherscanUrl);
+  }
+
+  // Deploy Staking NFT contract
+  console.log("\nDeploying StakingVisageNFT...");
+  const StakingVisageNFT = await withRetry(
+    async () => ethers.getContractFactory("StakingVisageNFT"),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  const stakingNFT = await withRetry(
+    async () => upgrades.deployProxy(
+      StakingVisageNFT, 
+      [deployerAddress], 
+      { kind: "uups" }
+    ),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  await withRetry(
+    async () => stakingNFT.waitForDeployment(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  const stakingNFTAddress = await withRetry(
+    async () => stakingNFT.getAddress(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  const nftImplAddress = await withRetry(
+    async () => upgrades.erc1967.getImplementationAddress(stakingNFTAddress),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  console.log("StakingVisageNFT deployed to:", stakingNFTAddress);
+  console.log("Implementation address:", nftImplAddress);
+  
+  // Get NFT transaction hash for Etherscan link
+  const nftDeployTx = stakingNFT.deploymentTransaction();
+  if (network.name !== "hardhat" && network.name !== "localhost") {
+    const nftEtherscanUrl = getEtherscanUrl(network.name, "tx", nftDeployTx.hash);
+    console.log("View transaction on Etherscan:", nftEtherscanUrl);
+  }
+
+  // Deploy Staking contract
+  console.log("\nDeploying VisageStaking...");
+  const VisageStaking = await withRetry(
+    async () => ethers.getContractFactory("VisageStaking"),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  const staking = await withRetry(
+    async () => upgrades.deployProxy(
+      VisageStaking, 
+      [
+        deployerAddress,
+        stakingTokenAddress,
+        stakingNFTAddress
+      ], 
+      { kind: "uups" }
+    ),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  await withRetry(
+    async () => staking.waitForDeployment(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  const stakingAddress = await withRetry(
+    async () => staking.getAddress(),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  const stakingImplAddress = await withRetry(
+    async () => upgrades.erc1967.getImplementationAddress(stakingAddress),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  console.log("VisageStaking deployed to:", stakingAddress);
+  console.log("Implementation address:", stakingImplAddress);
+  
+  // Get staking contract transaction hash for Etherscan link
+  const stakingDeployTx = staking.deploymentTransaction();
+  if (network.name !== "hardhat" && network.name !== "localhost") {
+    const stakingEtherscanUrl = getEtherscanUrl(network.name, "tx", stakingDeployTx.hash);
+    console.log("View transaction on Etherscan:", stakingEtherscanUrl);
+  }
+
+  // Transfer ownership of the NFT and token to the staking contract
+  console.log("\nTransferring staking token ownership to staking contract...");
+  const tokenTx = await withRetry(
+    async () => stakingToken.transferOwnership(stakingAddress),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  console.log("Transferring staking NFT ownership to staking contract...");
+  const nftTx = await withRetry(
+    async () => stakingNFT.transferOwnership(stakingAddress),
+    { maxRetries: 3, initialDelay: 5000 }
+  );
+  
+  await Promise.all([
+    withRetry(async () => tokenTx.wait(), { maxRetries: 3, initialDelay: 5000 }),
+    withRetry(async () => nftTx.wait(), { maxRetries: 3, initialDelay: 5000 })
+  ]);
+  
+  console.log("✅ Ownership transferred to staking contract");
+  
+  // Show ownership transfer transactions on Etherscan
+  if (network.name !== "hardhat" && network.name !== "localhost") {
+    console.log("Token ownership transfer:", getEtherscanUrl(network.name, "tx", tokenTx.hash));
+    console.log("NFT ownership transfer:", getEtherscanUrl(network.name, "tx", nftTx.hash));
+  }
+
+  // Save the deployed addresses
+  saveAddresses(network.name, "staking", {
+    token: stakingTokenAddress,
+    tokenImpl: tokenImplAddress,
+    nft: stakingNFTAddress,
+    nftImpl: nftImplAddress,
+    staking: stakingAddress,
+    stakingImpl: stakingImplAddress,
+    admin: deployerAddress
+  });
+  
+  // Show contract addresses on Etherscan
+  if (network.name !== "hardhat" && network.name !== "localhost") {
+    console.log("\nContract Etherscan links:");
+    console.log("Token:", getEtherscanUrl(network.name, "address", stakingTokenAddress));
+    console.log("NFT:", getEtherscanUrl(network.name, "address", stakingNFTAddress));
+    console.log("Staking:", getEtherscanUrl(network.name, "address", stakingAddress));
+  }
+  
+  console.log("\nStaking system deployment complete!");
+}
+
+// Helper function to generate Etherscan URLs
+function getEtherscanUrl(network, type, hash) {
+  let baseUrl;
+  if (network === "sepolia") {
+    baseUrl = "https://sepolia.etherscan.io";
+  } else if (network === "mainnet") {
+    baseUrl = "https://etherscan.io";
+  } else {
+    baseUrl = `https://${network}.etherscan.io`;
+  }
+  
+  return `${baseUrl}/${type}/${hash}`;
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+}); 

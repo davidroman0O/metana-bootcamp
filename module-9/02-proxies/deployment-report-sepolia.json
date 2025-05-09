@@ -1,0 +1,27 @@
+{
+  "network": "sepolia",
+  "timestamp": "2025-04-27T18:53:56.858Z",
+  "contracts": {
+    "nft": {
+      "proxy": "0xdfb63E4641678C08C9301692e1D120AD332eAD94",
+      "proxyUrl": "https://sepolia.etherscan.io/address/0xdfb63E4641678C08C9301692e1D120AD332eAD94",
+      "implementationV1": "0xA141C58f8289c47c0D55737357885D8eA60934d4",
+      "implementationV1Url": "https://sepolia.etherscan.io/address/0xA141C58f8289c47c0D55737357885D8eA60934d4",
+      "implementationV2": "0x2301736ab6Aa37C32AF02C669991F9421D15DA4B",
+      "implementationV2Url": "https://sepolia.etherscan.io/address/0x2301736ab6Aa37C32AF02C669991F9421D15DA4B",
+      "upgradeNote": "Implementation upgraded successfully"
+    },
+    "stakingNft": {
+      "proxy": "0x24a2F6B1a64d47e490125F7693aaAB4bb1674283",
+      "proxyUrl": "https://sepolia.etherscan.io/address/0x24a2F6B1a64d47e490125F7693aaAB4bb1674283",
+      "implementation": "0xC5a6e088dDd13AB8D2A5A44e4Fbe383eeEa5c1cA",
+      "implementationUrl": "https://sepolia.etherscan.io/address/0xC5a6e088dDd13AB8D2A5A44e4Fbe383eeEa5c1cA"
+    },
+    "erc20": {
+      "proxy": "0x91dD2cc96106175D88D3AD002975825E686A0a84",
+      "proxyUrl": "https://sepolia.etherscan.io/address/0x91dD2cc96106175D88D3AD002975825E686A0a84",
+      "implementation": "0x9fF719C09e2CDBDaD227ea68D14040438f4daC4F",
+      "implementationUrl": "https://sepolia.etherscan.io/address/0x9fF719C09e2CDBDaD227ea68D14040438f4daC4F"
+    }
+  }
+}
