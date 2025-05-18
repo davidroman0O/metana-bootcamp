@@ -22,6 +22,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/joho/godotenv"
+	"github.com/tyler-smith/go-bip32"
+	"github.com/tyler-smith/go-bip39"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -66,6 +68,26 @@ type KeyPair struct {
 	PrivateKey *ecdsa.PrivateKey
 	Address    common.Address
 }
+
+// HDWalletInfo holds information about an HD wallet
+type HDWalletInfo struct {
+	Mnemonic     string
+	Seed         string
+	HDPath       string
+	AccountIndex uint32
+}
+
+// HDKeyPair extends KeyPair with HD wallet information
+type HDKeyPair struct {
+	*KeyPair
+	HDInfo *HDWalletInfo
+}
+
+// Add constants for HD paths
+const (
+	// DefaultHDPath is the default derivation path for Ethereum (BIP-44)
+	DefaultHDPath = "m/44'/60'/0'/0/0"
+)
 
 // LoadEnvVariables loads environment variables from .env file and returns true if loaded successfully
 func LoadEnvVariables() bool {
@@ -380,6 +402,16 @@ func GetBaseFee(ctx context.Context, rpcURL string) (*big.Int, error) {
 	return HexToBig(block.BaseFeePerGas)
 }
 
+// GetGasPrice gets the current gas price from the network (for legacy transactions)
+func GetGasPrice(ctx context.Context, rpcURL string) (*big.Int, error) {
+	result, err := CallRPC(ctx, rpcURL, "eth_gasPrice", []interface{}{})
+	if err != nil {
+		return nil, fmt.Errorf("error getting gas price: %w", err)
+	}
+
+	return HexToBig(string(result))
+}
+
 // payloadRLP returns the unsigned payload (no V,R,S) RLP-encoded
 func (t *TX1559) PayloadRLP() ([]byte, error) {
 	type unsigned struct {
@@ -522,4 +554,254 @@ func GetAddressFromPrivateKeyHex(privKeyHex string) (string, error) {
 // FormatTransactionURL formats a transaction URL for Etherscan
 func FormatTransactionURL(txHash string, blockExplorer string) string {
 	return fmt.Sprintf("%s/tx/%s", blockExplorer, txHash)
+}
+
+// Generate a new HD wallet with mnemonic
+func GenerateHDWallet(hdPath string) (*HDKeyPair, error) {
+	// Use default path if not specified
+	if hdPath == "" {
+		hdPath = DefaultHDPath
+	}
+
+	// Generate entropy for mnemonic
+	entropy, err := bip39.NewEntropy(128) // 128 bits = 12 words
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate entropy: %w", err)
+	}
+
+	// Generate mnemonic
+	mnemonic, err := bip39.NewMnemonic(entropy)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate mnemonic: %w", err)
+	}
+
+	return ImportHDWallet(mnemonic, hdPath)
+}
+
+// Import HD wallet from mnemonic
+func ImportHDWallet(mnemonic string, hdPath string) (*HDKeyPair, error) {
+	// Use default path if not specified
+	if hdPath == "" {
+		hdPath = DefaultHDPath
+	}
+
+	// Validate mnemonic
+	if !bip39.IsMnemonicValid(mnemonic) {
+		return nil, errors.New("invalid mnemonic phrase")
+	}
+
+	// Generate seed from mnemonic
+	seed := bip39.NewSeed(mnemonic, "")
+
+	// Parse HD path
+	pathSegments, err := parseHDPath(hdPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid HD path: %w", err)
+	}
+
+	// Create master key from seed
+	masterKey, err := bip32.NewMasterKey(seed)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create master key: %w", err)
+	}
+
+	// Derive child keys
+	key := masterKey
+	for _, segment := range pathSegments {
+		hardened := false
+		childIndex := segment
+
+		// Check if this segment is hardened (has ' suffix in path notation)
+		if segment >= 0x80000000 {
+			hardened = true
+			childIndex = segment - 0x80000000
+		}
+
+		if hardened {
+			key, err = key.NewChildKey(childIndex + 0x80000000)
+		} else {
+			key, err = key.NewChildKey(childIndex)
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to derive child key: %w", err)
+		}
+	}
+
+	// Get private key
+	privateKey := crypto.ToECDSAUnsafe(key.Key)
+
+	// Derive address
+	address := crypto.PubkeyToAddress(privateKey.PublicKey)
+
+	// Create key pair
+	keyPair := &KeyPair{
+		PrivateKey: privateKey,
+		Address:    address,
+	}
+
+	// Extract account index from path
+	accountIndex := uint32(0)
+	if len(pathSegments) >= 5 {
+		accountIndex = pathSegments[4]
+	}
+
+	// Create HD wallet info
+	hdInfo := &HDWalletInfo{
+		Mnemonic:     mnemonic,
+		Seed:         hex.EncodeToString(seed),
+		HDPath:       hdPath,
+		AccountIndex: accountIndex,
+	}
+
+	return &HDKeyPair{
+		KeyPair: keyPair,
+		HDInfo:  hdInfo,
+	}, nil
+}
+
+// DeriveChildAccount derives a new account at the specified index
+func DeriveChildAccount(hdKeyPair *HDKeyPair, index uint32) (*HDKeyPair, error) {
+	// Get base path without the last segment
+	basePath := getBaseHDPath(hdKeyPair.HDInfo.HDPath)
+
+	// Create new path with the specified index
+	newPath := fmt.Sprintf("%s/%d", basePath, index)
+
+	// Import HD wallet with the new path
+	childKeyPair, err := ImportHDWallet(hdKeyPair.HDInfo.Mnemonic, newPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return childKeyPair, nil
+}
+
+// Parse HD path into segments
+func parseHDPath(path string) ([]uint32, error) {
+	if !strings.HasPrefix(path, "m/") {
+		return nil, errors.New("HD path must start with m/")
+	}
+
+	// Remove the 'm/' prefix
+	path = path[2:]
+
+	// Split by '/'
+	parts := strings.Split(path, "/")
+
+	segments := make([]uint32, len(parts))
+	for i, part := range parts {
+		// Check if hardened
+		hardened := strings.HasSuffix(part, "'") || strings.HasSuffix(part, "h")
+
+		// Remove hardened suffix
+		if hardened {
+			part = part[:len(part)-1]
+		}
+
+		// Parse index
+		index, err := strconv.ParseUint(part, 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("invalid path segment '%s': %w", part, err)
+		}
+
+		// Add hardened flag if needed
+		if hardened {
+			segments[i] = uint32(index) + 0x80000000
+		} else {
+			segments[i] = uint32(index)
+		}
+	}
+
+	return segments, nil
+}
+
+// Get base HD path (without last segment)
+func getBaseHDPath(path string) string {
+	if !strings.HasPrefix(path, "m/") {
+		return path
+	}
+
+	// Split by '/'
+	parts := strings.Split(path, "/")
+
+	// If there's only 'm', return the full path
+	if len(parts) <= 1 {
+		return path
+	}
+
+	// Return all parts except the last one
+	return strings.Join(parts[:len(parts)-1], "/")
+}
+
+// SendEIP1559Transaction sends an EIP-1559 transaction with the specified parameters
+func SendEIP1559Transaction(ctx context.Context, fromKeyPair *KeyPair, toAddress string, valueWei *big.Int, rpcURL string, priorityFeeWei *big.Int) (string, error) {
+	// Get chain ID
+	chainID, err := GetChainID(ctx, rpcURL)
+	if err != nil {
+		return "", err
+	}
+
+	// Get nonce
+	nonce, err := GetNonce(ctx, fromKeyPair.Address, rpcURL)
+	if err != nil {
+		return "", err
+	}
+
+	// Estimate gas
+	gasLimit, err := EstimateGas(ctx, fromKeyPair.Address.Hex(), toAddress, valueWei, rpcURL)
+	if err != nil {
+		return "", err
+	}
+
+	// Get base fee
+	baseFee, err := GetBaseFee(ctx, rpcURL)
+	if err != nil {
+		baseFee = big.NewInt(30_000_000_000) // 30 gwei default
+	}
+
+	// If priority fee is not specified, use a default of 1.5 gwei
+	if priorityFeeWei == nil {
+		priorityFeeWei = big.NewInt(1_500_000_000) // 1.5 gwei
+	}
+
+	// Calculate max fee: baseFee * 2 + priorityFee
+	maxFeePerGas := new(big.Int).Mul(baseFee, big.NewInt(2))
+	maxFeePerGas = new(big.Int).Add(maxFeePerGas, priorityFeeWei)
+
+	// Decode to address
+	var to [20]byte
+	toBytes, err := HexDecode(toAddress)
+	if err != nil {
+		return "", fmt.Errorf("error decoding to address: %w", err)
+	}
+	copy(to[:], toBytes)
+
+	// Create transaction
+	tx := &TX1559{
+		ChainID:              chainID,
+		Nonce:                nonce,
+		MaxPriorityFeePerGas: priorityFeeWei,
+		MaxFeePerGas:         maxFeePerGas,
+		GasLimit:             gasLimit,
+		To:                   &to,
+		Value:                valueWei,
+		Data:                 []byte{}, // Empty data for a simple transfer
+	}
+
+	// Sign transaction
+	rawTx, err := tx.Sign(fromKeyPair.PrivateKey)
+	if err != nil {
+		return "", fmt.Errorf("error signing transaction: %w", err)
+	}
+
+	// Send transaction
+	rawHex := "0x" + hex.EncodeToString(rawTx)
+	txHash, err := CallRPC(ctx, rpcURL, "eth_sendRawTransaction", []interface{}{rawHex})
+	if err != nil {
+		return "", fmt.Errorf("error sending transaction: %w", err)
+	}
+
+	// Return transaction hash
+	return strings.Trim(string(txHash), "\""), nil
 }

@@ -369,3 +369,200 @@ func TestEnvVariables(t *testing.T) {
 	}
 	t.Logf("Block Explorer URL: %s", blockExplorer)
 }
+
+// TestHDWalletGeneration tests generating new HD wallets
+func TestHDWalletGeneration(t *testing.T) {
+	// Generate a new HD wallet
+	hdKeyPair, err := GenerateHDWallet("")
+	if err != nil {
+		t.Fatalf("Failed to generate HD wallet: %v", err)
+	}
+
+	// Verify we have a valid mnemonic and derivation
+	if hdKeyPair.HDInfo == nil {
+		t.Fatal("HD wallet info is nil")
+	}
+
+	if hdKeyPair.HDInfo.Mnemonic == "" {
+		t.Fatal("Generated mnemonic is empty")
+	}
+
+	if hdKeyPair.KeyPair == nil || hdKeyPair.KeyPair.PrivateKey == nil {
+		t.Fatal("Generated private key is nil")
+	}
+
+	if (hdKeyPair.KeyPair.Address == common.Address{}) {
+		t.Fatal("Generated address is empty")
+	}
+
+	// Print for manual verification
+	t.Logf("Generated mnemonic: %s", hdKeyPair.HDInfo.Mnemonic)
+	t.Logf("HD path: %s", hdKeyPair.HDInfo.HDPath)
+	privateBytes := crypto.FromECDSA(hdKeyPair.KeyPair.PrivateKey)
+	t.Logf("Generated private key: 0x%s", hex.EncodeToString(privateBytes))
+	t.Logf("Generated address: %s", hdKeyPair.KeyPair.Address.Hex())
+}
+
+// TestHDWalletDerivation tests deriving multiple accounts from a single HD wallet
+func TestHDWalletDerivation(t *testing.T) {
+	// Create a wallet with a known mnemonic
+	mnemonic := "test cruise situate detail affair sunny theory clean interest reform quarter leopard"
+	hdPath := DefaultHDPath
+
+	// Import the HD wallet
+	hdKeyPair, err := ImportHDWallet(mnemonic, hdPath)
+	if err != nil {
+		t.Fatalf("Failed to import HD wallet: %v", err)
+	}
+
+	t.Logf("Primary account path: %s", hdKeyPair.HDInfo.HDPath)
+	t.Logf("Primary account address: %s", hdKeyPair.KeyPair.Address.Hex())
+
+	// Derive multiple accounts
+	for i := 1; i < 5; i++ {
+		childKeyPair, err := DeriveChildAccount(hdKeyPair, uint32(i))
+		if err != nil {
+			t.Fatalf("Failed to derive account %d: %v", i, err)
+		}
+
+		t.Logf("Account %d path: %s", i, childKeyPair.HDInfo.HDPath)
+		t.Logf("Account %d address: %s", i, childKeyPair.KeyPair.Address.Hex())
+
+		// Ensure each address is unique
+		if childKeyPair.KeyPair.Address == hdKeyPair.KeyPair.Address {
+			t.Fatalf("Derived address should be different from parent")
+		}
+	}
+}
+
+// TestEIP1559Transaction tests preparing and signing EIP-1559 transactions
+func TestEIP1559Transaction(t *testing.T) {
+	// Import a known private key
+	keyPair, err := ImportPrivateKey(testPrivateKey)
+	if err != nil {
+		t.Fatalf("Failed to import private key: %v", err)
+	}
+
+	// Create an EIP-1559 transaction
+	chainID := big.NewInt(11155111) // Sepolia
+	nonce := uint64(1)              // Test nonce
+	gasLimit := uint64(21000)       // Standard ETH transfer
+
+	// EIP-1559 parameters
+	tip := big.NewInt(1_500_000_000)      // 1.5 gwei
+	baseFee := big.NewInt(30_000_000_000) // 30 gwei
+	maxFee := new(big.Int).Mul(baseFee, big.NewInt(2))
+	maxFee = new(big.Int).Add(maxFee, tip) // 2*baseFee + tip
+
+	// Value to send - properly handle SetString return values
+	value, ok := new(big.Int).SetString(smallAmount, 10)
+	if !ok {
+		t.Fatalf("Failed to parse amount: %s", smallAmount)
+	}
+
+	// To address
+	to := common.HexToAddress(testAddress) // Self-transfer
+	var toBytes [20]byte
+	copy(toBytes[:], to.Bytes())
+
+	// Create transaction
+	tx := &TX1559{
+		ChainID:              chainID,
+		Nonce:                nonce,
+		MaxPriorityFeePerGas: tip,
+		MaxFeePerGas:         maxFee,
+		GasLimit:             gasLimit,
+		To:                   &toBytes,
+		Value:                value,
+		Data:                 []byte{}, // Empty data for a simple transfer
+	}
+
+	// Test RLP payload
+	payload, err := tx.PayloadRLP()
+	if err != nil {
+		t.Fatalf("Failed to encode payload: %v", err)
+	}
+	t.Logf("EIP-1559 Payload: 0x%s", hex.EncodeToString(payload))
+
+	// Test signing
+	signedTx, err := tx.Sign(keyPair.PrivateKey)
+	if err != nil {
+		t.Fatalf("Failed to sign transaction: %v", err)
+	}
+	t.Logf("EIP-1559 Signed transaction: 0x%s", hex.EncodeToString(signedTx))
+
+	// Verify signature values
+	if tx.R == nil || tx.S == nil {
+		t.Fatal("Signature values R or S are nil after signing")
+	}
+
+	t.Logf("EIP-1559 Signature V: %d", tx.V)
+	t.Logf("EIP-1559 Signature R: %s", tx.R.String())
+	t.Logf("EIP-1559 Signature S: %s", tx.S.String())
+
+	// Make sure the first byte is 0x02 for EIP-1559
+	if signedTx[0] != 0x02 {
+		t.Fatalf("First byte of signed EIP-1559 transaction should be 0x02, got 0x%x", signedTx[0])
+	}
+}
+
+// TestEIP1559TransactionSending tests sending a real EIP-1559 transaction
+func TestEIP1559TransactionSending(t *testing.T) {
+	// Skip if we're just doing unit tests (no network)
+	if testing.Short() {
+		t.Skip("Skipping EIP-1559 transaction test in short mode")
+	}
+
+	// Import private key from environment if available
+	privKey := os.Getenv("TEST_PRIVATE_KEY")
+	if privKey == "" {
+		privKey = testPrivateKey // Fall back to the test constant if env var not set
+	}
+
+	keyPair, err := ImportPrivateKey(privKey)
+	if err != nil {
+		t.Fatalf("Failed to import private key: %v", err)
+	}
+
+	// Get RPC URL
+	rpcURL := GetRPCURL()
+	blockExplorer := GetBlockExplorerURL()
+	ctx := context.Background()
+
+	// Check balance before sending
+	balance, err := GetBalance(ctx, keyPair.Address, rpcURL)
+	if err != nil {
+		t.Fatalf("Failed to get balance: %v", err)
+	}
+	t.Logf("Initial balance: %s wei (%s ETH)", balance.String(), WeiToEth(balance))
+
+	// Set a very small amount to send
+	amount, _ := new(big.Int).SetString("1", 10) // Just 1 wei
+
+	// Don't proceed if balance is too low
+	minBalance := big.NewInt(10000000000000) // 0.00001 ETH (much smaller requirement)
+	if balance.Cmp(minBalance) < 0 {
+		t.Skipf("Insufficient funds to run test: %s < %s", WeiToEth(balance), WeiToEth(minBalance))
+	}
+
+	// Send a self-transaction with EIP-1559
+	priorityFee := big.NewInt(1_000_000_000) // 1 gwei priority fee
+	txHash, err := SendEIP1559Transaction(ctx, keyPair, keyPair.Address.Hex(), amount, rpcURL, priorityFee)
+	if err != nil {
+		t.Fatalf("Failed to send EIP-1559 transaction: %v", err)
+	}
+	t.Logf("EIP-1559 Transaction sent! Hash: %s", txHash)
+	t.Logf("View on Etherscan: %s", FormatTransactionURL(txHash, blockExplorer))
+
+	// Wait for transaction to be mined
+	t.Log("Waiting for transaction to be mined...")
+	time.Sleep(15 * time.Second)
+
+	// Check new balance
+	newBalance, err := GetBalance(ctx, keyPair.Address, rpcURL)
+	if err != nil {
+		t.Fatalf("Failed to get new balance: %v", err)
+	}
+	t.Logf("New balance: %s wei (%s ETH)", newBalance.String(), WeiToEth(newBalance))
+	t.Logf("Spent: %s wei", new(big.Int).Sub(balance, newBalance).String())
+}

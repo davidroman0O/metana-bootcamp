@@ -52,6 +52,7 @@ The project uses environment variables for sensitive data and configuration:
    - Key generation: Creates a key pair using cryptographic primitives
    - Address derivation: Derives an Ethereum address from a private key without wallet libraries
    - Key storage: Simple localStorage-based key storage
+   - HD wallet support: Implements BIP-39 mnemonic and BIP-44 derivation path standards
 
 2. **Transaction Handling**
    - Nonce management: Manually tracks the nonce for accounts
@@ -64,6 +65,34 @@ The project uses environment variables for sensitive data and configuration:
 3. **RPC Interactions**
    - JSON-RPC communication: Direct implementation without library abstractions
    - Network interaction: Manually constructs and submits RPC calls
+   - Support for both legacy and EIP-1559 transactions
+
+### Transaction Types
+
+The wallet supports two transaction types:
+
+1. **Legacy Transactions**: The original Ethereum transaction format
+2. **EIP-1559 Transactions**: The new transaction format introduced with the London hard fork
+
+By default, the wallet uses EIP-1559 transactions for better gas efficiency. A successful EIP-1559 transaction can be viewed here:
+[Example EIP-1559 Transaction](https://sepolia.etherscan.io/tx/0xbfa047ef0e6fa4c0e62b9b903e8dc3c5d467d0d48816f77d1f466ea188ba6e07)
+
+The implementation includes:
+- Automatic gas fee estimation
+- Support for configurable priority fees
+- Accurate balance validation before sending
+- Smart MAX button for setting optimal transaction amounts
+
+### HD Wallet Implementation
+
+The wallet now uses Hierarchical Deterministic (HD) wallets by default:
+
+- **BIP-39 Mnemonic Phrases**: Generates and securely stores human-readable seed phrases
+- **BIP-44 Derivation Paths**: Standard derivation paths for Ethereum (m/44'/60'/0'/0/*)
+- **Multiple Accounts**: Support for generating and managing multiple accounts from a single seed
+- **Secure Recovery**: Simple recovery process using the mnemonic phrase
+
+HD wallets provide superior security and ease of use compared to simple private key wallets, making them the preferred option for modern cryptocurrency wallets.
 
 ### Running Tests
 
@@ -125,6 +154,18 @@ If you encounter issues with transactions:
 5. Ensure the gas price is appropriate for current network conditions
 6. Validate the RLP encoding of the transaction
 7. Verify the signature components (v, r, s)
+
+The wallet includes several features to ensure transaction reliability:
+- Optimized gas price parameters for efficient testnet transactions
+- Compatible transaction encoding for all networks
+- Pre-validation of transaction parameters before sending
+- Smart MAX button that calculates optimal send amounts
+- Clear error messaging with specific insufficient funds warnings
+
+Transactions are handled with a dual approach:
+- The UI presents EIP-1559 fee structure for better user experience
+- The backend adapts to use the most compatible format for each network
+- Transaction status is tracked with receipt polling
 
 The `wallet.smalltransfer.test.ts` file contains extensive console.log statements to help debug transaction issues. When running this test, you'll see all the transaction parameters, intermediate values, and results printed to the console.
 

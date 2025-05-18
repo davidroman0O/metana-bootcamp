@@ -79,26 +79,39 @@ async function testWalletFunctionality() {
     const balance = await getBalance(derivedAddress);
     console.log(`Balance: ${balance} wei (${Number(balance) / 1e18} ETH)`);
     
+    // Add a proper delay to ensure nonce synchronization
+    console.log('Waiting for nonce synchronization (12 seconds)...');
+    await new Promise(resolve => setTimeout(resolve, 12000)); // Wait 12 seconds
+    
     // Check account nonce manually (required for transaction sequencing)
     let nonce = await getNonce(derivedAddress);
-    console.log(`Current nonce: ${nonce}`);
+    console.log('Current nonce:', nonce);
     
-    // Increment nonce by 1 to avoid 'replacement transaction underpriced' error
-    // This is needed because we already sent a transaction in the previous test
-    nonce += 1;
-    console.log(`Using incremented nonce: ${nonce}`);
+    // Use a larger increment to avoid conflicts with pending transactions
+    const nonceToUse = nonce + 30;  // Use different offset than other tests
+    console.log(`Using nonce: ${nonceToUse} (nonce+30 to avoid pending transaction conflicts)`);
     
     // 3. Transaction Gas Management
     console.log('\n=== 3. GAS MANAGEMENT ===');
     
-    // Manually fetch gas price - not using wallet libraries
-    const rawGasPrice = await getGasPrice();
-    console.log(`Raw gas price: ${rawGasPrice} wei (${Number(rawGasPrice) / 1e9} Gwei)`);
+    // Get current gas price from the network
+    let rawGasPrice = await getGasPrice();
     
-    // Use a much lower gas price to fit within our balance
-    // Multiply by 0.1 to reduce gas price by 90%
-    const gasPrice = BigInt(Math.floor(Number(rawGasPrice) * 0.1));
-    console.log(`Adjusted gas price: ${gasPrice} wei (${Number(gasPrice) / 1e9} Gwei)`);
+    // Use a higher gas price to ensure transaction success
+    // 5x of the actual gas price
+    const gasPercentage = 5.0; // 500% of current gas price
+    const adjustedGasPrice = BigInt(Math.floor(Number(rawGasPrice) * gasPercentage));
+    console.log(`Raw gas price: ${rawGasPrice} wei (${Number(rawGasPrice) / 1e9} Gwei)`);
+    console.log(`Adjusted gas price: ${adjustedGasPrice} wei (${Number(adjustedGasPrice) / 1e9} Gwei)`);
+    
+    // For EIP-1559 transactions
+    const baseFeeEstimate = BigInt(Math.floor(Number(rawGasPrice) * 0.9)); // 90% of gas price as base fee
+    const priorityFee = BigInt(Math.floor(Number(rawGasPrice) * 0.1));     // 10% as priority fee
+    const maxFeePerGas = BigInt(Math.floor(Number(rawGasPrice) * gasPercentage));
+    
+    console.log(`EIP-1559 Base Fee Estimate: ${baseFeeEstimate} wei (${Number(baseFeeEstimate) / 1e9} Gwei)`);
+    console.log(`EIP-1559 Priority Fee: ${priorityFee} wei (${Number(priorityFee) / 1e9} Gwei)`);
+    console.log(`EIP-1559 Max Fee: ${maxFeePerGas} wei (${Number(maxFeePerGas) / 1e9} Gwei)`);
     
     // Manually estimate gas - a wallet library would abstract this
     const estimatedGas = await estimateGas({
@@ -114,75 +127,157 @@ async function testWalletFunctionality() {
     console.log(`Using gas limit: ${gasLimit}`);
     
     // Calculate transaction cost
-    const gasCost = gasPrice * gasLimit;
-    const totalCost = TEST_VALUE_WEI + gasCost;
+    const legacyGasCost = adjustedGasPrice * gasLimit;
+    const legacyTotalCost = TEST_VALUE_WEI + legacyGasCost;
     console.log(`Transaction value: ${TEST_VALUE_WEI} wei`);
-    console.log(`Gas cost: ${gasCost} wei (${Number(gasCost) / 1e18} ETH)`);
-    console.log(`Total cost: ${totalCost} wei (${Number(totalCost) / 1e18} ETH)`);
+    console.log(`Legacy Gas cost: ${legacyGasCost} wei (${Number(legacyGasCost) / 1e18} ETH)`);
+    console.log(`Legacy Total cost: ${legacyTotalCost} wei (${Number(legacyTotalCost) / 1e18} ETH)`);
+    
+    const eip1559GasCost = maxFeePerGas * gasLimit;
+    const eip1559TotalCost = TEST_VALUE_WEI + eip1559GasCost;
+    console.log(`EIP-1559 Gas cost: ${eip1559GasCost} wei (${Number(eip1559GasCost) / 1e18} ETH)`);
+    console.log(`EIP-1559 Total cost: ${eip1559TotalCost} wei (${Number(eip1559TotalCost) / 1e18} ETH)`);
+    
+    // Use the higher cost for balance check
+    const maxTotalCost = legacyTotalCost > eip1559TotalCost ? legacyTotalCost : eip1559TotalCost;
     
     // Check if we have enough funds
-    if (balance < totalCost) {
-      console.log(`\n⚠️ Not enough funds to send transaction. Have ${balance} wei, need ${totalCost} wei.`);
+    if (balance < maxTotalCost) {
+      console.log(`\n⚠️ Not enough funds to send transaction. Have ${balance} wei, need ${maxTotalCost} wei.`);
       console.log('Skipping transaction submission but continuing with preparation and signing demo.');
     } else {
       console.log('✅ Sufficient balance for the adjusted gas price');
     }
     
-    // 4. Transaction Preparation - manually constructing without wallet libraries
-    console.log('\n=== 4. TRANSACTION PREPARATION ===');
+    // 4. Legacy Transaction Preparation - manually constructing without wallet libraries
+    console.log('\n=== 4. LEGACY TRANSACTION PREPARATION ===');
     
-    // Manual construction of the transaction object
-    const tx: RawTransaction = {
-      nonce,
-      gasPrice, 
-      gasLimit,
-      to: derivedAddress, // Self-transfer for testing
+    // Create a legacy transaction (example transfer of 1 wei, for testing)
+    const legacyTx: RawTransaction = {
+      nonce: nonceToUse,
+      gasPrice: adjustedGasPrice,
+      gasLimit: gasLimit,
+      to: derivedAddress, // self-transfer (sending to our own address)
       value: TEST_VALUE_WEI,
-      data: '0x', // No data payload
+      data: '0x',
       chainId: SEPOLIA_CONFIG.chainId,
+      type: 'legacy'
     };
     
-    console.log('Raw transaction prepared:');
+    console.log('Legacy transaction prepared:');
     console.log(JSON.stringify({
-      nonce: tx.nonce,
-      gasPrice: tx.gasPrice.toString(),
-      gasLimit: tx.gasLimit.toString(),
-      to: tx.to,
-      value: tx.value.toString(),
-      data: tx.data,
-      chainId: tx.chainId
+      nonce: legacyTx.nonce,
+      gasPrice: legacyTx.gasPrice!.toString(),
+      gasLimit: legacyTx.gasLimit.toString(),
+      to: legacyTx.to,
+      value: legacyTx.value.toString(),
+      data: legacyTx.data,
+      chainId: legacyTx.chainId,
+      type: legacyTx.type
     }, null, 2));
     
-    // 5. Transaction Signing - manually done without wallet libraries
-    console.log('\n=== 5. TRANSACTION SIGNING ===');
+    // 5. Legacy Transaction Signing - manually done without wallet libraries
+    console.log('\n=== 5. LEGACY TRANSACTION SIGNING ===');
     
-    // Prepare the transaction for signing (manually encoding for RLP)
-    const preparedTx = prepareTransaction(tx);
+    console.log('Preparing legacy transaction with:');
+    console.log('- nonce:', legacyTx.nonce, typeof legacyTx.nonce);
+    console.log('- gasPrice:', legacyTx.gasPrice, typeof legacyTx.gasPrice);
+    console.log('- gasLimit:', legacyTx.gasLimit, typeof legacyTx.gasLimit);
+    console.log('- to:', legacyTx.to);
+    console.log('- value:', legacyTx.value, typeof legacyTx.value);
+    console.log('- data:', legacyTx.data);
+    console.log('- chainId:', legacyTx.chainId);
+    
+    // Prepare the legacy transaction for signing (manually encoding for RLP)
+    const preparedLegacyTx = prepareTransaction(legacyTx);
     console.log('Transaction prepared for signing with messageHash:');
     
-    // Sign the transaction (implementing EIP-155 without wallet libraries)
-    const signedTx = signTransaction(preparedTx, TEST_PRIVATE_KEY, SEPOLIA_CONFIG.chainId);
+    // Sign the legacy transaction (implementing EIP-155 without wallet libraries)
+    const signedLegacyTx = signTransaction(preparedLegacyTx, TEST_PRIVATE_KEY, SEPOLIA_CONFIG.chainId);
     
     console.log('Signature details:');
-    console.log(`- v: ${signedTx.v}`);
-    console.log(`- r: ${signedTx.r.toString().substring(0, 20)}...`);
-    console.log(`- s: ${signedTx.s.toString().substring(0, 20)}...`);
+    console.log(`- v: ${signedLegacyTx.v}`);
+    console.log(`- r: ${signedLegacyTx.r.toString().substring(0, 20)}...`);
+    console.log(`- s: ${signedLegacyTx.s.toString().substring(0, 20)}...`);
     
     console.log('\nSerialized signed transaction:');
-    console.log(signedTx.serialized.substring(0, 50) + '...');
+    console.log(signedLegacyTx.serialized.substring(0, 50) + '...');
     
-    // 6. Transaction Broadcasting - only if we have enough balance
-    if (balance >= totalCost) {
-      console.log('\n=== 6. TRANSACTION BROADCASTING ===');
-      console.log('Sending transaction to network...');
+    // 6. EIP-1559 Transaction Preparation
+    console.log('\n=== 6. EIP-1559 TRANSACTION PREPARATION ===');
+    
+    // Create an EIP-1559 transaction (example transfer of 1 wei, for testing)
+    const eip1559Tx: RawTransaction = {
+      nonce: nonceToUse + 1, // Use a different nonce to avoid conflicts
+      maxFeePerGas: maxFeePerGas,
+      maxPriorityFeePerGas: priorityFee,
+      gasLimit: gasLimit,
+      to: derivedAddress, // self-transfer
+      value: TEST_VALUE_WEI,
+      data: '0x',
+      chainId: SEPOLIA_CONFIG.chainId,
+      type: 'eip1559'
+    };
+    
+    console.log('EIP-1559 transaction prepared:');
+    console.log(JSON.stringify({
+      nonce: eip1559Tx.nonce,
+      maxFeePerGas: eip1559Tx.maxFeePerGas!.toString(),
+      maxPriorityFeePerGas: eip1559Tx.maxPriorityFeePerGas!.toString(),
+      gasLimit: eip1559Tx.gasLimit.toString(),
+      to: eip1559Tx.to,
+      value: eip1559Tx.value.toString(),
+      data: eip1559Tx.data,
+      chainId: eip1559Tx.chainId,
+      type: eip1559Tx.type
+    }, null, 2));
+    
+    // 7. EIP-1559 Transaction Signing
+    console.log('\n=== 7. EIP-1559 TRANSACTION SIGNING ===');
+    
+    // Prepare the transaction for signing
+    const preparedEip1559Tx = prepareTransaction(eip1559Tx);
+    console.log('EIP-1559 transaction prepared for signing');
+    
+    // Sign the transaction
+    const signedEip1559Tx = signTransaction(preparedEip1559Tx, TEST_PRIVATE_KEY, SEPOLIA_CONFIG.chainId);
+    
+    console.log('EIP-1559 signature details:');
+    console.log(`- v: ${signedEip1559Tx.v}`);
+    console.log(`- r: ${signedEip1559Tx.r.toString().substring(0, 20)}...`);
+    console.log(`- s: ${signedEip1559Tx.s.toString().substring(0, 20)}...`);
+    
+    console.log('\nSerialized EIP-1559 transaction:');
+    console.log(signedEip1559Tx.serialized.substring(0, 50) + '...');
+    console.log('First few bytes:', signedEip1559Tx.serialized.substring(0, 10)); // Should start with 0x02
+    
+    // 8. Transaction Broadcasting - only if we have enough balance
+    if (balance >= maxTotalCost) {
+      // First send the legacy transaction
+      console.log('\n=== 8. LEGACY TRANSACTION BROADCASTING ===');
+      console.log('Sending legacy transaction to network...');
       
       try {
         // Send the raw transaction without wallet libraries
-        const txHash = await sendRawTransaction(signedTx.serialized);
+        const legacyTxHash = await sendRawTransaction(signedLegacyTx.serialized);
         
-        console.log('\n✅ TRANSACTION SENT SUCCESSFULLY!');
-        console.log(`Transaction hash: ${txHash}`);
-        console.log(`View on Etherscan: ${getTransactionUrl(txHash)}`);
+        console.log('\n✅ LEGACY TRANSACTION SENT SUCCESSFULLY!');
+        console.log(`Transaction hash: ${legacyTxHash}`);
+        console.log(`View on Etherscan: ${getTransactionUrl(legacyTxHash)}`);
+        
+        // Wait a moment for the transaction to be processed
+        console.log('\nWaiting for transaction confirmation...');
+        await new Promise(resolve => setTimeout(resolve, 10000)); // 10 seconds
+        
+        // Then send the EIP-1559 transaction
+        console.log('\n=== 9. EIP-1559 TRANSACTION BROADCASTING ===');
+        console.log('Sending EIP-1559 transaction to network...');
+        
+        const eip1559TxHash = await sendRawTransaction(signedEip1559Tx.serialized);
+        
+        console.log('\n✅ EIP-1559 TRANSACTION SENT SUCCESSFULLY!');
+        console.log(`Transaction hash: ${eip1559TxHash}`);
+        console.log(`View on Etherscan: ${getTransactionUrl(eip1559TxHash)}`);
         
         // Wait a moment for the transaction to be processed
         console.log('\nWaiting for transaction confirmation...');
@@ -207,7 +302,7 @@ async function testWalletFunctionality() {
         }
       }
     } else {
-      console.log('\n=== 6. TRANSACTION BROADCASTING (SKIPPED) ===');
+      console.log('\n=== 8 & 9. TRANSACTION BROADCASTING (SKIPPED) ===');
       console.log('Transaction broadcasting was skipped due to insufficient funds.');
       console.log('To complete this test, fund the test wallet address shown above.');
     }
@@ -217,10 +312,10 @@ async function testWalletFunctionality() {
     console.log('1. ✅ Manual key management and address derivation');
     console.log('2. ✅ Manual nonce management');
     console.log('3. ✅ Manual gas estimation');
-    console.log('4. ✅ Manual transaction preparation');
-    console.log('5. ✅ Manual transaction signing (with EIP-155)');
-    if (balance >= totalCost) {
-      console.log('6. ✅ Manual transaction broadcasting');
+    console.log('4. ✅ Manual transaction preparation (Legacy & EIP-1559)');
+    console.log('5. ✅ Manual transaction signing (Legacy & EIP-1559)');
+    if (balance >= maxTotalCost) {
+      console.log('6. ✅ Manual transaction broadcasting (Legacy & EIP-1559)');
     } else {
       console.log('6. ❌ Transaction broadcasting (skipped due to insufficient funds)');
     }
