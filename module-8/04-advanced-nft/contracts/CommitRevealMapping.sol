@@ -211,13 +211,13 @@ contract CommitRevealMapping is ERC721Enumerable, Ownable, ReentrancyGuard, Mult
                 selector := shr(224, calldataload(add(data.offset, add(mul(i, 32), 36))))
             }
             
-            // Only allow transferFrom and safeTransferFrom functions
-            require(
+            // Check if the function is one of the allowed transfer functions
+            bool isAllowedFunction = 
                 selector == transferFromSelector || 
                 selector == safeTransferFromSelector1 || 
-                selector == safeTransferFromSelector2,
-                "Only transferFrom and safeTransferFrom functions are allowed"
-            );
+                selector == safeTransferFromSelector2;
+                
+            require(isAllowedFunction, "Only transferFrom and safeTransferFrom functions are allowed");
             
             // Check if from address is zero
             // The from address is always the first parameter at offset 4 (after selector)
