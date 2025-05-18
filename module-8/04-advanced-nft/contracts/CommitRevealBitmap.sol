@@ -202,12 +202,6 @@ contract CommitRevealBitmap is ERC721Enumerable, Ownable, ReentrancyGuard, Multi
         bytes4 safeTransferFromSelector1 = bytes4(keccak256("safeTransferFrom(address,address,uint256)"));
         bytes4 safeTransferFromSelector2 = bytes4(keccak256("safeTransferFrom(address,address,uint256,bytes)"));
         
-        // Define explicitly blocked function selectors
-        bytes4 commitSelector = bytes4(keccak256("commit(bytes32,uint256,bytes32[])"));
-        bytes4 revealSelector = bytes4(keccak256("reveal(bytes32,uint256)"));
-        bytes4 whitelistMintSelector = bytes4(keccak256("whitelistMint(uint256,bytes32[])"));
-        bytes4 publicMintSelector = bytes4(keccak256("publicMint(uint256)"));
-        
         for (uint256 i = 0; i < data.length; i++) {
             // Require minimum length for function selector and from address
             require(data[i].length >= 36, "Invalid calldata length"); // 4 bytes selector + 32 bytes address
@@ -225,15 +219,6 @@ contract CommitRevealBitmap is ERC721Enumerable, Ownable, ReentrancyGuard, Multi
                 selector == safeTransferFromSelector1 || 
                 selector == safeTransferFromSelector2,
                 "Only transferFrom and safeTransferFrom functions are allowed"
-            );
-            
-            // Double-check by explicitly blocking minting functions
-            require(
-                selector != commitSelector &&
-                selector != revealSelector &&
-                selector != whitelistMintSelector &&
-                selector != publicMintSelector,
-                "Minting operations are not allowed"
             );
             
             // Check if from address is zero
