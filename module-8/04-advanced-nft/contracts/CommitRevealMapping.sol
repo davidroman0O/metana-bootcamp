@@ -157,34 +157,7 @@ contract CommitRevealMapping is ERC721Enumerable, Ownable, ReentrancyGuard, Mult
         emit TokenMinted(msg.sender, tokenId);
     }
     
-    // 4. WhitelistMint (primary claim function)
-    function whitelistMint(uint256 index, bytes32[] calldata proof) external payable inState(State.PrivateSale) {
-        require(!claimedMapping[msg.sender], "Already claimed whitelist spot");
-        require(msg.value >= privateSalePrice, "Insufficient payment");
-        
-        // Verify merkle proof
-        bytes32 leaf = keccak256(abi.encode(msg.sender, index));
-        require(MerkleProof.verify(proof, merkleRoot, leaf), "Invalid merkle proof");
-        
-        // Mark as claimed
-        claimedMapping[msg.sender] = true;
-        
-        // Mint the token
-        uint256 tokenId = nextToken();
-        _safeMint(msg.sender, tokenId);
-        
-        // Check if sold out
-        if (tokenCount() >= MAX_SUPPLY && state != State.SoldOut) {
-            State prevState = state;
-            state = State.SoldOut;
-            emit StateChanged(prevState, State.SoldOut);
-        }
-        
-        emit TokenMinted(msg.sender, tokenId);
-        emit WhitelistClaimed(msg.sender);
-    }
-    
-    // 5. Public Mint (primary purchase function)
+    // 4. Public Mint (primary purchase function)
     function publicMint(uint256 quantity) external payable inState(State.PublicSale) {
         require(quantity > 0, "Must mint at least one");
         require(tokenCount() + quantity <= MAX_SUPPLY, "Would exceed supply");
@@ -204,7 +177,7 @@ contract CommitRevealMapping is ERC721Enumerable, Ownable, ReentrancyGuard, Mult
         }
     }
     
-    // 6. Withdraw (used by contributors)
+    // 5. Withdraw (used by contributors)
     function withdraw() external nonReentrant {
         uint256 amount = pendingWithdrawals[msg.sender];
         require(amount > 0, "No funds to withdraw");
@@ -217,7 +190,7 @@ contract CommitRevealMapping is ERC721Enumerable, Ownable, ReentrancyGuard, Mult
         emit PaymentWithdrawn(msg.sender, amount);
     }
 
-    // 7. Multicall (important for batch operations)
+    // 6. Multicall (important for batch operations)
     function multicall(bytes[] calldata data) external override returns (bytes[] memory results) {
         require(msg.sender == tx.origin, "Contracts cannot call multicall");
         results = new bytes[](data.length);
