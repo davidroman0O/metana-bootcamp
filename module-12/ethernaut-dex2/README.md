@@ -10,11 +10,20 @@ This solution exploits two vulnerabilities in the Dex2 contract:
 2. The price calculation uses relative balance: `swapAmount = (amount * TO_TOKEN.balanceOf(dex)) / FROM_TOKEN.balanceOf(dex)`
 
 The attack:
-1. Creates a custom token in the constructor
-2. Transfers 1 token to the Dex to set up a balance ratio
-3. Swaps 1 token for all of token1 (price calculation: 1 * token1Balance / 1 = token1Balance)
-4. Swaps 1 token for all of token2
-5. Automatically transfers the drained tokens to your Ledger address
+1. Creates two custom evil tokens (with names "Evil Token 1" and "Evil Token 2")
+2. Mints exactly 2 tokens of each (keeping 1 and sending 1 to the Dex)
+3. Uses evilToken1 to drain token1 (price calculation: 1 * token1Balance / 1 = token1Balance)
+4. Uses evilToken2 to drain token2 (price calculation: 1 * token2Balance / 1 = token2Balance)
+5. Both tokens from the Dex are transferred to your Ledger address
+
+## Successful Deployment
+
+```
+Dex2Hack deployed to: 0xC2B6e790201Bf975b5Ea7E6E2818a1D39D171948
+Deployment transaction hash: 0xd7db219d8dfbf4b6b6a18b16d1150ab2cc0a4f587493484ef4b9bd26e9f0fe2d
+View transaction on Etherscan: https://sepolia.etherscan.io/tx/0xd7db219d8dfbf4b6b6a18b16d1150ab2cc0a4f587493484ef4b9bd26e9f0fe2d
+View contract on Etherscan: https://sepolia.etherscan.io/address/0xC2B6e790201Bf975b5Ea7E6E2818a1D39D171948
+```
 
 ## Prerequisites
 
@@ -30,9 +39,11 @@ The attack:
 ```
 npm install
 ```
-3. Create a `.env` file with your Sepolia RPC URL:
+3. Create a `.env` file with your Sepolia RPC URL and Ledger account:
 ```
 SEPOLIA_RPC_URL=your_sepolia_rpc_url_here
+LEDGER_ACCOUNT=your_ledger_address_here
+INSTANCE_ADDRESS=your_ethernaut_instance_address
 ```
 
 ## Deployment with Ledger
@@ -40,16 +51,12 @@ SEPOLIA_RPC_URL=your_sepolia_rpc_url_here
 1. Connect your Ledger via USB
 2. Open the Ethereum app on your Ledger
 3. Ensure that "Contract data" is ALLOWED in the settings
-4. Compile the contracts:
+4. Deploy with:
 ```
-npm run compile
+npm run deploy
 ```
-5. Deploy with your Ethernaut instance address:
-```
-npx hardhat run scripts/deploy.js --network sepolia 0xYourEthernautInstanceAddress
-```
-6. Confirm the transaction on your Ledger device when prompted
-7. Done! The attack executes automatically and tokens are sent to your Ledger address
+5. Confirm the transaction on your Ledger device when prompted
+6. Done! The attack executes automatically and tokens are sent to your Ledger address
 
 ## Security Note
 
