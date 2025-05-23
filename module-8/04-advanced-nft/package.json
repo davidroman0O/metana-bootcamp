@@ -1,0 +1,26 @@
+{
+  "name": "advanced-nft",
+  "version": "1.0.0",
+  "description": "Advanced NFT with merkle tree airdrop, commit-reveal, and more",
+  "main": "index.js",
+  "scripts": {
+    "test": "npx hardhat test",
+    "compile": "npx hardhat compile",
+    "deploy": "npx hardhat run scripts/deploy.js --network hardhat",
+    "compare:commit-reveal": "npx hardhat run scripts/compareCommitReveal.js --network hardhat",
+    "generate:merkle": "npx hardhat run scripts/generateMerkleTree.js --network hardhat",
+    "deploy:commit-reveal": "npx hardhat run scripts/deployCommitReveal.js --network hardhat",
+    "simulate": "npx hardhat run scripts/simulateCommitReveal.js --network hardhat",
+    "report": "npx hardhat run scripts/compareCommitReveal.js --network hardhat && echo 'Comparison complete. Check console output for gas usage results.'"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.9.0",
+    "dotenv": "^16.0.3",
+    "keccak256": "^1.0.6",
+    "merkletreejs": "^0.3.10"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^2.0.0",
+    "hardhat": "^2.14.0"
+  }
+} 

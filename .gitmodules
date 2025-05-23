@@ -10,3 +10,9 @@
 [submodule "module-6/capturetheether/GuessTheNumber/lib/forge-std"]
 	path = module-6/capturetheether/GuessTheNumber/lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
+[submodule "module-8/02-damn-vulnerable-defi/lib/openzeppelin-contracts"]
+	path = module-8/02-damn-vulnerable-defi/lib/openzeppelin-contracts
+	url = https://github.com/openzeppelin/openzeppelin-contracts
+[submodule "module-8/02-damn-vulnerable-defi/lib/solady"]
+	path = module-8/02-damn-vulnerable-defi/lib/solady
+	url = https://github.com/vectorized/solady
