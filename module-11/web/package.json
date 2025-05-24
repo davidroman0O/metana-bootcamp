@@ -1,0 +1,64 @@
+{
+  "name": "web",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "test:wallet": "tsx src/tests/wallet.assignment.test.ts",
+    "test:transfer": "tsx src/tests/simple.transfer.test.ts",
+    "test:eip1559": "tsx src/tests/eip1559.transaction.test.ts",
+    "test:hd-wallet": "tsx src/tests/test-hd-wallet.ts",
+    "test:encoding": "tsx src/tests/wallet.encoding.test.ts",
+    "test:transaction": "tsx src/tests/wallet.transaction.test.ts",
+    "test:rpc": "tsx src/tests/wallet.rpc.test.ts",
+    "test:smalltransfer": "tsx src/tests/wallet.smalltransfer.test.ts",
+    "test:debug": "node src/tests/wallet.debug.js",
+    "test:directsend": "node src/tests/wallet.directsend.js",
+    "test:fundcheck": "node src/tests/wallet.fundcheck.js",
+    "test:wallet-js": "node src/tests/test-wallet.js",
+    "test:wallet-ts": "tsx src/tests/test-wallet.ts",
+    "test:hd-wallet-2": "tsx src/tests/hd-wallet.test.ts",
+    "test:all": "npm run test:hd-wallet && sleep 5 && npm run test:hd-wallet-2 && sleep 5 && npm run test:encoding && sleep 5 && npm run test:rpc && sleep 5 && npm run test:debug && sleep 5 && npm run test:wallet-js && sleep 5 && npm run test:wallet-ts && sleep 5 && npm run test:fundcheck && sleep 5 && npm run test:directsend && sleep 5 && npm run test:transaction && sleep 5 && npm run test:smalltransfer && sleep 5 && npm run test:wallet && sleep 10 && npm run test:transfer && sleep 10 && npm run test:eip1559"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Basic Ethereum wallet implementation",
+  "dependencies": {
+    "@blueprintjs/core": "^5.10.0",
+    "@blueprintjs/popover2": "*",
+    "@blueprintjs/select": "^5.2.0",
+    "@ethereumjs/rlp": "^5.0.1",
+    "@testing-library/jest-dom": "^5.17.0",
+    "@testing-library/react": "^13.4.0",
+    "@testing-library/user-event": "^13.5.0",
+    "@types/node": "^20.13.6",
+    "@types/react": "^18.2.67",
+    "@types/react-dom": "^18.2.22",
+    "dotenv": "^16.4.5",
+    "ethereum-cryptography": "^2.1.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "5.0.1",
+    "typescript": "^5.4.5",
+    "web-vitals": "^2.1.4"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14"
+  }
+}
