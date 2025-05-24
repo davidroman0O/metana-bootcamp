@@ -1,3 +1,9 @@
+// `getSwapPrice = (amount * to_balance) / from_balance` 
+// alternate swaps back and forth between the two tokens
+// swaps changes the token ratios in the dex, making subsequent swaps more favorable
+// each swaps gets me more tokens than a fair exchange would give
+// tldr: the pricing formula creates arbitrage opportunities
+// each swap shifts the balance ratio and the dex doesn't have proper slippage protection
 async function drainDex() {
   // Get token addresses
   const token1 = await contract.token1();

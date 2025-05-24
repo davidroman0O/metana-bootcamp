@@ -133,6 +133,14 @@ contract SelfieChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_selfie() public checkSolvedByPlayer {
+        // governance requires >50% voting power to queue actions, but only checks at queue time not execution
+        // pool has emergencyExit function that drains all tokens, but only callable by governance
+        // flash loan all 1.5M tokens, delegate votes to self for majority power, queue emergencyExit action
+        // return flash loan, wait 2 days delay, execute queued action to drain pool
+        // `_hasEnoughVotes` checks `_votingToken.getVotes(who) > totalSupply / 2` only when queueing
+        // so temporarily borrow tokens -> get votes -> queue drain -> return tokens -> execute later
+        // tldr: flash loan voting power + governance time delay + emergencyExit = delayed pool drain
+        
         // Create an attacker contract
         SelfieAttacker attacker = new SelfieAttacker(
             address(pool),

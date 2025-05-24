@@ -6,6 +6,13 @@ const { withRetry } = require("./utils/retry");
 const hre = require("hardhat");
 require('dotenv').config();
 
+// There is no validation, i can swap any erc20 token for the victim token
+// so i can just create a malicious token and swap it
+// send 1 evil token to the DEX, then execute the drain
+// `swapAmount = (amount * to_balance) / from_balance` 
+// 1 evil token for token1, to_balance 100 token1 from_Balance 1 DEX evil token == swapAmount = (1 x 100) / 1 = 100
+// so i get all 100 token1 for just worthless evil token
+// there is no whitelist, super favorable ratio (1:1 for my token vs 100:1 for the victim token), get it all for 2 evil tokens
 async function main() {
     // Clean and recompile before deploying
     await hre.run("clean");

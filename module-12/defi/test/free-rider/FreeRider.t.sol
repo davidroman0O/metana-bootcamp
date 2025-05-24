@@ -213,6 +213,15 @@ contract FreeRiderChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_freeRider() public checkSolvedByPlayer {
+        // marketplace has critical payment bug: pays current owner after transfer, not original seller
+        // `_token.safeTransferFrom(seller, buyer, tokenId); payable(_token.ownerOf(tokenId)).sendValue(price);`
+        // after transfer, ownerOf returns buyer (me), so i get paid back my own money
+        // buyMany with single msg.value works because it checks `msg.value >= price` for each nft individually
+        // so 15 ETH lets me buy all 6 NFTs (each 15 ETH) but i get paid back 15 ETH for each = 90 ETH profit
+        // flash loan 15 ETH from uniswap, buy all nfts for 15 ETH, get 90 ETH back, send nfts to recovery for 45 ETH bounty
+        // repay flash loan ~15.05 ETH, keep ~120 ETH profit from 0.1 ETH start
+        // tldr: payment logic error + bulk purchase + flash loan + recovery bounty = massive profit
+        
         // Deploy attacker contract
         FreeRiderAttacker attacker = new FreeRiderAttacker(
             payable(player),
