@@ -26,4 +26,8 @@ module-3/solidity/cache
 **/baseline
 **/sumo-log.txt
 
+module-12/defi/out
+module-12/defi/cache
+module-12/defi/lib
+
 **/build
