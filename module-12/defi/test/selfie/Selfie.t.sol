@@ -139,7 +139,6 @@ contract SelfieChallenge is Test {
         // return flash loan, wait 2 days delay, execute queued action to drain pool
         // `_hasEnoughVotes` checks `_votingToken.getVotes(who) > totalSupply / 2` only when queueing
         // so temporarily borrow tokens -> get votes -> queue drain -> return tokens -> execute later
-        // tldr: flash loan voting power + governance time delay + emergencyExit = delayed pool drain
         
         // Create an attacker contract
         SelfieAttacker attacker = new SelfieAttacker(
@@ -150,10 +149,18 @@ contract SelfieChallenge is Test {
         );
         
         // Start the attack
+        // tldr: flash loan voting power + governance time delay + emergencyExit = delayed pool drain
         attacker.attack();
         
         // Advance time by 2 days so the governance action can be executed
         vm.warp(block.timestamp + 2 days + 1);
+        
+        // Why This Works
+        // - Flash loan (1 transaction): Borrow → get votes → queue action → return tokens
+        // - Wait 2 days: The action sits in the queue (we no longer have tokens/votes)
+        // - Execute (separate transaction): Anyone can execute because only time is checked
+        // The exploit: Use temporary voting power to queue a permanent action that executes later without needing ongoing voting power!
+        // The lesson: Governance should check voting power at both queue time and execution time! 
         
         // Execute the governance action
         attacker.executeAction();

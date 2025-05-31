@@ -72,7 +72,7 @@ This solution exploits two vulnerabilities in the Dex2 contract:
 2. The price calculation uses relative balance: `swapAmount = (amount * TO_TOKEN.balanceOf(dex)) / FROM_TOKEN.balanceOf(dex)`
 
 The attack:
-1. Creates two custom evil tokens (with names "Evil Token 1" and "Evil Token 2")
+1. Creates two custom evil tokens (with names "Evil Token 1" and "Evil Token 2") - Name inspired from the book [Evil Tokenomics](https://www.goodreads.com/book/show/63329254-evil-tokenomics) you should read it!
 2. Mints exactly 2 tokens of each (keeping 1 and sending 1 to the Dex)
 3. Uses evilToken1 to drain token1 (price calculation: 1 * token1Balance / 1 = token1Balance)
 4. Uses evilToken2 to drain token2 (price calculation: 1 * token2Balance / 1 = token2Balance)

@@ -1,6 +1,7 @@
 # Damn Vulnerable DeFi
 
 > Edited cloned version of the challenge to just fit the required challenges
+> Contains: free-rider and selfie
 
 Damn Vulnerable DeFi is _the_ smart contract security playground for developers, security researchers and educators.
 

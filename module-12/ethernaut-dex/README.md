@@ -1,4 +1,25 @@
+# Ethernaut Dex1 Challenge (frontend) Solution 
 
+Lazy multi-transactions solution with a simple script that interact with the contract demonstrating that not only you can be vulnerable with another contract attacker but also leveraging your protocol.
+
+## The Exploit
+
+the dex uses a flawed pricing formula: `getSwapPrice = (amount * to_balance) / from_balance`
+
+this formula doesn't account for slippage and can be manipulated by alternating swaps between token1 and token2. each swap changes the token ratios in the dex, making subsequent swaps more favorable to the attacker.
+
+**attack flow:**
+- start: player(10,10) | dex(100,100) 
+- swap 1: player(0,20) | dex(110,90) // 10→10 tokens
+- swap 2: player(24,0) | dex(86,110) // 20→24 tokens ✨ 
+- swap 3: player(0,30) | dex(110,80) // 24→30 tokens ✨
+- continue alternating until you can drain one token completely
+
+the key insight: each swap gets you slightly more tokens than a "fair" exchange because the pricing formula creates arbitrage opportunities. the dex has no slippage protection, so you compound these small gains until you can calculate the exact amount to drain all remaining tokens of one type.
+
+**tldr:** flawed pricing formula + no slippage protection + alternating swaps = complete token drain
+
+Vulnerable contract:
 
 ```solidity
 // SPDX-License-Identifier: MIT
@@ -62,3 +83,4 @@ contract SwappableToken is ERC20 {
     }
 }
 ```
+
