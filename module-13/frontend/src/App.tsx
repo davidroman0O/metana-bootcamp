@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -12,7 +12,7 @@ import { DegenSlotsABI } from './config/contracts/DegenSlotsABI';
 import { CONTRACT_ADDRESSES } from './config/wagmi';
 
 // Contexts
-import { AppModeProvider } from './contexts/AppModeContext';
+import { AppModeProvider, useAppMode } from './contexts/AppModeContext';
 
 // Components
 import Navbar from './components/Navbar';
@@ -64,19 +64,12 @@ function AppContent() {
 
   // Slot machine state and logic
   const {
-    // Display state
+    // State
     displayLCD,
-    reels,
-    spin1,
-    spin2,
-    spin3,
-    lockLever,
-    animationSpin,
     betAmount,
     lastResult,
     
     // Computed values
-    isSpinning,
     needsApproval,
     hasChips,
     
@@ -91,6 +84,7 @@ function AppContent() {
     
     // Actions
     callbackOnLever,
+    handleSlotResult,
     approveChipsForPlay,
     buyChipsWithETH,
     setBetAmount,
@@ -98,6 +92,64 @@ function AppContent() {
     // Utils
     refetchChipBalance,
   } = useSlotMachine(chainId);
+
+  // SlotMachine ref for programmatic control
+  const slotMachineRef = useRef<any>(null);
+
+  // Add this hook to get app mode context
+  const { isManualMode, isControlledMode } = useAppMode();
+
+  // Handle slot machine results
+  const handleSlotResultWrapper = (symbols: number[], payout: number, payoutType: string) => {
+    console.log(`🎰 Slot result: [${symbols.join(', ')}], payout: ${payout}, type: ${payoutType}`);
+    // Pass to the hook's result handler
+    handleSlotResult(symbols, payout, payoutType);
+  };
+
+  // Handle slot machine state changes
+  const handleSlotStateChange = (state: string) => {
+    console.log(`🎰 Slot state: ${state}`);
+    
+    // Update display messages based on state
+    // Note: Don't override 'idle' state - let SlotMachine manage its own display
+    switch (state) {
+      case 'spinning_up':
+        slotMachineRef.current?.updateDisplayMessage('Starting spin...');
+        break;
+      case 'spinning':
+        slotMachineRef.current?.updateDisplayMessage('Spinning...');
+        break;
+      case 'evaluating_result':
+        slotMachineRef.current?.updateDisplayMessage('Calculating...');
+        break;
+      // Removed 'idle' case to prevent race condition
+    }
+  };
+
+  // Update display message when displayLCD changes
+  useEffect(() => {
+    if (slotMachineRef.current && displayLCD) {
+      slotMachineRef.current.updateDisplayMessage(displayLCD);
+    }
+  }, [displayLCD]);
+
+  // For controlled mode, we can trigger spins programmatically
+  const triggerControlledSpin = async () => {
+    if (!slotMachineRef.current?.isReady()) {
+      return;
+    }
+    
+    // Get target symbols from the hook
+    const targets = await callbackOnLever();
+    
+    if (targets) {
+      // Start spin with specific targets from the hook
+      slotMachineRef.current?.startSpin(targets);
+    } else {
+      // Start random spin
+      slotMachineRef.current?.startSpin();
+    }
+  };
 
   // Contract addresses
   const addresses = CONTRACT_ADDRESSES[chainId || 31337] || {};
@@ -217,53 +269,143 @@ function AppContent() {
                   {/* Slot Machine */}
                   <div className="flex justify-center">
                     <SlotMachine
-                      displayLCD={displayLCD}
-                      reels={reels}
-                      reel1={reels[0]}
-                      reel2={reels[1]}
-                      reel3={reels[2]}
-                      spin1={spin1}
-                      spin2={spin2}
-                      spin3={spin3}
-                      lockLever={lockLever}
-                      animation={animationSpin}
-                      onLever={callbackOnLever}
+                      ref={slotMachineRef}
+                      onResult={handleSlotResultWrapper}
+                      onStateChange={handleSlotStateChange}
                       isConnected={isConnected}
-                      onCoinInsert={buyChipsWithETH}
                     />
                   </div>
 
-                  {/* Betting Controls - Only when connected and has access */}
-                  {isConnected && isSupported && (
+                  {/* Betting Controls - Show in connected mode OR manual controlled mode */}
+                  {((isConnected && isSupported) || (isManualMode && isControlledMode)) && (
                     <div className="max-w-2xl mx-auto bg-black/30 rounded-2xl p-6 border border-gray-600">
                       <h3 className="text-xl font-bold text-yellow-400 mb-4">🎯 Place Your Bet</h3>
                       
                       <div className="space-y-4">
-                        <div className="flex items-center gap-4">
-                          <input
-                            type="number"
-                            placeholder="Bet amount in CHIPS"
-                            value={betAmount}
-                            onChange={(e) => setBetAmount(e.target.value)}
-                            disabled={isSpinning || lockLever}
-                            className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 outline-none"
-                          />
-                          
-                          {needsApproval ? (
+                        {(isConnected && isSupported) && (
+                          <>
+                            <div className="flex items-center gap-4">
+                              <input
+                                type="number"
+                                placeholder="Bet amount in CHIPS"
+                                value={betAmount}
+                                onChange={(e) => setBetAmount(e.target.value)}
+                                disabled={isSpinningTx}
+                                className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 outline-none"
+                              />
+                              
+                              {needsApproval ? (
+                                <button
+                                  onClick={approveChipsForPlay}
+                                  disabled={isApproving}
+                                  className="bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition-all duration-200"
+                                >
+                                  {isApproving ? 'Approving...' : 'Approve CHIPS'}
+                                </button>
+                              ) : (
+                                <div className="text-green-400 font-medium">✅ Ready to Play</div>
+                              )}
+                            </div>
+                            
+                            <div className="text-sm text-gray-400">
+                              CHIP Balance: {chipBalance ? parseFloat(formatEther(chipBalance)).toFixed(2) : '0.00'}
+                            </div>
+                          </>
+                        )}
+
+                        {/* Manual Control for Testing - Always show in manual controlled mode */}
+                        <div className="space-y-3">
+                          <h4 className="text-lg font-bold text-green-400">🧪 Manual Testing Controls</h4>
+                          <div className="flex gap-2 flex-wrap">
                             <button
-                              onClick={approveChipsForPlay}
-                              disabled={isApproving}
-                              className="bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition-all duration-200"
+                              onClick={() => slotMachineRef.current?.startSpin()}
+                              disabled={!slotMachineRef.current?.isReady()}
+                              className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg"
                             >
-                              {isApproving ? 'Approving...' : 'Approve CHIPS'}
+                              Start Random Spin
                             </button>
-                          ) : (
-                            <div className="text-green-400 font-medium">✅ Ready to Play</div>
-                          )}
-                        </div>
-                        
-                        <div className="text-sm text-gray-400">
-                          CHIP Balance: {chipBalance ? parseFloat(formatEther(chipBalance)).toFixed(2) : '0.00'}
+                            <button
+                              onClick={() => {
+                                // Start spin first, then set jackpot targets after a brief delay
+                                if (slotMachineRef.current?.isReady()) {
+                                  slotMachineRef.current?.startSpin();
+                                  // Wait for spin to be fully started, then set jackpot targets
+                                  setTimeout(() => {
+                                    slotMachineRef.current?.setAllReelTargets([6, 6, 6]); // 🐵🐵🐵 JACKPOT
+                                  }, 1000); // 1 second delay to ensure reels are spinning
+                                }
+                              }}
+                              disabled={!slotMachineRef.current?.isReady()}
+                              className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg"
+                            >
+                              🐵 Jackpot Test
+                            </button>
+                            <button
+                              onClick={triggerControlledSpin}
+                              disabled={!slotMachineRef.current?.isReady()}
+                              className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg"
+                            >
+                              Hook Spin Test
+                            </button>
+                            <button
+                              onClick={() => slotMachineRef.current?.reset()}
+                              className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg"
+                            >
+                              Reset
+                            </button>
+                          </div>
+                          
+                          {/* Reel Control Buttons for Testing */}
+                          <div className="space-y-2">
+                            <h5 className="text-md font-bold text-orange-400">🎯 Set Target Symbols (while spinning)</h5>
+                            <div className="flex gap-2 flex-wrap">
+                              <button
+                                onClick={() => {
+                                  slotMachineRef.current?.setAllReelTargets([1, 1, 1]); // DUMP triple
+                                }}
+                                className="bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded text-sm"
+                              >
+                                📉📉📉 DUMP
+                              </button>
+                              <button
+                                onClick={() => {
+                                  slotMachineRef.current?.setAllReelTargets([2, 2, 2]); // COPE triple
+                                }}
+                                className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-1 px-3 rounded text-sm"
+                              >
+                                🤡🤡🤡 COPE
+                              </button>
+                              <button
+                                onClick={() => {
+                                  slotMachineRef.current?.setAllReelTargets([3, 3, 3]); // PUMP triple
+                                }}
+                                className="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 rounded text-sm"
+                              >
+                                📈📈📈 PUMP
+                              </button>
+                              <button
+                                onClick={() => {
+                                  slotMachineRef.current?.setAllReelTargets([5, 5, 1]); // Rocket special
+                                }}
+                                className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-1 px-3 rounded text-sm"
+                              >
+                                🚀🚀X Special
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const targets = [
+                                    Math.floor(Math.random() * 6) + 1,
+                                    Math.floor(Math.random() * 6) + 1,
+                                    Math.floor(Math.random() * 6) + 1
+                                  ];
+                                  slotMachineRef.current?.setAllReelTargets(targets);
+                                }}
+                                className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-1 px-3 rounded text-sm"
+                              >
+                                🎲 Random Stop
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
