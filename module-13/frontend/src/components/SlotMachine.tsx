@@ -233,7 +233,7 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
 
     // Position on window resize
     window.addEventListener('resize', positionLever);
-
+    
     return () => {
       clearTimeout(timer);
       window.removeEventListener('resize', positionLever);
