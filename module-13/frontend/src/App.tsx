@@ -17,6 +17,7 @@ import { AppModeProvider, useAppMode } from './contexts/AppModeContext';
 // Components
 import Navbar from './components/Navbar';
 import SlotMachine from './components/SlotMachine';
+import FlexibleSlotDemo from './components/FlexibleSlotDemo';
 import PlayerStats from './components/PlayerStats';
 import HouseComponent from './components/HouseComponent';
 import CreditLoan from './components/CreditLoan';
@@ -231,7 +232,7 @@ function AppContent() {
       />
       
       {/* Development Mode Switcher */}
-      <DevModeSwitcher />
+      {/* <DevModeSwitcher /> */}
       
       <Router>
         <Navbar
@@ -259,7 +260,7 @@ function AppContent() {
                   {/* Main Title */}
                   <div className="text-center">
                     <h1 className="text-6xl font-bold text-white mb-4 bg-gradient-to-r from-yellow-400 via-red-500 to-pink-600 bg-clip-text text-transparent">
-                      🎰 Boomer's Last Hope
+                      🎰 Ape Escape
                     </h1>
                     <p className="text-2xl text-gray-300">
                       Provably Fair Degen Slot Machine
@@ -480,6 +481,10 @@ function AppContent() {
                   <p className="text-gray-300">Advanced credit management coming soon...</p>
                 </div>
               }
+            />
+            <Route
+              path="/flexible"
+              element={<FlexibleSlotDemo />}
             />
           </Routes>
         </main>

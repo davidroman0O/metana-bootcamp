@@ -93,6 +93,13 @@ const IndividualReel = forwardRef<IndividualReelRef, IndividualReelProps>(({
   const targetSymbolRef = useRef<number | null>(null);
   const reelStripRef = useRef<number[]>([]);
   
+  // NUCLEAR LOCK: Cache target position to prevent oscillation
+  const lockedTargetPositionRef = useRef<number | null>(null);
+  
+  // PLATINUM NUCLEAR LOCK: Master lock flag to bypass ALL other calculations
+  const masterLockEngagedRef = useRef<boolean>(false);
+  const lockedTargetSymbolRef = useRef<number | null>(null);
+
   // Animation references - simplified
   const currentAnimationRef = useRef<any>(null);
   const animationFrameRef = useRef<number>(0);
@@ -124,49 +131,14 @@ const IndividualReel = forwardRef<IndividualReelRef, IndividualReelProps>(({
     return newStrip;
   };
 
-  // Calculate the exact reel position needed to center the target symbol on the red line
-  const calculateTargetPosition = (targetSymbol: number): number | null => {
-    const currentReelIndex = Math.floor(reelAnimation.current.position / SYMBOL_SIZE);
-    const symbolOffset = reelAnimation.current.position % SYMBOL_SIZE;
-    
-    // Find the target symbol that's currently closest to being centered
-    let targetSymbolStripIndex = -1;
-    let closestDistance = Infinity;
-    
-    // Check which visible target symbol is closest to the red line
-    for (let row = 0; row < ROW_COUNT + 1; row++) {
-      let stripIndex = (currentReelIndex + row) % REEL_POSITIONS;
-      if (stripIndex < 0) stripIndex += REEL_POSITIONS;
-      
-      const symbolAtThisRow = reelStripRef.current[stripIndex];
-      
-      if (symbolAtThisRow === targetSymbol) {
-        const symbolScreenTop = row * SYMBOL_SIZE - symbolOffset;
-        const symbolScreenCenter = symbolScreenTop + SYMBOL_CENTER_OFFSET;
-        const FIXED_PAYLINE_CENTER = 150;
-        const distance = Math.abs(symbolScreenCenter - FIXED_PAYLINE_CENTER);
-        
-        if (distance < closestDistance) {
-          closestDistance = distance;
-          targetSymbolStripIndex = stripIndex;
-        }
-      }
-    }
-    
-    if (targetSymbolStripIndex === -1) return null;
-    
-    // Calculate exact position to center this symbol
-    const targetCurrentReelIndex = (targetSymbolStripIndex - 1 + REEL_POSITIONS) % REEL_POSITIONS;
-    const targetReelPosition = targetCurrentReelIndex * SYMBOL_SIZE;
-    
-    return targetReelPosition;
-  };
-
-  // CLEAN target detection - simple and reliable
+  // FIXED target detection - single point, more forgiving, no oscillation
   const checkTargetSymbolCrossing = (targetSymbol: number): boolean => {
     const currentReelIndex = Math.floor(reelAnimation.current.position / SYMBOL_SIZE);
     const symbolOffset = reelAnimation.current.position % SYMBOL_SIZE;
     const FIXED_PAYLINE_CENTER = 150;
+    
+    // Single detection point with larger tolerance to prevent oscillation
+    const DETECTION_TOLERANCE = 20; // More forgiving than before
     
     // Check visible rows for target symbol
     for (let row = 0; row < ROW_COUNT + 2; row++) {
@@ -177,8 +149,10 @@ const IndividualReel = forwardRef<IndividualReelRef, IndividualReelProps>(({
         const symbolScreenTop = row * SYMBOL_SIZE - symbolOffset;
         const symbolScreenCenter = symbolScreenTop + SYMBOL_CENTER_OFFSET;
         
-        // Simple crossing check - symbol center at or past payline
-        if (symbolScreenCenter >= FIXED_PAYLINE_CENTER) {
+        // Single forgiving check - symbol center within tolerance of payline
+        const distanceFromPayline = Math.abs(symbolScreenCenter - FIXED_PAYLINE_CENTER);
+        if (distanceFromPayline <= DETECTION_TOLERANCE) {
+          console.log(`🎯 Reel ${reelIndex}: Target ${targetSymbol} detected (distance: ${distanceFromPayline.toFixed(1)}px)`);
           return true;
         }
       }
@@ -187,8 +161,59 @@ const IndividualReel = forwardRef<IndividualReelRef, IndividualReelProps>(({
     return false;
   };
 
+  // DETERMINISTIC position calculation - always pick the FIRST upcoming target symbol
+  const calculateTargetPosition = (targetSymbol: number): number | null => {
+    const currentReelIndex = Math.floor(reelAnimation.current.position / SYMBOL_SIZE);
+    const symbolOffset = reelAnimation.current.position % SYMBOL_SIZE;
+    const FIXED_PAYLINE_CENTER = 150;
+    
+    console.log(`🔍 Reel ${reelIndex}: Starting position calculation for symbol ${targetSymbol}`);
+    console.log(`📍 Current reel index: ${currentReelIndex}, offset: ${symbolOffset.toFixed(1)}`);
+    
+    // DETERMINISTIC: Always pick the FIRST upcoming instance of target symbol
+    // Look ahead in the strip direction to find the next occurrence
+    for (let lookAhead = 0; lookAhead < REEL_POSITIONS; lookAhead++) {
+      let stripIndex = (currentReelIndex + lookAhead) % REEL_POSITIONS;
+      if (stripIndex < 0) stripIndex += REEL_POSITIONS;
+      
+      const symbolAtThisPosition = reelStripRef.current[stripIndex];
+      
+      if (symbolAtThisPosition === targetSymbol) {
+        console.log(`✅ Found target symbol ${targetSymbol} at strip index ${stripIndex} (lookAhead: ${lookAhead})`);
+        
+        // Calculate the exact position to center this specific symbol instance
+        // We want this symbol to appear in the MIDDLE row (row 1, 0-indexed)
+        // Row 0 (top): currentReelIndex + 0
+        // Row 1 (middle): currentReelIndex + 1  ← TARGET ROW
+        // Row 2 (bottom): currentReelIndex + 2
+        // So we need: currentReelIndex + 1 = stripIndex
+        // Therefore: currentReelIndex = stripIndex - 1
+        const targetReelPosition = ((stripIndex - 1 + REEL_POSITIONS) % REEL_POSITIONS) * SYMBOL_SIZE;
+        
+        console.log(`🎯 DETERMINISTIC target position: ${targetReelPosition} for symbol at strip index ${stripIndex}`);
+        
+        // Verify this makes sense
+        const verificationReelIndex = Math.floor(targetReelPosition / SYMBOL_SIZE);
+        const verificationMiddleRowIndex = (verificationReelIndex + 1) % REEL_POSITIONS;
+        const verificationSymbol = reelStripRef.current[verificationMiddleRowIndex];
+        console.log(`✓ Verification: At position ${targetReelPosition}, middle row (index ${verificationMiddleRowIndex}) will show symbol ${verificationSymbol} (expected: ${targetSymbol})`);
+        
+        return targetReelPosition;
+      }
+    }
+    
+    console.log(`❌ No target symbol ${targetSymbol} found in entire strip!`);
+    return null;
+  };
+
   // Get current symbol closest to payline center
   const getCurrentSymbol = (): number => {
+    // PLATINUM NUCLEAR LOCK: If master lock is engaged, return the locked symbol directly
+    if (masterLockEngagedRef.current && lockedTargetSymbolRef.current !== null) {
+      console.log(`🔒 PLATINUM LOCK: Returning locked symbol ${lockedTargetSymbolRef.current} instead of calculating`);
+      return lockedTargetSymbolRef.current;
+    }
+    
     const currentReelIndex = Math.floor(reelAnimation.current.position / SYMBOL_SIZE);
     const symbolOffset = reelAnimation.current.position % SYMBOL_SIZE;
     
@@ -255,6 +280,16 @@ const IndividualReel = forwardRef<IndividualReelRef, IndividualReelProps>(({
     targetSymbolRef.current = null;
     targetDetectedRef.current = false;
     
+    // CLEAR ALL LOCKS for next spin
+    lockedTargetPositionRef.current = null;
+    masterLockEngagedRef.current = false;
+    lockedTargetSymbolRef.current = null;
+    
+    // Clear any blur effects
+    if (canvasRef.current) {
+      canvasRef.current.style.filter = 'none';
+    }
+    
     // DON'T regenerate reel strip - keep existing symbols!
     
     // Always end in idle
@@ -276,6 +311,16 @@ const IndividualReel = forwardRef<IndividualReelRef, IndividualReelProps>(({
     targetSymbolRef.current = null;
     targetDetectedRef.current = false;
     
+    // CLEAR ALL LOCKS for fresh start
+    lockedTargetPositionRef.current = null;
+    masterLockEngagedRef.current = false;
+    lockedTargetSymbolRef.current = null;
+    
+    // Clear any blur effects
+    if (canvasRef.current) {
+      canvasRef.current.style.filter = 'none';
+    }
+    
     // Generate fresh reel strip for manual reset
     reelStripRef.current = generateRandomStrip();
     
@@ -284,7 +329,7 @@ const IndividualReel = forwardRef<IndividualReelRef, IndividualReelProps>(({
     render();
   };
 
-  // Draw a symbol at the given position
+  // Draw a symbol at the given position (clean, no blur)
   const drawSymbol = (symbolIndex: number, x: number, y: number) => {
     if (!ctxRef.current) return;
     
@@ -312,15 +357,44 @@ const IndividualReel = forwardRef<IndividualReelRef, IndividualReelProps>(({
     ctx.fillText(symbol.emoji, centerX, centerY);
   };
 
-  // Render the reel (called by Anime.js onUpdate)
+  // Render the reel (with proper canvas filter motion blur)
   const render = () => {
     if (!ctxRef.current || !canvasRef.current) return;
     
     const ctx = ctxRef.current;
+    const canvas = canvasRef.current;
     
     // Clear canvas
     ctx.fillStyle = '#0a1526';
     ctx.fillRect(0, 0, width, height);
+    
+    // Calculate dynamic vertical motion blur based on current speed and state
+    const currentSpeed = reelAnimation.current.speed;
+    const currentState = currentStateRef.current;
+    
+    let blurIntensity = 0;
+    
+    // Map speed to vertical motion blur intensity
+    if (currentState === REEL_STATE_SPINNING_UP) {
+      // Blur increases as reel accelerates (0 to MAX_SPINNING_SPEED)
+      blurIntensity = Math.min((currentSpeed / MAX_SPINNING_SPEED) * 2, 6);
+    } else if (currentState === REEL_STATE_SPINNING) {
+      // Maximum blur during constant high-speed spinning
+      blurIntensity = 6;
+    } else if (currentState === REEL_STATE_SPINNING_DOWN) {
+      // Blur decreases as reel decelerates
+      blurIntensity = Math.max((currentSpeed / MAX_SPINNING_SPEED) * 2, 0);
+    } else {
+      // No blur when idle, stopping, settling, or showing result
+      blurIntensity = 0;
+    }
+    
+    // Apply vertical-only motion blur using canvas filter (much cleaner!)
+    if (blurIntensity > 0.1) {
+      ctx.filter = `blur(0px ${blurIntensity.toFixed(1)}px)`; // Only vertical blur
+    } else {
+      ctx.filter = 'none';
+    }
     
     // Set clipping area
     ctx.save();
@@ -343,10 +417,12 @@ const IndividualReel = forwardRef<IndividualReelRef, IndividualReelProps>(({
       // Calculate y position with offset for smooth animation
       const y = j * SYMBOL_SIZE - symbolOffset;
       
-      // Draw the symbol
+      // Draw the symbol (with canvas filter blur applied)
       drawSymbol(symbolIndex, 0, y);
     }
     
+    // Reset filter for future draws
+    ctx.filter = 'none';
     ctx.restore();
   };
 
@@ -407,13 +483,14 @@ const IndividualReel = forwardRef<IndividualReelRef, IndividualReelProps>(({
         continuousSpinLoop();
       });
       
-      // Spin down phase - CLEAN deceleration with simple detection
+      // Spin down phase - NUCLEAR LOCK deceleration with bulletproof detection
       self.add('spinDown', () => {
         stopAllAnimations();
         transitionToState(REEL_STATE_SPINNING_DOWN);
         
         console.log(`🎯 Reel ${reelIndex}: Clean deceleration starting`);
         
+        // PLATINUM NUCLEAR LOCK: Create completely isolated animation state
         const animationState = { 
           speed: MAX_SPINNING_SPEED,
           position: reelAnimation.current.position 
@@ -424,98 +501,121 @@ const IndividualReel = forwardRef<IndividualReelRef, IndividualReelProps>(({
           duration: 6000,
           ease: 'outQuint',
           onUpdate: () => {
-            // Update position
-            animationState.position -= animationState.speed;
-            if (animationState.position < 0) {
-              animationState.position += REEL_PIXEL_LENGTH;
-            }
-            
-            reelAnimation.current.position = animationState.position;
-            reelAnimation.current.speed = animationState.speed;
-            reelAnimation.current.oscillation = 0;
-            
-            render();
-            
-            // FIXED: Use detection flag to prevent multiple triggers
-            if (targetSymbolRef.current && 
-                !targetDetectedRef.current &&
-                checkTargetSymbolCrossing(targetSymbolRef.current)) {
-              console.log(`🎯 Reel ${reelIndex}: Target ${targetSymbolRef.current} crossed - capturing`);
-              targetDetectedRef.current = true; // STOP multiple detections
-              self.methods.capture();
-            } else if (targetSymbolRef.current) {
-              // Debug logging to see what's happening
-              const crossing = checkTargetSymbolCrossing(targetSymbolRef.current);
-              if (crossing && targetDetectedRef.current) {
-                console.log(`🚫 Reel ${reelIndex}: Target detected but flag already set`);
+            // PLATINUM NUCLEAR LOCK: Only update position if master lock is NOT engaged
+            if (!masterLockEngagedRef.current) {
+              // Update position
+              animationState.position -= animationState.speed;
+              if (animationState.position < 0) {
+                animationState.position += REEL_PIXEL_LENGTH;
+              }
+              
+              reelAnimation.current.position = animationState.position;
+              reelAnimation.current.speed = animationState.speed;
+              reelAnimation.current.oscillation = 0;
+              
+              render();
+              
+              // NUCLEAR LOCK: Only check ONCE, then NEVER again
+              if (targetSymbolRef.current && 
+                  !targetDetectedRef.current &&
+                  checkTargetSymbolCrossing(targetSymbolRef.current)) {
+                console.log(`🔒 PLATINUM NUCLEAR LOCK ENGAGED - Target ${targetSymbolRef.current} detected!`);
+                
+                // IMMEDIATE MASTER LOCK ENGAGEMENT
+                targetDetectedRef.current = true; // PERMANENT LOCK
+                masterLockEngagedRef.current = true; // PLATINUM MASTER LOCK
+                lockedTargetSymbolRef.current = targetSymbolRef.current; // Lock the target symbol
+                
+                // IMMEDIATELY stop this animation to prevent ANY further updates
+                if (currentAnimationRef.current) {
+                  currentAnimationRef.current.pause();
+                  currentAnimationRef.current = null;
+                }
+                
+                // Force immediate capture with zero delay
+                self.methods.platinumCapture();
               }
             }
           },
           onComplete: () => {
-            console.log(`⚠️ Reel ${reelIndex}: Deceleration timeout`);
-            self.methods.capture();
+            if (!targetDetectedRef.current && !masterLockEngagedRef.current) {
+              console.log(`⚠️ Reel ${reelIndex}: Deceleration timeout without detection`);
+              self.methods.platinumCapture();
+            }
           }
         });
       });
       
-      // Capture phase - CLEAN snap to target
-      self.add('capture', () => {
-        console.log(`🔥 Reel ${reelIndex}: CAPTURE METHOD CALLED for target ${targetSymbolRef.current}`);
-        stopAllAnimations();
-        transitionToState(REEL_STATE_STOPPING);
+      // PLATINUM Capture phase - Completely atomic, zero interference
+      self.add('platinumCapture', () => {
+        console.log(`💎 Reel ${reelIndex}: PLATINUM CAPTURE for target ${targetSymbolRef.current}`);
         
-        const targetPosition = calculateTargetPosition(targetSymbolRef.current!);
-        
-        if (targetPosition === null) {
-          console.log(`⚠️ Reel ${reelIndex}: No target position - showing current`);
-          self.methods.showResult();
+        // PREVENT ANY duplicate calls
+        if (currentStateRef.current === REEL_STATE_STOPPING) {
+          console.log(`🚫 Reel ${reelIndex}: PLATINUM CAPTURE ALREADY IN PROGRESS - HARD IGNORE`);
           return;
         }
         
-        console.log(`🎯 Reel ${reelIndex}: Capturing to position ${targetPosition.toFixed(1)}`);
+        stopAllAnimations();
+        transitionToState(REEL_STATE_STOPPING);
         
+        let targetPosition: number | null = null;
+        
+        // PLATINUM NUCLEAR LOCK: Use cached position if available, never recalculate
+        if (lockedTargetPositionRef.current !== null) {
+          targetPosition = lockedTargetPositionRef.current;
+          console.log(`💎 PLATINUM: Using LOCKED target position: ${targetPosition.toFixed(1)}`);
+        } else {
+          targetPosition = calculateTargetPosition(targetSymbolRef.current!);
+          if (targetPosition !== null) {
+            lockedTargetPositionRef.current = targetPosition; // LOCK IT FOREVER
+            console.log(`💎 PLATINUM: LOCKING target position: ${targetPosition.toFixed(1)}`);
+          }
+        }
+        
+        if (targetPosition === null) {
+          console.log(`⚠️ Reel ${reelIndex}: No target position - showing current`);
+          self.methods.platinumResult();
+          return;
+        }
+        
+        // ENGAGE MASTER LOCK if not already engaged
+        if (!masterLockEngagedRef.current) {
+          masterLockEngagedRef.current = true;
+          lockedTargetSymbolRef.current = targetSymbolRef.current!;
+          console.log(`💎 PLATINUM MASTER LOCK ENGAGED for symbol ${lockedTargetSymbolRef.current}`);
+        }
+        
+        console.log(`💎 PLATINUM: Capturing to LOCKED position ${targetPosition.toFixed(1)}`);
+        
+        // ATOMIC SNAP - no elastic animation that could drift
         currentAnimationRef.current = animate(reelAnimation.current, {
           position: targetPosition,
           speed: 0,
-          duration: 800,
-          ease: 'outElastic',
-          onUpdate: render,
-          onComplete: () => {
-            console.log(`✅ Reel ${reelIndex}: Capture complete`);
-            self.methods.showResult();
-          }
-        });
-      });
-      
-      // Settling phase - subtle bounce effect
-      self.add('settle', () => {
-        transitionToState(REEL_STATE_SETTLING);
-        
-        const referencePosition = reelAnimation.current.position;
-        
-        // Subtle bounce animation
-        currentAnimationRef.current = animate(reelAnimation.current, {
-          position: [
-            { to: referencePosition + 8, duration: SETTLING_DURATION * 0.3 },
-            { to: referencePosition - 4, duration: SETTLING_DURATION * 0.4 },
-            { to: referencePosition, duration: SETTLING_DURATION * 0.3 }
-          ],
-          ease: 'outElastic(1, 0.5)',
+          duration: 800, // Shorter, cleaner animation
+          ease: 'outQuart', // Simpler easing, less bouncy
           onUpdate: () => {
-            render(); // Render on each update
+            // PLATINUM LOCK: Only render, no position interference
+            render();
           },
           onComplete: () => {
-            self.methods.showResult();
+            console.log(`💎 PLATINUM: Capture complete at EXACT position ${reelAnimation.current.position.toFixed(1)}`);
+            // SKIP settling phase entirely - go directly to result
+            self.methods.platinumResult();
           }
         });
       });
       
-      // Result phase - CLEAN and immediate
-      self.add('showResult', () => {
+      // PLATINUM Result phase - Deterministic result based on locked symbol
+      self.add('platinumResult', () => {
         transitionToState(REEL_STATE_SHOWING_RESULT);
         
-        const finalSymbol = getCurrentSymbol();
-        console.log(`🎯 Reel ${reelIndex}: Result = ${finalSymbol}`);
+        // PLATINUM NUCLEAR LOCK: Use locked symbol if available
+        const finalSymbol = masterLockEngagedRef.current && lockedTargetSymbolRef.current !== null 
+          ? lockedTargetSymbolRef.current 
+          : getCurrentSymbol();
+          
+        console.log(`💎 PLATINUM RESULT: Symbol = ${finalSymbol} ${masterLockEngagedRef.current ? '(LOCKED)' : '(CALCULATED)'}`);
         onResult?.(reelIndex, finalSymbol);
         
         // Auto-return to idle after brief display
@@ -568,6 +668,11 @@ const IndividualReel = forwardRef<IndividualReelRef, IndividualReelProps>(({
     // Reset detection flag for new spin
     targetDetectedRef.current = false;
     
+    // CLEAR ALL LOCKS for new spin
+    lockedTargetPositionRef.current = null;
+    masterLockEngagedRef.current = false;
+    lockedTargetSymbolRef.current = null;
+    
     console.log(`🎮 Reel ${reelIndex}: Starting clean spin`);
     
     if (animeScope.current?.methods?.spinUp) {
@@ -605,7 +710,13 @@ const IndividualReel = forwardRef<IndividualReelRef, IndividualReelProps>(({
     
     targetSymbolRef.current = symbol;
     targetDetectedRef.current = false; // Reset detection flag for new target
-    console.log(`🎯 Reel ${reelIndex}: Target set to ${symbol}, detection flag reset to false`);
+    
+    // CLEAR ALL LOCKS for new target
+    lockedTargetPositionRef.current = null;
+    masterLockEngagedRef.current = false;
+    lockedTargetSymbolRef.current = null;
+    
+    console.log(`🎯 Reel ${reelIndex}: Target set to ${symbol}, ALL locks cleared`);
     
     // Auto-transition to deceleration if spinning
     if (currentStateRef.current === REEL_STATE_SPINNING) {

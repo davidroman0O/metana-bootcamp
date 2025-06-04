@@ -14,6 +14,24 @@ const SYMBOLS = [
   { id: 6, emoji: '🐵', name: 'JACKPOT', color: '#facc15' }    // Gold
 ];
 
+/**
+ * FLEXIBLE SLOT MACHINE SYSTEM
+ * 
+ * This slot machine now supports 1 to 10 reels dynamically!
+ * 
+ * Usage Examples:
+ * - <SlotMachine /> // Default 3 reels
+ * - <SlotMachine reelCount={1} /> // Single reel
+ * - <SlotMachine reelCount={5} /> // 5 reels
+ * - <SlotMachine reelCount={7} /> // Lucky 7 reels
+ * 
+ * APIs automatically adapt:
+ * - setAllReelTargets([1,2,3,4,5]) for 5 reels
+ * - setReelTarget(4, 6) for reel index 4
+ * - Sequential reveal works for any count
+ * - Payout logic adapts (perfect matches, pairs)
+ */
+
 // Slot Machine State Machine States
 const MACHINE_STATE_IDLE = 'idle';
 const MACHINE_STATE_SPINNING_UP = 'spinning_up';
@@ -49,6 +67,7 @@ interface SlotMachineProps {
   onResult?: (symbols: number[], payout: number, payoutType: string) => void;
   onStateChange?: (state: string) => void;
   isConnected?: boolean;
+  reelCount?: number; // Number of reels (default: 3, min: 1, max: 10)
 }
 
 interface SlotMachineRef {
@@ -81,22 +100,31 @@ interface SlotMachineRef {
 const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
   onResult,
   onStateChange,
-  isConnected = false
+  isConnected = false,
+  reelCount = 3
 }, ref) => {
+  // Validate reelCount
+  const validReelCount = Math.min(Math.max(reelCount, 1), 10); // Clamp between 1-10
+  if (reelCount !== validReelCount) {
+    console.warn(`Invalid reelCount ${reelCount}, clamped to ${validReelCount}`);
+  }
+
   const { isControlledMode, isAnimatedMode } = useAppMode();
   const leverRef = useRef<any>(null);
-  const reel1Ref = useRef<any>(null);
-  const reel2Ref = useRef<any>(null);
-  const reel3Ref = useRef<any>(null);
+  
+  // Dynamic reel refs instead of fixed reel1Ref, reel2Ref, reel3Ref
+  const reelRefs = useRef<Array<React.RefObject<any>>>(
+    Array.from({ length: validReelCount }, () => React.createRef())
+  );
   
   // State Machine State
   const currentStateRef = useRef<string>(MACHINE_STATE_IDLE);
   const targetSymbolsRef = useRef<number[] | null>(null);
   
-  // Reel state tracking
-  const reelStatesRef = useRef<string[]>(['idle', 'idle', 'idle']);
-  const reelResultsRef = useRef<number[]>([1, 2, 3]);
-  const reelCompletionsRef = useRef<boolean[]>([false, false, false]); // Track which reels have completed
+  // Dynamic reel state tracking based on reel count
+  const reelStatesRef = useRef<string[]>(Array(validReelCount).fill('idle'));
+  const reelResultsRef = useRef<number[]>(Array(validReelCount).fill(1).map((_, i) => i + 1));
+  const reelCompletionsRef = useRef<boolean[]>(Array(validReelCount).fill(false));
   
   // Sequential deceleration queue for old-school slot machine feel
   const decelerationQueueRef = useRef<Array<{reelIndex: number, targetSymbol: number}>>([]);
@@ -107,8 +135,8 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
   const revealQueueRef = useRef<Array<{reelIndex: number, result: number}>>([]);
   const isSequentialRevealingRef = useRef<boolean>(false);
   const revealTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const capturedReelsRef = useRef<boolean[]>([false, false, false]);
-  const reelCaptureResultsRef = useRef<number[]>([0, 0, 0]);
+  const capturedReelsRef = useRef<boolean[]>(Array(validReelCount).fill(false));
+  const reelCaptureResultsRef = useRef<number[]>(Array(validReelCount).fill(0));
   const isSimultaneousRevealRef = useRef<boolean>(false);
   
   // UI State
@@ -119,6 +147,98 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
   // Transition timers
   const transitionTimerRef = useRef<NodeJS.Timeout | null>(null);
   const demoTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Refs for dynamic lever positioning
+  const slotFrameRef = useRef<HTMLDivElement>(null);
+  const leverContainerRef = useRef<HTMLDivElement>(null);
+
+  // Helper function to check if ALL reels are truly ready
+  const areAllReelsReady = (): boolean => {
+    let readyCount = 0;
+    let totalCount = 0;
+    
+    reelRefs.current.forEach((reelRef, index) => {
+      if (reelRef?.current) {
+        totalCount++;
+        if (reelRef.current.isReady && reelRef.current.isReady()) {
+          readyCount++;
+        } else {
+          const state = reelRef.current.getState ? reelRef.current.getState() : 'unknown';
+          console.log(`⏳ Reel ${index} not ready (state: ${state})`);
+        }
+      }
+    });
+    
+    const allReady = readyCount === validReelCount && totalCount === validReelCount;
+    if (!allReady) {
+      console.log(`🚨 Reels readiness check: ${readyCount}/${validReelCount} ready, ${totalCount}/${validReelCount} connected`);
+    }
+    
+    return allReady;
+  };
+
+  // Update refs when reel count changes and clear any pending operations
+  useEffect(() => {
+    // Clear any pending operations when reel count changes
+    if (sequentialTimerRef.current) {
+      clearTimeout(sequentialTimerRef.current);
+      sequentialTimerRef.current = null;
+    }
+    if (revealTimerRef.current) {
+      clearTimeout(revealTimerRef.current);
+      revealTimerRef.current = null;
+    }
+    
+    // Clear queues
+    decelerationQueueRef.current = [];
+    revealQueueRef.current = [];
+    isSequentialStoppingRef.current = false;
+    isSequentialRevealingRef.current = false;
+    
+    // Reset arrays to match new reel count
+    reelStatesRef.current = Array(validReelCount).fill('idle');
+    reelResultsRef.current = Array(validReelCount).fill(1).map((_, i) => i + 1);
+    reelCompletionsRef.current = Array(validReelCount).fill(false);
+    capturedReelsRef.current = Array(validReelCount).fill(false);
+    reelCaptureResultsRef.current = Array(validReelCount).fill(0);
+    
+    // Recreate refs for new reel count
+    reelRefs.current = Array.from({ length: validReelCount }, () => React.createRef());
+    
+    console.log(`🎰 Reel count changed to ${validReelCount}, cleared all queues`);
+  }, [validReelCount]);
+
+  // Dynamic lever positioning
+  useEffect(() => {
+    const positionLever = () => {
+      if (slotFrameRef.current && leverContainerRef.current) {
+        const slotFrameRect = slotFrameRef.current.getBoundingClientRect();
+        const slotFrameWidth = slotFrameRect.width;
+        
+        // Position lever at the RIGHT EDGE of the yellow slot frame
+        // The lever should start where the yellow frame ends
+        const leverLeftPosition = slotFrameWidth; // At the right edge of yellow frame
+        
+        leverContainerRef.current.style.left = `${leverLeftPosition}px`;
+        
+        console.log(`🎮 Lever positioned at RIGHT EDGE: ${leverLeftPosition}px (yellow frame width: ${slotFrameWidth}px)`);
+      }
+    };
+
+    // Position immediately
+    positionLever();
+
+    // Position after a short delay to ensure DOM is fully rendered
+    const timer = setTimeout(positionLever, 100);
+
+    // Position on window resize
+    window.addEventListener('resize', positionLever);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', positionLever);
+    };
+  }, [validReelCount]); // Re-run when reel count changes
 
   // State Machine Methods
   const transitionToState = (newState: string) => {
@@ -158,7 +278,7 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
     }
     
     // In animated mode, start demo cycle
-    if (isAnimatedMode) {
+      if (isAnimatedMode) {
       startDemoMode();
     }
   };
@@ -168,25 +288,85 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
     setLeverDisabled(true);
     
     // Reset completion tracking for new spin
-    reelCompletionsRef.current = [false, false, false];
+    reelCompletionsRef.current = Array(validReelCount).fill(false);
     
-    // Start all reels spinning
-    const success1 = reel1Ref.current?.startSpin();
-    const success2 = reel2Ref.current?.startSpin();
-    const success3 = reel3Ref.current?.startSpin();
+    // Validate all reel refs are properly connected AND each reel is ready
+    let refsConnected = 0;
+    let reelsReady = 0;
     
-    if (!success1 || !success2 || !success3) {
-      console.error('Failed to start one or more reels');
-      transitionToState(MACHINE_STATE_IDLE);
+    reelRefs.current.forEach((reelRef, index) => {
+      if (reelRef?.current) {
+        refsConnected++;
+        
+        // CRITICAL: Check if this specific reel is actually ready
+        if (reelRef.current.isReady && reelRef.current.isReady()) {
+          reelsReady++;
+        } else {
+          const reelState = reelRef.current.getState ? reelRef.current.getState() : 'unknown';
+          console.warn(`🚨 Reel ${index} ref exists but NOT READY (state: ${reelState})`);
+        }
+      } else {
+        console.warn(`🚨 Reel ${index} ref is not connected`);
+      }
+    });
+    
+    if (refsConnected !== validReelCount) {
+      console.error(`🚨 Only ${refsConnected}/${validReelCount} reel refs connected. Aborting spin.`);
+      setDisplayMessage('Error: Reels not ready. Try resetting.');
+      setTimeout(() => transitionToState(MACHINE_STATE_IDLE), 1000);
       return;
     }
     
+    if (reelsReady !== validReelCount) {
+      console.error(`🚨 Only ${reelsReady}/${validReelCount} reels ready (${refsConnected} connected). Some reels are busy!`);
+      setDisplayMessage(`Error: ${validReelCount - reelsReady} reel(s) still busy. Wait a moment...`);
+      setTimeout(() => transitionToState(MACHINE_STATE_IDLE), 1000);
+      return;
+    }
+    
+    console.log(`✅ All ${reelsReady} reels are connected AND ready`);
+    
+    // Start all reels spinning
+    let success = true;
+    let startedReels = 0;
+    reelRefs.current.forEach((reelRef, index) => {
+      if (reelRef.current) {
+        const started = reelRef.current.startSpin();
+        if (started) {
+          startedReels++;
+        } else {
+          console.error(`🚨 Failed to start reel ${index}`);
+        }
+        success = success && started;
+      }
+    });
+    
+    if (!success || startedReels !== validReelCount) {
+      console.error(`🚨 Failed to start reels: ${startedReels}/${validReelCount} started`);
+      setDisplayMessage('Error: Failed to start reels. Resetting...');
+      setTimeout(() => transitionToState(MACHINE_STATE_IDLE), 1000);
+      return;
+    }
+    
+    console.log(`✅ Successfully started all ${startedReels} reels`);
+    
     // Set target symbols if provided
     if (targetSymbolsRef.current) {
-      reel1Ref.current?.setTargetSymbol(targetSymbolsRef.current[0]);
-      reel2Ref.current?.setTargetSymbol(targetSymbolsRef.current[1]);
-      reel3Ref.current?.setTargetSymbol(targetSymbolsRef.current[2]);
+      reelRefs.current.forEach((reelRef, index) => {
+        if (reelRef.current && targetSymbolsRef.current) {
+          reelRef.current.setTargetSymbol(targetSymbolsRef.current[index]);
+        }
+      });
     }
+    
+    // Safety timeout: if we don't transition to SPINNING within 5 seconds, reset
+    transitionTimerRef.current = setTimeout(() => {
+      if (currentStateRef.current === MACHINE_STATE_SPINNING_UP) {
+        console.error('🚨 Stuck in SPINNING_UP state for 5 seconds. Force resetting.');
+        setDisplayMessage('Spin timeout. Resetting...');
+        setTimeout(() => transitionToState(MACHINE_STATE_IDLE), 1000);
+      }
+    }, 5000);
   };
 
   const handleSpinningEntry = () => {
@@ -210,9 +390,16 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
       return false;
     }
     
+    // CRITICAL: Check if ALL individual reels are actually ready
+    if (!areAllReelsReady()) {
+      console.error('SlotMachine: Cannot start spin, not all reels are ready');
+      setDisplayMessage('Some reels are busy. Please wait...');
+      return false;
+    }
+    
     // Validate target symbols if provided
     if (targetSymbols) {
-      if (targetSymbols.length !== 3 || targetSymbols.some(s => s < 1 || s > 6)) {
+      if (targetSymbols.length !== validReelCount || targetSymbols.some(s => s < 1 || s > 6)) {
         console.error('SlotMachine: Invalid target symbols');
         return false;
       }
@@ -232,9 +419,11 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
     }
     
     console.log('🛑 SlotMachine: Force stopping all reels');
-    reel1Ref.current?.forceStop();
-    reel2Ref.current?.forceStop();
-    reel3Ref.current?.forceStop();
+    reelRefs.current.forEach((reelRef, index) => {
+      if (reelRef && reelRef.current && index < reelRefs.current.length) {
+        reelRef.current.forceStop();
+      }
+    });
     return true;
   };
 
@@ -243,19 +432,30 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
       return false;
     }
     
+    if (targetSymbols.length !== validReelCount) {
+      console.error(`stopWithTargets: Expected ${validReelCount} symbols, got ${targetSymbols.length}`);
+      return false;
+    }
+    
     console.log(`🎯 SlotMachine: Stopping with targets [${targetSymbols.join(', ')}]`);
     
     // Stop reels with staggered timing for realistic effect
-    setTimeout(() => reel1Ref.current?.forceStop(targetSymbols[0]), 0);
-    setTimeout(() => reel2Ref.current?.forceStop(targetSymbols[1]), 500);
-    setTimeout(() => reel3Ref.current?.forceStop(targetSymbols[2]), 1000);
+    targetSymbols.forEach((symbol, index) => {
+      if (index < reelRefs.current.length && reelRefs.current[index]?.current) {
+        setTimeout(() => {
+          reelRefs.current[index].current?.forceStop(symbol);
+        }, index * 500); // Stagger by 500ms per reel
+      }
+    });
     
     return true;
   };
 
   const getState = (): string => currentStateRef.current;
   
-  const isReady = (): boolean => currentStateRef.current === MACHINE_STATE_IDLE;
+  const isReady = (): boolean => {
+    return currentStateRef.current === MACHINE_STATE_IDLE && areAllReelsReady();
+  };
   
   const isSpinning = (): boolean => {
     return currentStateRef.current === MACHINE_STATE_SPINNING_UP ||
@@ -299,18 +499,20 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
     // Reset sequential reveal state
     revealQueueRef.current = [];
     isSequentialRevealingRef.current = false;
-    capturedReelsRef.current = [false, false, false];
-    reelCaptureResultsRef.current = [0, 0, 0];
+    capturedReelsRef.current = Array(validReelCount).fill(false);
+    reelCaptureResultsRef.current = Array(validReelCount).fill(0);
     isSimultaneousRevealRef.current = false;
     
     // Reset all reels
-    reel1Ref.current?.reset();
-    reel2Ref.current?.reset();
-    reel3Ref.current?.reset();
+    reelRefs.current.forEach(reelRef => {
+      if (reelRef.current) {
+        reelRef.current.reset();
+      }
+    });
     
     // Reset state
-    reelStatesRef.current = ['idle', 'idle', 'idle'];
-    reelCompletionsRef.current = [false, false, false]; // Reset completion tracking
+    reelStatesRef.current = Array(validReelCount).fill('idle');
+    reelCompletionsRef.current = Array(validReelCount).fill(false); // Reset completion tracking
     targetSymbolsRef.current = null;
     
     transitionToState(MACHINE_STATE_IDLE);
@@ -341,7 +543,24 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
     }
     
     const { reelIndex, targetSymbol } = decelerationQueueRef.current[stopIndex];
-    const reelRef = reelIndex === 0 ? reel1Ref : reelIndex === 1 ? reel2Ref : reel3Ref;
+    
+    // Bounds checking to prevent runtime errors
+    if (reelIndex >= reelRefs.current.length) {
+      console.error(`🚨 Invalid reel index ${reelIndex}, max is ${reelRefs.current.length - 1}`);
+      // Skip this reel and continue with next
+      if (stopIndex < decelerationQueueRef.current.length - 1) {
+        const randomDelay = REEL_STOP_INTERVAL + (Math.random() - 0.5) * REEL_STOP_RANDOMNESS;
+        sequentialTimerRef.current = setTimeout(() => {
+          processNextReelStop(stopIndex + 1);
+        }, randomDelay);
+      } else {
+        isSequentialStoppingRef.current = false;
+        decelerationQueueRef.current = [];
+      }
+      return;
+    }
+    
+    const reelRef = reelRefs.current[reelIndex];
     
     console.log(`🎯 Sequential stop ${stopIndex + 1}: Reel ${reelIndex} → Symbol ${targetSymbol}`);
     
@@ -365,7 +584,7 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
   };
 
   const setReelTarget = (reelIndex: number, symbol: number): boolean => {
-    if (reelIndex < 0 || reelIndex > 2 || symbol < 1 || symbol > 6) {
+    if (reelIndex < 0 || reelIndex > validReelCount - 1 || symbol < 1 || symbol > 6) {
       console.error(`Invalid reel index ${reelIndex} or symbol ${symbol}`);
       return false;
     }
@@ -395,8 +614,8 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
   };
 
   const setAllReelTargets = (symbols: number[]): boolean => {
-    if (symbols.length !== 3) {
-      console.error('setAllReelTargets requires exactly 3 symbols');
+    if (symbols.length !== validReelCount) {
+      console.error(`setAllReelTargets requires exactly ${validReelCount} symbols`);
       return false;
     }
 
@@ -407,12 +626,11 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
 
     console.log(`🎯 Queuing all reel targets: [${symbols.join(', ')}]`);
     
-    // Clear existing queue and add all three reels in order
-    decelerationQueueRef.current = [
-      { reelIndex: 0, targetSymbol: symbols[0] },
-      { reelIndex: 1, targetSymbol: symbols[1] },
-      { reelIndex: 2, targetSymbol: symbols[2] }
-    ];
+    // Clear existing queue and add all reels in order
+    decelerationQueueRef.current = symbols.map((symbol, index) => ({
+      reelIndex: index,
+      targetSymbol: symbol
+    }));
     
     // Start sequential processing
     processDecelerationQueue();
@@ -422,8 +640,8 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
 
   // Sequential reveal - reels reveal in strict 0→1→2 order with dramatic pauses
   const setAllReelTargetsSequential = (symbols: number[]): boolean => {
-    if (symbols.length !== 3) {
-      console.error('setAllReelTargetsSequential requires exactly 3 symbols');
+    if (symbols.length !== validReelCount) {
+      console.error(`setAllReelTargetsSequential requires exactly ${validReelCount} symbols`);
       return false;
     }
 
@@ -440,8 +658,8 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
 
   // Simultaneous reveal - all reels reveal together once all have captured
   const setAllReelTargetsSimultaneous = (symbols: number[]): boolean => {
-    if (symbols.length !== 3) {
-      console.error('setAllReelTargetsSimultaneous requires exactly 3 symbols');
+    if (symbols.length !== validReelCount) {
+      console.error(`setAllReelTargetsSimultaneous requires exactly ${validReelCount} symbols`);
       return false;
     }
 
@@ -460,7 +678,7 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
 
   // Individual reel with custom reveal order
   const setReelTargetWithRevealOrder = (reelIndex: number, symbol: number, revealOrder: number): boolean => {
-    if (reelIndex < 0 || reelIndex > 2 || symbol < 1 || symbol > 6 || revealOrder < 0 || revealOrder > 2) {
+    if (reelIndex < 0 || reelIndex > validReelCount - 1 || symbol < 1 || symbol > 6 || revealOrder < 0 || revealOrder > validReelCount - 1) {
       console.error(`Invalid reel index ${reelIndex}, symbol ${symbol}, or reveal order ${revealOrder}`);
       return false;
     }
@@ -519,7 +737,7 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
   };
 
   const processNextReveal = (reelIndex: number) => {
-    if (reelIndex >= 3) {
+    if (reelIndex >= validReelCount) {
       // All reels revealed
       isSequentialRevealingRef.current = false;
       isSimultaneousRevealRef.current = false; // Reset flag
@@ -578,35 +796,48 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
 
   // Result Evaluation
   const evaluateResult = () => {
-    const [s1, s2, s3] = reelResultsRef.current;
+    const results = reelResultsRef.current;
     const messages: string[] = [];
     let totalPayout = 0;
     let payoutType = 'LOSE';
     
-    console.log(`💰 Evaluating result: [${reelResultsRef.current.join(', ')}]`);
+    console.log(`💰 Evaluating result: [${results.join(', ')}]`);
     
-    // Perfect match
-    if (s1 === s2 && s2 === s3) {
-      const payout = MATCH_PAYOUT[s1] || 0;
+    // Perfect match - all symbols the same
+    if (results.every(symbol => symbol === results[0])) {
+      const payout = MATCH_PAYOUT[results[0]] || 0;
       if (payout > 0) {
-        const symbolName = SYMBOLS[s1 - 1].name;
-        messages.push(`${symbolName} TRIPLE! ${payout} CHIPS!`);
+        const symbolName = SYMBOLS[results[0] - 1].name;
+        messages.push(`${symbolName} ${validReelCount === 3 ? 'TRIPLE' : 'MATCH'}! ${payout} CHIPS!`);
         totalPayout += payout;
-        payoutType = `${symbolName} TRIPLE`;
+        payoutType = `${symbolName} ${validReelCount === 3 ? 'TRIPLE' : 'MATCH'}`;
       }
     }
-    // Special rocket pair (🚀🚀X)
-    else if (s1 === 5 && s2 === 5) {
+    // Special rocket pair (🚀🚀X) - only applies if we have at least 2 reels
+    else if (validReelCount >= 2 && results[0] === 5 && results[1] === 5) {
       messages.push(`ROCKET SPECIAL! ${PAYOUT_ROCKET_PAIR} CHIPS!`);
       totalPayout += PAYOUT_ROCKET_PAIR;
       payoutType = 'ROCKET SPECIAL';
     }
-    // Any pair
-    else if (s1 === s2 || s2 === s3 || s1 === s3) {
+    // Any pair - check if any two symbols match
+    else if (validReelCount >= 2) {
+      let hasPair = false;
+      for (let i = 0; i < results.length - 1; i++) {
+        for (let j = i + 1; j < results.length; j++) {
+          if (results[i] === results[j]) {
+            hasPair = true;
+            break;
+          }
+        }
+        if (hasPair) break;
+      }
+      
+      if (hasPair) {
       const pairPayout = 50;
       messages.push(`PAIR MATCH! ${pairPayout} CHIPS!`);
       totalPayout += pairPayout;
-      payoutType = 'PAIR WIN';
+        payoutType = 'PAIR WIN';
+      }
     }
     
     console.log(`💰 Total payout: ${totalPayout}`);
@@ -620,7 +851,7 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
     }
     
     // Notify parent of result
-    onResult?.(reelResultsRef.current, totalPayout, payoutType);
+    onResult?.(results, totalPayout, payoutType);
     
     // Return to idle after showing result
     transitionTimerRef.current = setTimeout(() => {
@@ -662,11 +893,7 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
         // In animated mode, auto-stop after delay with random targets
         if (isAnimatedMode) {
           setTimeout(() => {
-            const randomTargets = [
-              Math.floor(Math.random() * 6) + 1,
-              Math.floor(Math.random() * 6) + 1,
-              Math.floor(Math.random() * 6) + 1
-            ];
+            const randomTargets = Array.from({ length: validReelCount }, () => Math.floor(Math.random() * 6) + 1);
             console.log(`🎯 Auto-stopping with random targets: [${randomTargets.join(', ')}]`);
             stopWithTargets(randomTargets);
           }, 2000 + Math.random() * 2000); // 2-4 seconds
@@ -718,47 +945,32 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
   return (
     <div className="slot-machine-container">
       {/* Main slot machine frame */}
-      <div className="slot-frame">
+      <div className="slot-frame" ref={slotFrameRef}>
         {/* Header */}
         <div className="slot-header">
-          <span className="slot-title">🎰 BOOMER'S LAST HOPE 🎰</span>
+          <span className="slot-title">🐒 APE ESCAPE 🙈</span>
           {/* Mode indicator */}
-          <div className="text-xs text-center mt-1">
+          {/* <div className="text-xs text-center mt-1">
             {isControlledMode && <span className="text-purple-400">⚡ CONTROLLED MODE</span>}
             {isAnimatedMode && <span className="text-orange-400">🎬 ANIMATED DEMO</span>}
-          </div>
+          </div> */}
         </div>
 
         {/* Independent Reels Container */}
-        <div className="independent-reels-container">
+        <div className="independent-reels-container" data-reel-count={validReelCount}>
           <div className="reels-frame">
-            <IndividualReel
-              ref={reel1Ref}
-              reelIndex={0}
-              onStateChange={handleReelStateChange}
-              onResult={handleReelResult}
-              disabled={leverDisabled}
-              width={SYMBOL_SIZE}
-              height={REEL_AREA_HEIGHT}
-            />
-            <IndividualReel
-              ref={reel2Ref}
-              reelIndex={1}
-              onStateChange={handleReelStateChange}
-              onResult={handleReelResult}
-              disabled={leverDisabled}
-              width={SYMBOL_SIZE}
-              height={REEL_AREA_HEIGHT}
-            />
-            <IndividualReel
-              ref={reel3Ref}
-              reelIndex={2}
-              onStateChange={handleReelStateChange}
-              onResult={handleReelResult}
-              disabled={leverDisabled}
-              width={SYMBOL_SIZE}
-              height={REEL_AREA_HEIGHT}
-            />
+            {reelRefs.current.map((reelRef, index) => (
+              <IndividualReel
+                key={`reel-${index}-${validReelCount}`}
+                ref={reelRef}
+                reelIndex={index}
+                onStateChange={handleReelStateChange}
+                onResult={handleReelResult}
+                disabled={leverDisabled}
+                width={SYMBOL_SIZE}
+                height={REEL_AREA_HEIGHT}
+              />
+            ))}
           </div>
           
           {/* Payline overlay */}
@@ -815,8 +1027,8 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
           </div>
         </div>
 
-        {/* Lever positioned on the right side of entire machine */}
-        <div className="lever-container">
+        {/* Lever positioned dynamically via JavaScript */}
+        <div className="lever-container" ref={leverContainerRef}>
           <SlotMachineLever
             ref={leverRef}
             position="left" 
