@@ -1,0 +1,116 @@
+name: PR Webhook Notifier
+
+on:
+  pull_request:
+    types: [opened, closed]
+  pull_request_review:
+    types: [submitted, edited]
+  pull_request_review_comment:
+    types: [created, edited]
+  issue_comment:
+    types: [created, edited]
+
+# Add permissions for the workflow
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+jobs:
+  send-webhook:
+    if: github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.pull_request.merged == true || github.event.action == 'closed')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get PR diff
+        run: |
+          curl -H "Accept: application/vnd.github.v3.diff" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "${{ github.event.pull_request.url }}" > pr.diff
+
+      - name: Send webhook with PR info and diff
+        env:
+          WEBHOOK_URL:  https://pr-watchbot-test.automations-3d6.workers.dev
+        run: |
+          if [[ "${{ github.event.action }}" == "opened" ]]; then
+            STATUS="opened"
+          elif [[ "${{ github.event.action }}" == "closed" && "${{ github.event.pull_request.merged }}" == "true" ]]; then
+            STATUS="merged"
+          elif [[ "${{ github.event.action }}" == "closed" && "${{ github.event.pull_request.merged }}" != "true" ]]; then
+            STATUS="closed"
+          else
+            STATUS="unknown"
+          fi
+
+          PR_INFO=$(jq -n \
+            --arg id '${{ github.event.pull_request.id }}' \
+            --arg number '${{ github.event.pull_request.number }}' \
+            --arg title '${{ github.event.pull_request.title }}' \
+            --arg body '${{ github.event.pull_request.body }}' \
+            --arg url '${{ github.event.pull_request.html_url }}' \
+            --arg user '${{ github.event.pull_request.user.login }}' \
+            --arg created_at '${{ github.event.pull_request.created_at }}' \
+            --arg branch '${{ github.event.pull_request.head.ref }}' \
+            --arg base '${{ github.event.pull_request.base.ref }}' \
+            --arg status "$STATUS" \
+            '{
+              id: $id,
+              number: $number,
+              title: $title,
+              body: $body,
+              url: $url,
+              user: $user,
+              created_at: $created_at,
+              branch: $branch,
+              base: $base,
+              status: $status
+            }')
+
+          DIFF=$(cat pr.diff | jq -Rs .)
+
+          curl -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "{\"pr_info\": $PR_INFO, \"diff\": $DIFF}"
+
+  send-webhook-review:
+    if: github.event_name == 'pull_request_review' || github.event_name == 'pull_request_review_comment' || (github.event_name == 'issue_comment' && github.event.issue.pull_request)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    env:
+      WEBHOOK_URL:  https://pr-watchbot-test.automations-3d6.workers.dev
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Send PR ID and status webhook
+        run: |
+          EVENT_TYPE="${{ github.event_name }}"
+  
+          if [[ "$EVENT_TYPE" == "pull_request_review" || "$EVENT_TYPE" == "pull_request_review_comment" ]]; then
+            PR_ID="${{ github.event.pull_request.id }}"
+          elif [[ "$EVENT_TYPE" == "issue_comment" ]]; then
+            PR_URL="${{ github.event.issue.pull_request.url }}"
+            PR_INFO=$(curl -s \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "$PR_URL")
+            PR_ID=$(echo "$PR_INFO" | jq -r '.id // "unknown"')
+          else
+            PR_ID="unknown"
+          fi
+  
+          INFO=$(jq -n \
+            --arg pr_id "$PR_ID" \
+            '{
+                pr_info: {
+                  id: $pr_id,
+                  status: "in_progress"
+                  }
+            }')
+  
+          curl -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$INFO"
