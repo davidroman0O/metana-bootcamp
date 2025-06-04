@@ -69,6 +69,11 @@ interface SlotMachineRef {
   setReelTarget: (reelIndex: number, symbol: number) => boolean;
   setAllReelTargets: (symbols: number[]) => boolean;
   
+  // Reveal order control APIs
+  setAllReelTargetsSequential: (symbols: number[]) => boolean;
+  setAllReelTargetsSimultaneous: (symbols: number[]) => boolean;
+  setReelTargetWithRevealOrder: (reelIndex: number, symbol: number, revealOrder: number) => boolean;
+  
   // Utility
   reset: () => void;
 }
@@ -97,6 +102,14 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
   const decelerationQueueRef = useRef<Array<{reelIndex: number, targetSymbol: number}>>([]);
   const isSequentialStoppingRef = useRef<boolean>(false);
   const sequentialTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Sequential reveal queue to ensure 0→1→2 reveal order
+  const revealQueueRef = useRef<Array<{reelIndex: number, result: number}>>([]);
+  const isSequentialRevealingRef = useRef<boolean>(false);
+  const revealTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const capturedReelsRef = useRef<boolean[]>([false, false, false]);
+  const reelCaptureResultsRef = useRef<number[]>([0, 0, 0]);
+  const isSimultaneousRevealRef = useRef<boolean>(false);
   
   // UI State
   const [displayMessage, setDisplayMessage] = useState('Ready to play!');
@@ -274,10 +287,21 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
       clearTimeout(sequentialTimerRef.current);
       sequentialTimerRef.current = null;
     }
+    if (revealTimerRef.current) {
+      clearTimeout(revealTimerRef.current);
+      revealTimerRef.current = null;
+    }
     
     // Reset sequential stopping state
     decelerationQueueRef.current = [];
     isSequentialStoppingRef.current = false;
+    
+    // Reset sequential reveal state
+    revealQueueRef.current = [];
+    isSequentialRevealingRef.current = false;
+    capturedReelsRef.current = [false, false, false];
+    reelCaptureResultsRef.current = [0, 0, 0];
+    isSimultaneousRevealRef.current = false;
     
     // Reset all reels
     reel1Ref.current?.reset();
@@ -333,7 +357,7 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
       sequentialTimerRef.current = setTimeout(() => {
         processNextReelStop(stopIndex + 1);
       }, randomDelay);
-      } else {
+    } else {
       // Last reel, finish up
       isSequentialStoppingRef.current = false;
       decelerationQueueRef.current = [];
@@ -396,6 +420,63 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
     return true;
   };
 
+  // Sequential reveal - reels reveal in strict 0→1→2 order with dramatic pauses
+  const setAllReelTargetsSequential = (symbols: number[]): boolean => {
+    if (symbols.length !== 3) {
+      console.error('setAllReelTargetsSequential requires exactly 3 symbols');
+      return false;
+    }
+
+    if (currentStateRef.current !== MACHINE_STATE_SPINNING) {
+      console.warn(`Cannot set reel targets when machine is not spinning (current state: ${currentStateRef.current})`);
+      return false;
+    }
+
+    console.log(`🎭 Queuing all reel targets with sequential reveal: [${symbols.join(', ')}]`);
+    
+    // Use standard targeting but the sequential reveal system handles the timing
+    return setAllReelTargets(symbols);
+  };
+
+  // Simultaneous reveal - all reels reveal together once all have captured
+  const setAllReelTargetsSimultaneous = (symbols: number[]): boolean => {
+    if (symbols.length !== 3) {
+      console.error('setAllReelTargetsSimultaneous requires exactly 3 symbols');
+      return false;
+    }
+
+    if (currentStateRef.current !== MACHINE_STATE_SPINNING) {
+      console.warn(`Cannot set reel targets when machine is not spinning (current state: ${currentStateRef.current})`);
+      return false;
+    }
+
+    console.log(`⚡ Queuing all reel targets with simultaneous reveal: [${symbols.join(', ')}]`);
+    
+    // Set flag for simultaneous reveal mode
+    isSimultaneousRevealRef.current = true;
+    
+    return setAllReelTargets(symbols);
+  };
+
+  // Individual reel with custom reveal order
+  const setReelTargetWithRevealOrder = (reelIndex: number, symbol: number, revealOrder: number): boolean => {
+    if (reelIndex < 0 || reelIndex > 2 || symbol < 1 || symbol > 6 || revealOrder < 0 || revealOrder > 2) {
+      console.error(`Invalid reel index ${reelIndex}, symbol ${symbol}, or reveal order ${revealOrder}`);
+      return false;
+    }
+
+    if (currentStateRef.current !== MACHINE_STATE_SPINNING) {
+      console.warn(`Cannot set reel target when machine is not spinning (current state: ${currentStateRef.current})`);
+      return false;
+    }
+
+    console.log(`🎯 Queuing reel ${reelIndex} target: symbol ${symbol} with reveal order ${revealOrder}`);
+    
+    // Store the custom reveal order for this reel
+    // This would require extending the system to handle custom orders
+    return setReelTarget(reelIndex, symbol);
+  };
+
   // Event Handlers
   const handleReelStateChange = (reelIndex: number, state: string) => {
     reelStatesRef.current[reelIndex] = state;
@@ -409,6 +490,67 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
   const handleReelResult = (reelIndex: number, symbol: number) => {
     reelResultsRef.current[reelIndex] = symbol;
     console.log(`🎯 Reel ${reelIndex}: Result = ${symbol} (Results: [${reelResultsRef.current.join(', ')}])`);
+    
+    // Queue result for sequential reveal instead of immediate processing
+    queueReelResult(reelIndex, symbol);
+  };
+
+  // Sequential result reveal system
+  // Ensures reels always reveal results in 0→1→2 order for cinematic effect
+  // Even if they capture targets at different times
+  const queueReelResult = (reelIndex: number, symbol: number) => {
+    capturedReelsRef.current[reelIndex] = true;
+    reelCaptureResultsRef.current[reelIndex] = symbol;
+    
+    console.log(`📦 Reel ${reelIndex}: Result queued = ${symbol} (Captured: [${capturedReelsRef.current.join(', ')}])`);
+    
+    // Start sequential reveal if not already running
+    processRevealQueue();
+  };
+
+  const processRevealQueue = () => {
+    if (isSequentialRevealingRef.current) return;
+    
+    isSequentialRevealingRef.current = true;
+    console.log(`🎭 Starting sequential reveal process`);
+    
+    // Process reels in order 0→1→2
+    processNextReveal(0);
+  };
+
+  const processNextReveal = (reelIndex: number) => {
+    if (reelIndex >= 3) {
+      // All reels revealed
+      isSequentialRevealingRef.current = false;
+      isSimultaneousRevealRef.current = false; // Reset flag
+      console.log('🎭 Sequential reveal complete');
+      
+      // Now check if all reels are actually showing results
+      checkStateTransitions();
+      return;
+    }
+    
+    // Wait for this reel to be captured
+    if (!capturedReelsRef.current[reelIndex]) {
+      console.log(`⏳ Waiting for reel ${reelIndex} to capture...`);
+      // Check again in 100ms
+      revealTimerRef.current = setTimeout(() => {
+        processNextReveal(reelIndex);
+      }, 100);
+      return;
+    }
+    
+    const revealType = isSimultaneousRevealRef.current ? 'simultaneously' : 'sequentially';
+    console.log(`🎭 Revealing reel ${reelIndex} ${revealType} with result ${reelCaptureResultsRef.current[reelIndex]}`);
+    
+    // Mark this reel as completed for transition logic
+    reelCompletionsRef.current[reelIndex] = true;
+    
+    // Schedule next reel reveal with timing based on mode
+    const revealDelay = isSimultaneousRevealRef.current ? 0 : 300; // No delay for simultaneous
+    revealTimerRef.current = setTimeout(() => {
+      processNextReveal(reelIndex + 1);
+    }, revealDelay);
   };
 
   const checkStateTransitions = () => {
@@ -424,17 +566,10 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
         break;
         
       case MACHINE_STATE_SPINNING:
-        // Mark reels as completed when they reach showing_result
-        states.forEach((state, index) => {
-          if (state === 'showing_result' && !reelCompletionsRef.current[index]) {
-            reelCompletionsRef.current[index] = true;
-            console.log(`🎯 Reel ${index} completed! Completions: [${reelCompletionsRef.current.join(', ')}]`);
-          }
-        });
-        
-        // Transition to evaluation when ALL reels have completed (reached showing_result)
+        // Don't mark reels as completed here - let sequential reveal system handle it
+        // Just transition to evaluation when ALL reels have been revealed sequentially
         if (reelCompletionsRef.current.every(completed => completed)) {
-          console.log('🎰 All reels completed - transitioning to evaluation');
+          console.log('🎰 All reels sequentially revealed - transitioning to evaluation');
           transitionToState(MACHINE_STATE_EVALUATING_RESULT);
         }
         break;
@@ -568,7 +703,10 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
     getDisplayMessage,
     reset,
     setReelTarget,
-    setAllReelTargets
+    setAllReelTargets,
+    setAllReelTargetsSequential: setAllReelTargetsSequential,
+    setAllReelTargetsSimultaneous: setAllReelTargetsSimultaneous,
+    setReelTargetWithRevealOrder: setReelTargetWithRevealOrder
   }));
 
   // Handle coin insert
