@@ -1,0 +1,71 @@
+{
+  "name": "degen-slots-hardhat",
+  "version": "1.0.0",
+  "description": "Boomer's Last Hope - Degen Slot Machine Smart Contracts",
+  "main": "index.js",
+  "scripts": {
+    "start": "hardhat node --fork https://eth-mainnet.g.alchemy.com/v2/UlgUe5NUoeezq_0_AxTSKl0qpQQeHSKV",
+    "compile": "hardhat compile",
+    "test": "hardhat test --network hardhat",
+    "test:gas": "REPORT_GAS=true hardhat test",
+    "test:single": "hardhat test --grep",
+    
+    "test:integration": "hardhat test test/DegenSlotsIntegration.test.js --network hardhat",
+    "test:basics": "hardhat test test/ContractBasics.test.js --network hardhat",
+    "test:payouttables": "hardhat test test/PayoutTablesBasic.test.js --network hardhat",
+    "test:payouts": "hardhat test test/PayoutCombinations.test.js --network hardhat",
+    "test:vrf": "hardhat test test/VRFMechanics.test.js --network hardhat",
+    "test:admin": "hardhat test test/AdminFunctions.test.js --network hardhat",
+    "test:compound": "hardhat test test/CompoundIntegration.test.js --network hardhat",
+    "test:e2e": "hardhat test test/FullE2EIntegration.test.js --network hardhat",
+    
+    "test:all": "npm run test:basics && npm run test:integration && npm run test:payouttables && npm run test:payouts && npm run test:vrf && npm run test:admin && npm run test:compound && npm run test:e2e",
+    
+    "deploy": "hardhat run scripts/deploy.js --network localhost",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
+    "deploy:fork": "hardhat run scripts/deploy.js --network hardhat",
+    "extract-addresses": "node scripts/extract-addresses.js",
+    
+    "node": "hardhat node",
+    "node:fork": "hardhat node --fork https://eth-mainnet.g.alchemy.com/v2/UlgUe5NUoeezq_0_AxTSKl0qpQQeHSKV",
+    "clean": "hardhat clean",
+    "size": "hardhat size-contracts",
+    "coverage": "hardhat coverage",
+    "verify": "hardhat verify --network sepolia",
+    "lint": "solhint 'contracts/**/*.sol'",
+    "format": "prettier --write 'contracts/**/*.sol'",
+    "dev": "npm run compile && concurrently \"npm run node:fork\" \"npm run deploy:watch\"",
+    "deploy:watch": "wait-on http://127.0.0.1:8545 && npm run deploy"
+  },
+  "keywords": [
+    "ethereum",
+    "defi",
+    "gambling",
+    "chainlink",
+    "compound",
+    "slots",
+    "hardhat"
+  ],
+  "author": "Metana Bootcamp",
+  "license": "MIT",
+  "devDependencies": {
+    "@nomiclabs/hardhat-ethers": "^2.2.3",
+    "@nomiclabs/hardhat-waffle": "^2.0.6",
+    "chai": "^4.3.10",
+    "ethereum-waffle": "^4.0.10",
+    "ethers": "^5.8.0",
+    "hardhat": "^2.24.1",
+    "concurrently": "^8.2.2",
+    "wait-on": "^8.0.1",
+    "typescript": "^5.8.3",
+    "ts-node": "^10.9.2"
+  },
+  "dependencies": {
+    "@chainlink/contracts": "^1.2.0",
+    "@openzeppelin/contracts": "^5.1.0",
+    "@openzeppelin/contracts-upgradeable": "^5.1.0",
+    "@openzeppelin/hardhat-upgrades": "^1.28.0",
+    "dotenv": "^16.4.7"
+  }
+}

@@ -1,0 +1,7 @@
+
+
+# security stuff
+[ ] - Should I add a max supply cap to the ChipToken contract for real?
+[ ] - Should I add more prize pool draining protection?
+[ ] - Should I add more oracle validation to the DegenSlots contract? like boundaries on the price?!
+[ ] - Should I add a timelock on the upgrade?!
