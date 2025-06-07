@@ -26,6 +26,7 @@
     "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
     "deploy:fork": "hardhat run scripts/deploy.js --network hardhat",
     "extract-addresses": "node scripts/extract-addresses.js",
+    "measure-gas": "hardhat run scripts/measureGas.js --network hardhat",
     
     "node": "hardhat node",
     "node:fork": "hardhat node --fork https://eth-mainnet.g.alchemy.com/v2/UlgUe5NUoeezq_0_AxTSKl0qpQQeHSKV",

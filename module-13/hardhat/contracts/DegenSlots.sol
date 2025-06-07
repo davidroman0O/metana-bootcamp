@@ -139,7 +139,7 @@ contract DegenSlots is
         comptroller = IComptroller(comptrollerAddress);
         
         // Initialize VRF parameters
-        callbackGasLimit = 100000;
+        callbackGasLimit = 200000;
         requestConfirmations = 3;
         numWords = 1;
         houseEdge = 500; // 5%
