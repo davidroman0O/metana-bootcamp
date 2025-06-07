@@ -1,0 +1,665 @@
+/* Slot Machine Styles - Based on Karma Slots example */
+
+body {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+/* Container */
+.slot-machine-container {
+  width: 100%;
+  max-width: none;
+  margin: 0 auto;
+  padding: 20px;
+  position: relative;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  
+  /* Center content */
+  display: flex;
+  justify-content: center;
+}
+
+/* Slot Frame */
+.slot-frame {
+  /* Dynamic width based on content instead of fixed 100% */
+  width: fit-content;
+  min-width: 300px; /* Minimum width for small reel counts */
+  max-width: 95vw; /* Responsive maximum */
+  margin: 0 auto; /* Center the frame */
+  position: relative; /* Important: for lever absolute positioning */
+  
+  background: #ffd700;
+  background: linear-gradient(145deg, #ffd700 0%, #d9a900 100%);
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.slot-header {
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+.slot-title {
+  font-weight: bold;
+  font-size: 24px;
+  color: #000;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* Canvas Container */
+.canvas-container {
+  background: #0a1526;
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+/* Independent Reels Container - Dynamic sizing based on reel count */
+.independent-reels-container {
+  background: #0a1526;
+  padding: 25px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.5);
+  position: relative;
+  margin-bottom: 10px;
+  overflow: hidden;
+  /* Dynamic sizing based on reel count */
+  width: fit-content;
+  min-width: 150px; /* Minimum for single reel */
+  max-width: 95vw; /* Responsive to viewport */
+  height: 350px;
+  margin: 0 auto 10px auto;
+  /* Adaptive padding based on content */
+  padding: clamp(15px, 4vw, 25px);
+}
+
+.reels-frame {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 2px; /* Small gap between reels */
+  position: relative;
+  width: 100%;
+  height: 100%;
+  flex-wrap: nowrap;
+}
+
+/* Flexible reel styling - adapts to reel count using data attributes */
+.reels-frame canvas {
+  border: 1px solid #0055aa;
+  border-radius: 0;
+  /* Default sizing */
+  min-width: 70px;
+  max-width: 130px;
+  flex: 1;
+  transition: all 0.3s ease;
+}
+
+/* Single reel - larger and centered */
+.independent-reels-container[data-reel-count="1"] .reels-frame canvas {
+  min-width: 120px;
+  max-width: 150px;
+}
+
+/* Two reels - generous spacing */
+.independent-reels-container[data-reel-count="2"] .reels-frame canvas {
+  min-width: 110px;
+  max-width: 140px;
+}
+
+/* Three reels - standard sizing */
+.independent-reels-container[data-reel-count="3"] .reels-frame canvas {
+  min-width: 90px;
+  max-width: 120px;
+}
+
+/* Four reels - slightly smaller */
+.independent-reels-container[data-reel-count="4"] .reels-frame canvas {
+  min-width: 80px;
+  max-width: 110px;
+}
+
+/* Five reels - more compact */
+.independent-reels-container[data-reel-count="5"] .reels-frame canvas {
+  min-width: 70px;
+  max-width: 100px;
+}
+
+/* Six reels - compact */
+.independent-reels-container[data-reel-count="6"] .reels-frame canvas {
+  min-width: 60px;
+  max-width: 90px;
+}
+
+/* Seven reels - very compact */
+.independent-reels-container[data-reel-count="7"] .reels-frame canvas {
+  min-width: 50px;
+  max-width: 80px;
+}
+
+/* Eight or more reels - most compact */
+.independent-reels-container[data-reel-count="8"] .reels-frame canvas,
+.independent-reels-container[data-reel-count="9"] .reels-frame canvas,
+.independent-reels-container[data-reel-count="10"] .reels-frame canvas {
+  min-width: 45px;
+  max-width: 70px;
+}
+
+/* Border radius handling */
+.reels-frame canvas:first-child {
+  border-radius: 8px 0 0 8px;
+}
+
+.reels-frame canvas:last-child {
+  border-radius: 0 8px 8px 0;
+}
+
+/* Single reel case - full border radius */
+.reels-frame canvas:only-child {
+  border-radius: 8px;
+}
+
+/* Payline overlay that goes across all reels */
+.payline-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.payline {
+  position: absolute;
+  top: 50%;
+  left: 25px;
+  right: 25px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, #ff0000 10%, #ff0000 90%, transparent 100%);
+  transform: translateY(-50%);
+  box-shadow: 0 0 10px rgba(255, 0, 0, 0.8);
+  z-index: 10;
+}
+
+.slot-canvas {
+  display: block;
+  margin: 0 auto;
+  image-rendering: pixelated; /* Sharper rendering */
+  image-rendering: crisp-edges;
+}
+
+/* Lever - positioned dynamically via JavaScript */
+.lever-container {
+  position: absolute;
+  top: 10px;
+  z-index: 20;
+  width: 300px;
+  height: 400px;
+  /* JavaScript will set the left position */
+}
+
+.lever {
+  width: 60px;
+  height: 120px;
+  position: relative;
+  cursor: default;
+}
+
+.lever-head {
+  width: 40px;
+  height: 40px;
+  background: #e74c3c;
+  background: radial-gradient(circle at 30% 30%, #ff6b6b, #e74c3c);
+  border-radius: 50%;
+  border: 3px solid #c0392b;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4), inset -5px -5px 10px rgba(0, 0, 0, 0.3), inset 5px 5px 10px rgba(255, 255, 255, 0.2);
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  cursor: grab;
+}
+
+.lever-head:hover {
+  cursor: grab;
+}
+
+.lever-head:active {
+  cursor: grabbing;
+}
+
+.lever-stick {
+  width: 12px;
+  height: 80px;
+  background: linear-gradient(90deg, #999, #555);
+  border-radius: 6px;
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  z-index: 2;
+}
+
+.lever-base {
+  width: 30px;
+  height: 15px;
+  background: linear-gradient(to bottom, #555, #333);
+  border-radius: 5px;
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+  z-index: 1;
+}
+
+/* Coin slot at the bottom of the machine frame - part of the machine */
+.coin-slot-bottom {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+}
+
+.coin-slot-button {
+  background: #333;
+  background: linear-gradient(145deg, #333, #222);
+  padding: 15px 30px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.8), 0 5px 15px rgba(0, 0, 0, 0.3);
+  border: 2px solid #444;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.coin-slot-button:hover {
+  transform: scale(1.05);
+}
+
+.coin-slot-hole {
+  width: 80px;
+  height: 12px;
+  background: #000;
+  border-radius: 6px;
+  border: 2px solid #555;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8);
+  position: relative;
+  overflow: hidden;
+}
+
+.coin-slot-text {
+  font-size: 14px;
+  color: #ffd700;
+  font-weight: bold;
+  text-shadow: 0 0 8px rgba(255, 215, 0, 0.8);
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Horizontal LCD display bar */
+.lcd-display-bar {
+  width: 100%;
+  background: #000;
+  border-radius: 8px;
+  padding: 10px;
+  box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+  border: 2px solid #333;
+}
+
+.display-screen {
+  background: #111;
+  border: 2px solid #00ff00;
+  color: #00ff00;
+  padding: 12px;
+  font-family: 'Courier New', monospace;
+  font-size: 16px;
+  font-weight: bold;
+  text-align: center;
+  border-radius: 4px;
+  text-shadow: 0 0 8px #00ff00;
+  letter-spacing: 1px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.game-message {
+  color: #00ff00;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  font-weight: bold;
+  text-align: center;
+  margin-top: 8px;
+  text-shadow: 0 0 5px #00ff00;
+}
+
+.log-messages {
+  color: #00ff00;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  text-align: center;
+  margin-top: 5px;
+}
+
+.log-message {
+  margin-bottom: 2px;
+}
+
+/* Coin Animation */
+.coin {
+  position: absolute;
+  top: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 30px;
+  height: 30px;
+  background: linear-gradient(135deg, #ffd700, #b8860b);
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.7);
+  animation: coin-insert 1s forwards;
+}
+
+@keyframes coin-insert {
+  0% { 
+    top: -30px; 
+    opacity: 1; 
+  }
+  50% { 
+    top: -5px; 
+    opacity: 1; 
+    transform: translateX(-50%) scale(0.9) rotate(180deg); 
+  }
+  100% { 
+    top: 5px; 
+    opacity: 0; 
+    transform: translateX(-50%) scale(0.5) rotate(360deg); 
+  }
+}
+
+/* Buttons */
+.buttons {
+  margin: 1rem 0;
+  text-align: center;
+}
+
+button {
+  cursor: pointer;
+  font-size: 1.2rem;
+  margin: 0 0.2rem;
+  border: none;
+  border-radius: 5px;
+  padding: 10px 15px;
+  background: linear-gradient(to bottom, #ff7700, #ff5500);
+  color: white;
+  font-weight: bold;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .slot-machine-container {
+    padding: 10px;
+  }
+  
+  .slot-frame {
+    min-width: 250px;
+    max-width: 98vw;
+    padding: 15px;
+  }
+  
+  .independent-reels-container {
+    padding: 15px;
+    max-width: 98vw;
+  }
+  
+  .lever-container {
+    right: -50px;
+    width: 70px;
+    height: 120px;
+  }
+  
+  .lever {
+    width: 50px;
+    height: 80px;
+  }
+  
+  .lever-head {
+    width: 30px;
+    height: 30px;
+  }
+  
+  .lever-stick {
+    width: 10px;
+    height: 50px;
+    top: 20px;
+  }
+  
+  .coin-slot-button {
+    padding: 12px 25px;
+  }
+  
+  .coin-slot-hole {
+    width: 50px;
+    height: 10px;
+  }
+  
+  .coin-slot-text {
+    font-size: 12px;
+  }
+  
+  /* Default mobile sizing */
+  .reels-frame canvas {
+    min-width: 60px;
+    max-width: 100px;
+  }
+  
+  /* Specific mobile adjustments */
+  .independent-reels-container[data-reel-count="1"] .reels-frame canvas {
+    min-width: 100px;
+    max-width: 120px;
+  }
+  
+  .independent-reels-container[data-reel-count="2"] .reels-frame canvas {
+    min-width: 90px;
+    max-width: 110px;
+  }
+  
+  .independent-reels-container[data-reel-count="6"] .reels-frame canvas,
+  .independent-reels-container[data-reel-count="7"] .reels-frame canvas {
+    min-width: 45px;
+    max-width: 70px;
+  }
+  
+  .independent-reels-container[data-reel-count="8"] .reels-frame canvas,
+  .independent-reels-container[data-reel-count="9"] .reels-frame canvas,
+  .independent-reels-container[data-reel-count="10"] .reels-frame canvas {
+    min-width: 40px;
+    max-width: 60px;
+  }
+}
+
+/* Mobile */
+@media (max-width: 576px) {
+  .slot-frame {
+    padding: 15px;
+    gap: 10px;
+    min-width: 200px;
+    max-width: 99vw;
+  }
+  
+  .canvas-container {
+    padding: 5px;
+  }
+  
+  .lever-container {
+    right: -40px;
+    width: 60px;
+    height: 100px;
+  }
+  
+  .lever {
+    width: 40px;
+    height: 60px;
+  }
+  
+  .lever-head {
+    width: 25px;
+    height: 25px;
+  }
+  
+  .lever-stick {
+    width: 8px;
+    height: 35px;
+    top: 15px;
+  }
+  
+  .coin-slot-button {
+    padding: 10px 20px;
+  }
+  
+  .display-screen {
+    font-size: 14px;
+    padding: 8px;
+  }
+  
+  .independent-reels-container {
+    padding: 10px;
+  }
+  
+  /* Default small mobile sizing */
+  .reels-frame canvas {
+    min-width: 50px;
+    max-width: 80px;
+  }
+  
+  /* Specific small mobile adjustments */
+  .independent-reels-container[data-reel-count="1"] .reels-frame canvas {
+    min-width: 80px;
+    max-width: 100px;
+  }
+  
+  .independent-reels-container[data-reel-count="2"] .reels-frame canvas {
+    min-width: 70px;
+    max-width: 90px;
+  }
+  
+  .independent-reels-container[data-reel-count="5"] .reels-frame canvas,
+  .independent-reels-container[data-reel-count="6"] .reels-frame canvas,
+  .independent-reels-container[data-reel-count="7"] .reels-frame canvas {
+    min-width: 35px;
+    max-width: 55px;
+  }
+  
+  .independent-reels-container[data-reel-count="8"] .reels-frame canvas,
+  .independent-reels-container[data-reel-count="9"] .reels-frame canvas,
+  .independent-reels-container[data-reel-count="10"] .reels-frame canvas {
+    min-width: 30px;
+    max-width: 45px;
+  }
+}
+
+/* Status indicator styles */
+.status-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 10px 0;
+  padding: 5px 10px;
+  background: #111;
+  border-radius: 15px;
+  border: 1px solid #333;
+  width: fit-content;
+  margin: 15px auto;
+}
+
+.status-light {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  margin-right: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+}
+
+.status-light.ready {
+  background: radial-gradient(circle at 30% 30%, #4caf50, #1b5e20);
+  box-shadow: 0 0 10px rgba(76, 175, 80, 0.8);
+  animation: pulse-green 2s infinite;
+}
+
+.status-light.busy {
+  background: radial-gradient(circle at 30% 30%, #f44336, #b71c1c);
+  box-shadow: 0 0 10px rgba(244, 67, 54, 0.8);
+  animation: pulse-red 1s infinite;
+}
+
+.status-text {
+  color: #e0e0e0;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  font-weight: bold;
+  text-shadow: 0 0 5px rgba(0, 0, 0, 0.8);
+}
+
+@keyframes pulse-green {
+  0% {
+    box-shadow: 0 0 5px rgba(76, 175, 80, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(76, 175, 80, 0.8);
+  }
+  100% {
+    box-shadow: 0 0 5px rgba(76, 175, 80, 0.5);
+  }
+}
+
+@keyframes pulse-red {
+  0% {
+    box-shadow: 0 0 5px rgba(244, 67, 54, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(244, 67, 54, 0.8);
+  }
+  100% {
+    box-shadow: 0 0 5px rgba(244, 67, 54, 0.5);
+  }
+} 

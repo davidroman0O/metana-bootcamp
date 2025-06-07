@@ -16,7 +16,6 @@ interface SlotMachineState {
   betAmount: string;
   
   // Transaction IDs (only used in real mode)
-  buyChipTransactionID: string | null;
   approveTransactionID: string | null;
   spinTransactionID: string | null;
   
@@ -46,7 +45,6 @@ export function useSlotMachine(chainId: number | undefined) {
   const [state, setState] = useState<SlotMachineState>({
     displayLCD: isManualMode ? "Manual mode - Ready to play!" : (isConnected ? "Ready to play!" : "Connect wallet to play"),
     betAmount: '1000',
-    buyChipTransactionID: null,
     approveTransactionID: null,
     spinTransactionID: null,
     lastResult: null
@@ -74,12 +72,10 @@ export function useSlotMachine(chainId: number | undefined) {
 
   // Contract writes (only used in real mode)
   const { writeContract: approveChips, data: approveHash, isPending: isApproving } = useWriteContract();
-  const { writeContract: buyChips, data: buyHash, isPending: isBuying } = useWriteContract();
   const { writeContract: spinSlots, data: spinHash, isPending: isSpinning } = useWriteContract();
 
   // Transaction receipts (only used in real mode)
   const { isLoading: approveTxLoading, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveHash });
-  const { isLoading: buyTxLoading, isSuccess: buySuccess } = useWaitForTransactionReceipt({ hash: buyHash });
   const { isLoading: spinTxLoading, isSuccess: spinSuccess } = useWaitForTransactionReceipt({ hash: spinHash });
 
   // Update LCD display based on mode
@@ -105,14 +101,6 @@ export function useSlotMachine(chainId: number | undefined) {
       setState(prev => ({ ...prev, approveTransactionID: approveHash }));
     }
   }, [approveHash, isRealMode]);
-
-  useEffect(() => {
-    if (!isRealMode) return;
-    
-    if (buyHash) {
-      setState(prev => ({ ...prev, buyChipTransactionID: buyHash }));
-    }
-  }, [buyHash, isRealMode]);
 
   useEffect(() => {
     if (!isRealMode) return;
@@ -196,8 +184,7 @@ export function useSlotMachine(chainId: number | undefined) {
       await spinSlots({
         address: addresses.DEGEN_SLOTS,
         abi: DegenSlotsABI,
-        functionName: 'spin',
-        args: [parseEther(state.betAmount)],
+        functionName: 'spin3Reels',
       });
 
       toast.success('Spin requested!');
@@ -278,15 +265,21 @@ export function useSlotMachine(chainId: number | undefined) {
     }
   }, [isConnected, isRealMode, addresses, approveChips]);
 
-  // Buy chips function (only in real mode)
+  // Buy chips function (only in real mode) - DISABLED: No buyChips function in contract
   const buyChipsWithETH = useCallback(async (ethAmount: string) => {
     if (!isConnected || !ethAmount || !isRealMode) return;
 
-    try {
+    // TODO: Implement proper chip purchasing mechanism
+    // The contract doesn't have a direct buyChips function
+    // Options: 1) Use borrowChips with collateral, 2) Mint function from ChipToken
+    console.log('Buy chips not implemented - contract has no buyChips function');
+    toast.error('Chip purchasing not yet implemented');
+    
+    /* try {
       await buyChips({
         address: addresses.DEGEN_SLOTS,
         abi: DegenSlotsABI,
-        functionName: 'buyChips',
+        functionName: 'buyChips', // This function doesn't exist
         value: parseEther(ethAmount),
       });
       
@@ -295,8 +288,8 @@ export function useSlotMachine(chainId: number | undefined) {
     } catch (error) {
       console.error('Buy chips error:', error);
       toast.error('Failed to buy CHIPS');
-    }
-  }, [isConnected, isRealMode, addresses, buyChips]);
+    } */
+  }, [isConnected, isRealMode]);
 
   return {
     // State
@@ -312,7 +305,6 @@ export function useSlotMachine(chainId: number | undefined) {
     
     // Loading states
     isApproving: isRealMode ? (isApproving || approveTxLoading) : false,
-    isBuying: isRealMode ? (isBuying || buyTxLoading) : false,
     isSpinningTx: isRealMode ? (isSpinning || spinTxLoading) : false,
     
     // Actions

@@ -80,7 +80,6 @@ function AppContent() {
     
     // Loading states
     isApproving,
-    isBuying,
     isSpinningTx,
     
     // Actions
@@ -163,17 +162,11 @@ function AppContent() {
     query: { enabled: !!addresses.DEGEN_SLOTS },
   });
 
-  const { data: chipsPerETH } = useReadContract({
+  const { data: chipsFromETH } = useReadContract({
     address: addresses.DEGEN_SLOTS,
     abi: DegenSlotsABI,
-    functionName: 'calculateChipsPerETH',
-    query: { enabled: !!addresses.DEGEN_SLOTS },
-  });
-
-  const { data: ethPriceFromChainlink } = useReadContract({
-    address: addresses.DEGEN_SLOTS,
-    abi: DegenSlotsABI,
-    functionName: 'getETHPrice',
+    functionName: 'calculateChipsFromETH',
+    args: [BigInt(1e18)], // 1 ETH in wei
     query: { enabled: !!addresses.DEGEN_SLOTS },
   });
 
@@ -186,13 +179,13 @@ function AppContent() {
   });
 
   // Format data for components
-  const formattedPoolETH = poolStats ? formatEther(poolStats[0]) : '0';
-  const ethPrice = ethPriceFromChainlink ? `$${(Number(ethPriceFromChainlink) / 100).toFixed(2)}` : '$0';
-  const chipRate = chipsPerETH ? parseFloat(formatEther(chipsPerETH)).toFixed(0) : '0';
+  const formattedPoolETH = poolStats ? formatEther(poolStats[0] as bigint) : '0';
+  const ethPrice = poolStats ? `$${(Number(poolStats[2] as bigint) / 100).toFixed(2)}` : '$0';
+  const chipRate = chipsFromETH ? parseFloat(formatEther(chipsFromETH as bigint)).toFixed(0) : '0';
   
   // Calculate expected chips for house component
-  const expectedChips = chipsPerETH ? 
-    formatEther((chipsPerETH * BigInt(Math.floor(parseFloat('0.1') * 1e18))) / BigInt(1e18)) : '0';
+  const expectedChips = chipsFromETH ? 
+    formatEther((chipsFromETH as bigint * BigInt(Math.floor(parseFloat('0.1') * 1e18))) / BigInt(1e18)) : '0';
 
   // Mock data for player stats (would come from events/subgraph in production)
   const mockPlayerData = {
@@ -430,7 +423,7 @@ function AppContent() {
                       ethPrice={ethPrice}
                       chipRate={chipRate}
                       isConnected={isConnected}
-                      isBuying={isBuying}
+                      isBuying={false}
                       onBuyChips={buyChipsWithETH}
                       expectedChips={expectedChips}
                     />
