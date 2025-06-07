@@ -592,7 +592,7 @@ contract PayoutTables${reelCount} {
         
         // Only store if there are non-zero values in this slot
         if (hasNonZero) {
-            solidityCode += `\n        packedPayouts[${slotIndex}] = ${packedValue.toString()};`;
+        solidityCode += `\n        packedPayouts[${slotIndex}] = ${packedValue.toString()};`;
         }
     }
     
@@ -797,7 +797,7 @@ function generateAllContracts() {
             });
             
             fs.writeFileSync(`./contracts/PayoutTables${reelCount}.sol`, contracts);
-            console.log(`✅ Generated PayoutTables${reelCount}.sol (${sizeKB}KB) ${edgeCases.length > 5000 ? '[BIT-PACKED]' : '[STANDARD]'}`);
+        console.log(`✅ Generated PayoutTables${reelCount}.sol (${sizeKB}KB) ${edgeCases.length > 5000 ? '[BIT-PACKED]' : '[STANDARD]'}`);
             console.log(`   Stored: ${nonLoseEdgeCases.length}/${edgeCases.length} edge cases (removed ${loseCasesRemoved} LOSE cases)`);
         }
     }
