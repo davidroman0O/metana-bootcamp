@@ -1,0 +1,26 @@
+{
+  "network": {
+    "name": "unknown",
+    "chainId": 31337,
+    "timestamp": "2025-06-01T21:21:27.575Z"
+  },
+  "contracts": {
+    "DegenSlots": {
+      "address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+      "constructor": {
+        "vrfCoordinator": "0x271682DEB8C4E0901D1a1550aD2e64D568E69909",
+        "keyHash": "0x8af398995b04c28e9951adb9721ef74c74f93e6a478f39e7e0777be13527e7ef",
+        "subscriptionId": 1,
+        "ethUsdPriceFeed": "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+        "cETH": "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
+        "comptroller": "0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B"
+      }
+    },
+    "ChipToken": {
+      "address": "0xa16E02E87b7454126E5E10d957A927A7F5B5d2be"
+    }
+  },
+  "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "blockNumber": 2,
+  "initialFunding": "10.0"
+}
