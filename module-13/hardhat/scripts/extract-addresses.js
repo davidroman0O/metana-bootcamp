@@ -1,10 +1,16 @@
 const fs = require("fs");
 const path = require("path");
+const hre = require("hardhat");
 
 async function extractAddresses() {
   console.log("🚀 Extracting contract addresses for frontend...");
 
   try {
+    // First, compile contracts to ensure fresh ABIs
+    console.log("🔨 Compiling smart contracts...");
+    await hre.run("compile");
+    console.log("✅ Smart contracts compiled successfully");
+
     // Read deployment data
     const deploymentDir = path.join(__dirname, "../deployments");
     const hardhatDeploymentFile = path.join(deploymentDir, "deployment-31337.json");
