@@ -230,7 +230,12 @@ function generateOptimizedContract(reelCount) {
     
     console.log(`${reelCount}-reel: ${edgeCases.length}/${totalPossible} edge cases (${reductionRatio}% reduction)`);
     
-    // Use bit-packing for contracts with many edge cases (6+ reels)
+    // For PayoutTables7, use chunked approach
+    if (reelCount === 7) {
+        return generateChunkedContract7(edgeCases, totalPossible, reductionRatio);
+    }
+    
+    // Use bit-packing for contracts with many edge cases (6 reels)
     const useBitPacking = edgeCases.length > 5000;
     
     if (useBitPacking) {
@@ -244,12 +249,19 @@ function generateOptimizedContract(reelCount) {
  * Generate standard contract for smaller reel counts
  */
 function generateStandardContract(reelCount, edgeCases, totalPossible, reductionRatio) {
+    // Filter out LOSE cases - mappings default to 0, no need to set explicitly
+    const nonLoseEdgeCases = edgeCases.filter(edge => edge.payout !== PayoutType.LOSE);
+    
     // Group edge cases by payout type for efficient storage
     const byPayoutType = {};
-    for (const edge of edgeCases) {
+    for (const edge of nonLoseEdgeCases) {
         if (!byPayoutType[edge.payout]) byPayoutType[edge.payout] = [];
         byPayoutType[edge.payout].push(edge.key);
     }
+    
+    const actualStoredCases = nonLoseEdgeCases.length;
+    const originalStoredCases = edgeCases.length;
+    const loseCasesRemoved = originalStoredCases - actualStoredCases;
     
     let solidityCode = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
@@ -257,7 +269,8 @@ pragma solidity ^0.8.22;
 /**
  * @title PayoutTables${reelCount} - Ultra-optimized ${reelCount}-reel payout lookup
  * @dev Uses mathematical patterns + assembly for ${reductionRatio}% storage reduction
- * @notice Only stores ${edgeCases.length} edge cases vs ${totalPossible} total combinations
+ * @notice Only stores ${actualStoredCases} winning edge cases vs ${totalPossible} total combinations
+ * @notice Removed ${loseCasesRemoved} LOSE cases (mappings default to 0)
  */
 contract PayoutTables${reelCount} {
     
@@ -272,7 +285,7 @@ contract PayoutTables${reelCount} {
         JACKPOT         // 7 - 50% of pool
     }
     
-    // Only store edge cases not covered by mathematical patterns
+    // Only store winning edge cases - LOSE cases default to 0
     mapping(uint256 => PayoutType) private edgeCases;
     
     constructor() {
@@ -291,7 +304,7 @@ contract PayoutTables${reelCount} {
             return mathPattern;
         }
         
-        // Fallback to edge case storage
+        // Fallback to edge case storage (defaults to LOSE if not found)
         return edgeCases[combinationKey];
     }
     
@@ -325,7 +338,6 @@ contract PayoutTables${reelCount} {
         }
         
         // Extract counts for analysis
-        uint256 count1 = (counts >> 0) & 0xF;   // DUMP count
         uint256 count2 = (counts >> 4) & 0xF;   // COPE count  
         uint256 count3 = (counts >> 8) & 0xF;   // PUMP count
         uint256 count4 = (counts >> 12) & 0xF;  // DIAMOND count
@@ -377,11 +389,11 @@ contract PayoutTables${reelCount} {
     }
     
     /**
-     * @dev Initialize only the edge cases not covered by mathematical patterns
+     * @dev Initialize only winning edge cases - LOSE cases omitted (default to 0)
      */
     function _initializeEdgeCases() internal {`;
 
-    // Generate edge case assignments
+    // Generate edge case assignments (only for non-LOSE cases)
     const payoutTypeNames = ['LOSE', 'SMALL_WIN', 'MEDIUM_WIN', 'BIG_WIN', 'MEGA_WIN', 'ULTRA_WIN', 'SPECIAL_COMBO', 'JACKPOT'];
     
     for (const [payoutType, keys] of Object.entries(byPayoutType)) {
@@ -405,10 +417,13 @@ contract PayoutTables${reelCount} {
  * Generate bit-packed contract for larger reel counts (6+ reels)
  */
 function generateBitPackedContract(reelCount, edgeCases, totalPossible, reductionRatio) {
+    // Filter out LOSE cases - mappings default to 0, no need to store
+    const nonLoseEdgeCases = edgeCases.filter(edge => edge.payout !== PayoutType.LOSE);
+    
     // Pack 10 payout types per storage slot (3 bits each = 30 bits used)
     const packedSlots = {};
     
-    for (const edge of edgeCases) {
+    for (const edge of nonLoseEdgeCases) {
         const slotIndex = Math.floor(edge.key / 10);
         const positionInSlot = edge.key % 10;
         
@@ -418,13 +433,18 @@ function generateBitPackedContract(reelCount, edgeCases, totalPossible, reductio
         packedSlots[slotIndex][positionInSlot] = edge.payout;
     }
     
+    const actualStoredCases = nonLoseEdgeCases.length;
+    const originalStoredCases = edgeCases.length;
+    const loseCasesRemoved = originalStoredCases - actualStoredCases;
+    
     let solidityCode = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
 /**
  * @title PayoutTables${reelCount} - Bit-packed ${reelCount}-reel payout lookup
  * @dev Uses math patterns + bit-packing for ${reductionRatio}% reduction
- * @notice Stores ${edgeCases.length} edge cases in ${Object.keys(packedSlots).length} packed slots vs ${totalPossible} total
+ * @notice Stores ${actualStoredCases} winning edge cases in ${Object.keys(packedSlots).length} packed slots vs ${totalPossible} total
+ * @notice Removed ${loseCasesRemoved} LOSE cases (default to 0)
  */
 contract PayoutTables${reelCount} {
     
@@ -456,7 +476,7 @@ contract PayoutTables${reelCount} {
             return mathPattern;
         }
         
-        // Fallback to bit-packed storage
+        // Fallback to bit-packed storage (defaults to LOSE if not found)
         return _getPackedPayoutType(combinationKey);
     }
     
@@ -507,7 +527,6 @@ contract PayoutTables${reelCount} {
         }
         
         // Extract counts for analysis
-        uint256 count1 = (counts >> 0) & 0xF;   // DUMP count
         uint256 count2 = (counts >> 4) & 0xF;   // COPE count  
         uint256 count3 = (counts >> 8) & 0xF;   // PUMP count
         uint256 count4 = (counts >> 12) & 0xF;  // DIAMOND count
@@ -555,20 +574,26 @@ contract PayoutTables${reelCount} {
     }
     
     /**
-     * @dev Initialize bit-packed payouts
+     * @dev Initialize bit-packed payouts (only winning cases)
      */
     function _initializePackedPayouts() internal {`;
 
-    // Generate bit-packed initialization
+    // Generate bit-packed initialization (only for slots that have non-zero values)
     for (const [slotIndex, slot] of Object.entries(packedSlots)) {
         // Calculate packed value
         let packedValue = 0n;
+        let hasNonZero = false;
+        
         for (let i = 0; i < 10; i++) {
             const payoutType = slot[i] || 0;
+            if (payoutType > 0) hasNonZero = true;
             packedValue |= BigInt(payoutType) << (BigInt(i) * 3n);
         }
         
-        solidityCode += `\n        packedPayouts[${slotIndex}] = ${packedValue.toString()};`;
+        // Only store if there are non-zero values in this slot
+        if (hasNonZero) {
+            solidityCode += `\n        packedPayouts[${slotIndex}] = ${packedValue.toString()};`;
+        }
     }
     
     solidityCode += `\n    }
@@ -714,21 +739,67 @@ function generateAllContracts() {
     
     let totalEdgeCases = 0;
     let totalPossible = 0;
+    let totalLoseCasesRemoved = 0;
     const contractSizes = [];
     
     for (let reelCount = 3; reelCount <= 7; reelCount++) {
-        const contract = generateOptimizedContract(reelCount);
         const edgeCases = generateEdgeCases(reelCount);
+        const nonLoseEdgeCases = edgeCases.filter(edge => edge.payout !== PayoutType.LOSE);
+        const loseCasesRemoved = edgeCases.length - nonLoseEdgeCases.length;
+        
+        const contracts = generateOptimizedContract(reelCount);
         const possible = Math.pow(6, reelCount);
         
-        totalEdgeCases += edgeCases.length;
+        totalEdgeCases += nonLoseEdgeCases.length;
         totalPossible += possible;
+        totalLoseCasesRemoved += loseCasesRemoved;
         
-        const sizeKB = (contract.length / 1024).toFixed(1);
-        contractSizes.push({ reelCount, sizeKB, useBitPacking: edgeCases.length > 5000 });
-        
-        fs.writeFileSync(`./contracts/PayoutTables${reelCount}.sol`, contract);
-        console.log(`✅ Generated PayoutTables${reelCount}.sol (${sizeKB}KB) ${edgeCases.length > 5000 ? '[BIT-PACKED]' : '[STANDARD]'}`);
+        // Handle chunked contracts (array) vs single contract (string)
+        if (Array.isArray(contracts)) {
+            // PayoutTables7 chunked contracts
+            console.log(`✅ Generated PayoutTables${reelCount} with ${contracts.length - 1} chunk contracts + 1 router`);
+            console.log(`   Stored: ${nonLoseEdgeCases.length}/${edgeCases.length} edge cases (removed ${loseCasesRemoved} LOSE cases)`);
+            
+            let totalSizeKB = 0;
+            for (const contract of contracts) {
+                fs.writeFileSync(`./contracts/${contract.filename}`, contract.content);
+                const sizeKB = (contract.content.length / 1024).toFixed(1);
+                totalSizeKB += parseFloat(sizeKB);
+                
+                if (contract.isRouter) {
+                    console.log(`   📁 ${contract.filename} (${sizeKB}KB) [ROUTER]`);
+                } else {
+                    console.log(`   📁 ${contract.filename} (${sizeKB}KB) [CHUNK ${contract.partNumber}] Keys: ${contract.minKey}-${contract.maxKey}`);
+                }
+            }
+            
+            contractSizes.push({ 
+                reelCount, 
+                sizeKB: totalSizeKB.toFixed(1), 
+                useBitPacking: false,
+                isChunked: true,
+                chunkCount: contracts.length - 1,
+                originalEdges: edgeCases.length,
+                storedEdges: nonLoseEdgeCases.length,
+                loseCasesRemoved
+            });
+        } else {
+            // Regular single contract
+            const sizeKB = (contracts.length / 1024).toFixed(1);
+            contractSizes.push({ 
+                reelCount, 
+                sizeKB, 
+                useBitPacking: edgeCases.length > 5000,
+                isChunked: false,
+                originalEdges: edgeCases.length,
+                storedEdges: nonLoseEdgeCases.length,
+                loseCasesRemoved
+            });
+            
+            fs.writeFileSync(`./contracts/PayoutTables${reelCount}.sol`, contracts);
+            console.log(`✅ Generated PayoutTables${reelCount}.sol (${sizeKB}KB) ${edgeCases.length > 5000 ? '[BIT-PACKED]' : '[STANDARD]'}`);
+            console.log(`   Stored: ${nonLoseEdgeCases.length}/${edgeCases.length} edge cases (removed ${loseCasesRemoved} LOSE cases)`);
+        }
     }
     
     // Generate unified interface contract
@@ -738,28 +809,361 @@ function generateAllContracts() {
     console.log(`✅ Generated PayoutTables.sol (${unifiedSizeKB}KB) [UNIFIED INTERFACE]`);
     
     const overallReduction = ((1 - totalEdgeCases / totalPossible) * 100).toFixed(2);
+    const loseOptimization = ((totalLoseCasesRemoved / (totalEdgeCases + totalLoseCasesRemoved)) * 100).toFixed(1);
     const maxSize = Math.max(...contractSizes.map(c => parseFloat(c.sizeKB)));
     const minSize = Math.min(...contractSizes.map(c => parseFloat(c.sizeKB)));
     
     console.log(`\n📊 OPTIMIZATION SUMMARY:`);
     console.log(`Total combinations: ${totalPossible.toLocaleString()}`);
-    console.log(`Edge cases stored: ${totalEdgeCases.toLocaleString()}`);
+    console.log(`Original edge cases: ${(totalEdgeCases + totalLoseCasesRemoved).toLocaleString()}`);
+    console.log(`Stored edge cases: ${totalEdgeCases.toLocaleString()}`);
+    console.log(`LOSE cases removed: ${totalLoseCasesRemoved.toLocaleString()} (${loseOptimization}% size reduction)`);
     console.log(`Overall reduction: ${overallReduction}%`);
     console.log(`\n🚀 Contract optimizations used:`);
     console.log(`• Mathematical patterns for O(1) lookup (~${overallReduction}% of cases)`);
     console.log(`• Assembly for ultra-fast bit manipulation`);
+    console.log(`• Removed all LOSE case assignments (${loseOptimization}% size reduction)`);
     console.log(`• Standard storage for smaller contracts (3-5 reels)`);
-    console.log(`• Bit-packing for larger contracts (6-7 reels)`);
+    console.log(`• Bit-packing for larger contracts (6 reels)`);
+    console.log(`• Chunked architecture for massive contracts (7 reels)`);
     console.log(`• Unified interface for clean API`);
     console.log(`• Separate deployment = modular + upgradeable architecture`);
     console.log(`\n📏 Contract sizes: ${minSize}KB - ${maxSize}KB + ${unifiedSizeKB}KB interface`);
     
     const bitPackedCount = contractSizes.filter(c => c.useBitPacking).length;
-    const standardCount = contractSizes.length - bitPackedCount;
+    const chunkedCount = contractSizes.filter(c => c.isChunked).length;
+    const standardCount = contractSizes.length - bitPackedCount - chunkedCount;
     
-    console.log(`${standardCount} standard contracts, ${bitPackedCount} bit-packed contracts, 1 unified interface`);
+    console.log(`${standardCount} standard, ${bitPackedCount} bit-packed, ${chunkedCount} chunked contracts + 1 unified interface`);
+    
+    // Show per-contract savings
+    console.log(`\n💾 Per-contract LOSE case removal savings:`);
+    for (const contract of contractSizes) {
+        const savingsPercent = ((contract.loseCasesRemoved / contract.originalEdges) * 100).toFixed(1);
+        const typeLabel = contract.isChunked ? `[CHUNKED: ${contract.chunkCount} parts]` : 
+                         contract.useBitPacking ? '[BIT-PACKED]' : '[STANDARD]';
+        console.log(`   PayoutTables${contract.reelCount}: Removed ${contract.loseCasesRemoved}/${contract.originalEdges} cases (${savingsPercent}% savings) ${typeLabel}`);
+    }
+    
     console.log(`\n🎯 Usage: DegenSlots → PayoutTables.sol → PayoutTables[3-7].sol`);
-    console.log(`\n🎉 Optimization complete! Clean API with modular backend`);
+    console.log(`\n🎉 Optimization complete! ALL tables deployed with chunked architecture for PayoutTables7!`);
+}
+
+/**
+ * Generate chunked contracts for PayoutTables7 (split into smaller deployable pieces)
+ */
+function generateChunkedContract7(edgeCases, totalPossible, reductionRatio) {
+    const reelCount = 7;
+    const nonLoseEdgeCases = edgeCases.filter(edge => edge.payout !== PayoutType.LOSE);
+    
+    // Split into chunks of ~1000 cases each for manageable deployment
+    const chunkSize = 1000;
+    const chunks = [];
+    for (let i = 0; i < nonLoseEdgeCases.length; i += chunkSize) {
+        chunks.push(nonLoseEdgeCases.slice(i, i + chunkSize));
+    }
+    
+    console.log(`Splitting PayoutTables7 into ${chunks.length} chunks of ~${chunkSize} cases each`);
+    
+    const contracts = [];
+    
+    // Generate chunk contracts
+    for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+        const chunk = chunks[chunkIndex];
+        const partNumber = chunkIndex + 1;
+        
+        // Determine key range for this chunk
+        const minKey = Math.min(...chunk.map(c => c.key));
+        const maxKey = Math.max(...chunk.map(c => c.key));
+        
+        let chunkContract = `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.22;
+
+/**
+ * @title PayoutTables7_Part${partNumber} - Chunked 7-reel payout lookup (Part ${partNumber}/${chunks.length})
+ * @dev Handles combination keys ${minKey} to ${maxKey} (${chunk.length} cases)
+ */
+contract PayoutTables7_Part${partNumber} {
+    
+    enum PayoutType {
+        LOSE,           // 0 - No payout
+        SMALL_WIN,      // 1 - 2x multiplier
+        MEDIUM_WIN,     // 2 - 5x multiplier  
+        BIG_WIN,        // 3 - 10x multiplier
+        MEGA_WIN,       // 4 - 50x multiplier
+        ULTRA_WIN,      // 5 - 100x multiplier
+        SPECIAL_COMBO,  // 6 - 20x multiplier
+        JACKPOT         // 7 - 50% of pool
+    }
+    
+    // Key range for this chunk
+    uint256 public constant MIN_KEY = ${minKey};
+    uint256 public constant MAX_KEY = ${maxKey};
+    
+    // Only store winning edge cases for this range
+    mapping(uint256 => PayoutType) private edgeCases;
+    
+    constructor() {
+        _initializeEdgeCases();
+    }
+    
+    /**
+     * @dev Check if this contract handles the given key
+     */
+    function handlesKey(uint256 combinationKey) external pure returns (bool) {
+        return combinationKey >= MIN_KEY && combinationKey <= MAX_KEY;
+    }
+    
+    /**
+     * @dev Get payout type for keys in this chunk's range
+     */
+    function getPayoutType(uint256 combinationKey) external view returns (PayoutType) {
+        require(combinationKey >= MIN_KEY && combinationKey <= MAX_KEY, "Key out of range");
+        return edgeCases[combinationKey]; // Defaults to LOSE if not found
+    }
+    
+    /**
+     * @dev Initialize edge cases for this chunk
+     */
+    function _initializeEdgeCases() internal {`;
+
+        // Group by payout type
+        const byPayoutType = {};
+        for (const edge of chunk) {
+            if (!byPayoutType[edge.payout]) byPayoutType[edge.payout] = [];
+            byPayoutType[edge.payout].push(edge.key);
+        }
+        
+        // Generate assignments
+        const payoutTypeNames = ['LOSE', 'SMALL_WIN', 'MEDIUM_WIN', 'BIG_WIN', 'MEGA_WIN', 'ULTRA_WIN', 'SPECIAL_COMBO', 'JACKPOT'];
+        
+        for (const [payoutType, keys] of Object.entries(byPayoutType)) {
+            const typeName = payoutTypeNames[payoutType];
+            if (keys.length > 0) {
+                chunkContract += `\n        // ${typeName} cases (${keys.length} total)\n`;
+                for (const key of keys) {
+                    chunkContract += `        edgeCases[${key}] = PayoutType.${typeName};\n`;
+                }
+            }
+        }
+        
+        chunkContract += `    }
+}
+`;
+        
+        contracts.push({
+            filename: `PayoutTables7_Part${partNumber}.sol`,
+            content: chunkContract,
+            partNumber,
+            minKey,
+            maxKey,
+            caseCount: chunk.length
+        });
+    }
+    
+    // Generate router contract
+    const routerContract = generatePayoutTables7Router(chunks.length, contracts);
+    contracts.push({
+        filename: 'PayoutTables7.sol',
+        content: routerContract,
+        isRouter: true
+    });
+    
+    return contracts;
+}
+
+/**
+ * Generate PayoutTables7 router that delegates to chunk contracts
+ */
+function generatePayoutTables7Router(chunkCount, chunkContracts) {
+    const reelCount = 7;
+    
+    let routerContract = `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.22;
+
+/**
+ * @title PayoutTables7 - Router for chunked 7-reel payout lookup
+ * @dev Routes to ${chunkCount} chunk contracts for complete 7-reel coverage
+ */
+
+interface IPayoutTables7Chunk {
+    enum PayoutType {
+        LOSE,           // 0 - No payout
+        SMALL_WIN,      // 1 - 2x multiplier
+        MEDIUM_WIN,     // 2 - 5x multiplier  
+        BIG_WIN,        // 3 - 10x multiplier
+        MEGA_WIN,       // 4 - 50x multiplier
+        ULTRA_WIN,      // 5 - 100x multiplier
+        SPECIAL_COMBO,  // 6 - 20x multiplier
+        JACKPOT         // 7 - 50% of pool
+    }
+    
+    function handlesKey(uint256 combinationKey) external pure returns (bool);
+    function getPayoutType(uint256 combinationKey) external view returns (PayoutType);
+}
+
+contract PayoutTables7 {
+    
+    enum PayoutType {
+        LOSE,           // 0 - No payout
+        SMALL_WIN,      // 1 - 2x multiplier
+        MEDIUM_WIN,     // 2 - 5x multiplier  
+        BIG_WIN,        // 3 - 10x multiplier
+        MEGA_WIN,       // 4 - 50x multiplier
+        ULTRA_WIN,      // 5 - 100x multiplier
+        SPECIAL_COMBO,  // 6 - 20x multiplier
+        JACKPOT         // 7 - 50% of pool
+    }
+    
+    // Chunk contracts
+    IPayoutTables7Chunk[${chunkCount}] public chunks;
+    
+    // Owner for upgradeability
+    address public owner;
+    
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only owner");
+        _;
+    }
+    
+    constructor(`;
+    
+    // Constructor parameters for all chunk addresses
+    for (let i = 0; i < chunkCount; i++) {
+        routerContract += `address chunk${i + 1}`;
+        if (i < chunkCount - 1) routerContract += ', ';
+    }
+    
+    routerContract += `) {
+        owner = msg.sender;
+        `;
+    
+    // Initialize chunk contracts
+    for (let i = 0; i < chunkCount; i++) {
+        routerContract += `chunks[${i}] = IPayoutTables7Chunk(chunk${i + 1});\n        `;
+    }
+    
+    routerContract += `}
+    
+    /**
+     * @dev Get payout type - first check math patterns, then route to appropriate chunk
+     */
+    function getPayoutType(uint256 combinationKey) external view returns (PayoutType) {
+        // First check mathematical patterns for instant O(1) lookup
+        PayoutType mathPattern = _checkMathematicalPatterns(combinationKey);
+        if (mathPattern != PayoutType.LOSE) {
+            return mathPattern;
+        }
+        
+        // Route to appropriate chunk contract
+        for (uint256 i = 0; i < ${chunkCount}; i++) {
+            if (chunks[i].handlesKey(combinationKey)) {
+                IPayoutTables7Chunk.PayoutType result = chunks[i].getPayoutType(combinationKey);
+                return PayoutType(uint8(result));
+            }
+        }
+        
+        // Default to LOSE if no chunk handles it
+        return PayoutType.LOSE;
+    }
+    
+    /**
+     * @dev Mathematical pattern detection (same as other contracts)
+     */
+    function _checkMathematicalPatterns(uint256 combinationKey) internal pure returns (PayoutType) {
+        // Extract individual reels using assembly for gas efficiency
+        uint256[${reelCount}] memory reels;
+        uint256 temp = combinationKey;
+        
+        assembly {
+            // Extract reels from right to left
+            for { let i := 0 } lt(i, ${reelCount}) { i := add(i, 1) } {
+                mstore(add(reels, mul(i, 32)), mod(temp, 10))
+                temp := div(temp, 10)
+            }
+        }
+        
+        // Count symbols using assembly-optimized bit packing
+        uint256 counts; // Pack all counts into single uint256 (6 symbols × 4 bits each)
+        
+        assembly {
+            for { let i := 0 } lt(i, ${reelCount}) { i := add(i, 1) } {
+                let reel := mload(add(reels, mul(i, 32)))
+                let shift := mul(sub(reel, 1), 4) // 4 bits per symbol count
+                let currentCount := and(shr(shift, counts), 0xF)
+                counts := or(and(counts, not(shl(shift, 0xF))), shl(shift, add(currentCount, 1)))
+            }
+        }
+        
+        // Extract counts for analysis
+        uint256 count2 = (counts >> 4) & 0xF;   // COPE count  
+        uint256 count3 = (counts >> 8) & 0xF;   // PUMP count
+        uint256 count4 = (counts >> 12) & 0xF;  // DIAMOND count
+        uint256 count5 = (counts >> 16) & 0xF;  // ROCKET count
+        uint256 count6 = (counts >> 20) & 0xF;  // JACKPOT count
+        
+        // All same symbol patterns
+        if (count6 == ${reelCount}) return PayoutType.JACKPOT;
+        if (count5 == ${reelCount}) return PayoutType.ULTRA_WIN;
+        if (count4 == ${reelCount}) return PayoutType.MEGA_WIN;
+        if (count3 == ${reelCount}) return PayoutType.BIG_WIN;
+        if (count2 == ${reelCount}) return PayoutType.MEDIUM_WIN;
+        
+        // Almost all patterns
+        if (count6 == ${reelCount - 1}) return PayoutType.SPECIAL_COMBO;
+        if (count5 == ${reelCount - 1}) return PayoutType.SPECIAL_COMBO;
+        
+        // Specific rocket patterns
+        if (count5 == 3) return PayoutType.SPECIAL_COMBO;
+        
+        // Mixed high-value combinations
+        if (count4 >= 2 && count5 >= 1) return PayoutType.SPECIAL_COMBO;
+        if (count5 >= 2 && count4 >= 1) return PayoutType.SPECIAL_COMBO;
+        
+        // Triple+ patterns
+        if (count6 >= 3) return PayoutType.MEGA_WIN;
+        if (count5 >= 3) return PayoutType.BIG_WIN;
+        if (count4 >= 3) return PayoutType.BIG_WIN;
+        if (count3 >= 3) return PayoutType.MEDIUM_WIN;
+        if (count2 >= 3) return PayoutType.MEDIUM_WIN;
+        
+        // 4+ patterns
+        if (count6 >= 4) return PayoutType.MEGA_WIN;
+        if (count5 >= 4) return PayoutType.MEGA_WIN;
+        if (count4 >= 4) return PayoutType.MEGA_WIN;
+        if (count3 >= 4) return PayoutType.BIG_WIN;
+        if (count2 >= 4) return PayoutType.BIG_WIN;
+        
+        // Pair patterns
+        if (count6 >= 2) return PayoutType.SMALL_WIN;
+        if (count5 >= 2) return PayoutType.SMALL_WIN;
+        if (count4 >= 2) return PayoutType.SMALL_WIN;
+        
+        return PayoutType.LOSE;
+    }
+    
+    /**
+     * @dev Get all chunk addresses
+     */
+    function getAllChunks() external view returns (address[${chunkCount}] memory) {
+        address[${chunkCount}] memory chunkAddresses;
+        for (uint256 i = 0; i < ${chunkCount}; i++) {
+            chunkAddresses[i] = address(chunks[i]);
+        }
+        return chunkAddresses;
+    }
+    
+    /**
+     * @dev Update a chunk contract (for upgradeability)
+     */
+    function updateChunk(uint256 chunkIndex, address newChunk) external onlyOwner {
+        require(chunkIndex < ${chunkCount}, "Invalid chunk index");
+        chunks[chunkIndex] = IPayoutTables7Chunk(newChunk);
+    }
+}
+`;
+    
+    return routerContract;
 }
 
 // Main execution

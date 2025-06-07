@@ -4,7 +4,8 @@ pragma solidity ^0.8.22;
 /**
  * @title PayoutTables3 - Ultra-optimized 3-reel payout lookup
  * @dev Uses mathematical patterns + assembly for 93.06% storage reduction
- * @notice Only stores 15 edge cases vs 216 total combinations
+ * @notice Only stores 0 winning edge cases vs 216 total combinations
+ * @notice Removed 15 LOSE cases (mappings default to 0)
  */
 contract PayoutTables3 {
     
@@ -19,7 +20,7 @@ contract PayoutTables3 {
         JACKPOT         // 7 - 50% of pool
     }
     
-    // Only store edge cases not covered by mathematical patterns
+    // Only store winning edge cases - LOSE cases default to 0
     mapping(uint256 => PayoutType) private edgeCases;
     
     constructor() {
@@ -38,7 +39,7 @@ contract PayoutTables3 {
             return mathPattern;
         }
         
-        // Fallback to edge case storage
+        // Fallback to edge case storage (defaults to LOSE if not found)
         return edgeCases[combinationKey];
     }
     
@@ -72,7 +73,6 @@ contract PayoutTables3 {
         }
         
         // Extract counts for analysis
-        uint256 count1 = (counts >> 0) & 0xF;   // DUMP count
         uint256 count2 = (counts >> 4) & 0xF;   // COPE count  
         uint256 count3 = (counts >> 8) & 0xF;   // PUMP count
         uint256 count4 = (counts >> 12) & 0xF;  // DIAMOND count
@@ -118,24 +118,7 @@ contract PayoutTables3 {
     }
     
     /**
-     * @dev Initialize only the edge cases not covered by mathematical patterns
+     * @dev Initialize only winning edge cases - LOSE cases omitted (default to 0)
      */
-    function _initializeEdgeCases() internal {
-        // LOSE edge cases (15 total)
-        edgeCases[122] = PayoutType.LOSE;
-        edgeCases[212] = PayoutType.LOSE;
-        edgeCases[221] = PayoutType.LOSE;
-        edgeCases[223] = PayoutType.LOSE;
-        edgeCases[224] = PayoutType.LOSE;
-        edgeCases[225] = PayoutType.LOSE;
-        edgeCases[226] = PayoutType.LOSE;
-        edgeCases[232] = PayoutType.LOSE;
-        edgeCases[242] = PayoutType.LOSE;
-        edgeCases[252] = PayoutType.LOSE;
-        edgeCases[262] = PayoutType.LOSE;
-        edgeCases[322] = PayoutType.LOSE;
-        edgeCases[422] = PayoutType.LOSE;
-        edgeCases[522] = PayoutType.LOSE;
-        edgeCases[622] = PayoutType.LOSE;
-    }
+    function _initializeEdgeCases() internal {    }
 }

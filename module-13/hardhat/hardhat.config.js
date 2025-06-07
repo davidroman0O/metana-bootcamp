@@ -12,25 +12,34 @@ module.exports = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200
+        runs: 20  // Optimize for size but not so aggressive that it breaks compilation
       }
     }
   },
   networks: {
     hardhat: {
-      // Enable forking for mainnet testing - REQUIRED
-      forking: {
-        url: "https://eth-mainnet.g.alchemy.com/v2/UlgUe5NUoeezq_0_AxTSKl0qpQQeHSKV",
-        blockNumber: 18500000 // Use a recent block
-      },
+      // Disable forking to use pure local network for testing large contracts
+      // forking: {
+      //   url: "https://eth-mainnet.g.alchemy.com/v2/UlgUe5NUoeezq_0_AxTSKl0qpQQeHSKV",
+      //   blockNumber: 18500000 // Use a recent block
+      // },
+      // Disable contract size limit for local testing
+      allowUnlimitedContractSize: true,
+      // Use local network settings for maximum flexibility
+      chainId: 31337,
+      // High gas settings for large contract deployments
+      blockGasLimit: 30000000,
+      gasPrice: 8000000000,
       // Use default hardhat accounts
     },
     hardhat_local: {
       // Local network without forking for basic tests
-      url: "http://127.0.0.1:8545"
+      url: "http://127.0.0.1:8545",
+      allowUnlimitedContractSize: true
     },
     localhost: {
-      url: "http://127.0.0.1:8545"
+      url: "http://127.0.0.1:8545",
+      allowUnlimitedContractSize: true
     },
     sepolia: {
       url: "https://eth-sepolia.g.alchemy.com/v2/UlgUe5NUoeezq_0_AxTSKl0qpQQeHSKV",

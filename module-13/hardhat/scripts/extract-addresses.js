@@ -40,7 +40,7 @@ async function extractAddresses() {
     // Determine network and environment
     const chainId = deploymentData.network.chainId;
     const networkName = getNetworkName(chainId);
-    const environment = process.env.NODE_ENV || 'dev';
+    const environment = mapEnvironment(process.env.NODE_ENV || 'dev');
     
     console.log(`🌐 Network: ${networkName}, Environment: ${environment}`);
 
@@ -76,6 +76,19 @@ function getNetworkName(chainId) {
     1: 'mainnet'
   };
   return networks[chainId] || 'unknown';
+}
+
+function mapEnvironment(nodeEnv) {
+  const envMap = {
+    'development': 'dev',
+    'dev': 'dev',
+    'test': 'test',
+    'testing': 'test',
+    'staging': 'staging',
+    'production': 'prod',
+    'prod': 'prod'
+  };
+  return envMap[nodeEnv] || 'dev';
 }
 
 async function generateNetworkEnvFile(configDir, network, env, { degenSlotsAddress, chipTokenAddress, deploymentData }) {
@@ -237,15 +250,15 @@ async function updateIndexFile(configDir) {
   }).join('\n');
 
   const indexContent = `// Auto-generated contract configuration entry point
+import type { NetworkDeployment, AllDeployments, NetworkName, Environment } from './types';
+import { SUPPORTED_CHAINS } from './types';
+${imports}
+
 export * from './types';
 export * from './DegenSlotsABI';
 export * from './ChipTokenABI';
 
 ${exports}
-
-import type { NetworkDeployment, AllDeployments, NetworkName, Environment } from './types';
-import { SUPPORTED_CHAINS } from './types';
-${imports}
 
 // Network -> Environment -> Deployment structure
 const DEPLOYMENTS: AllDeployments = {
