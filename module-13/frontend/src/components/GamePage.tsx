@@ -16,8 +16,8 @@ import SlotMachine from './SlotMachine';
 import PhoneHelpLine from './PhoneHelpLine';
 
 // Hooks
-import { useWeb3 } from '../hooks/useWeb3';
-import { useNetworkSwitcher } from '../hooks/useNetworkSwitcher';
+import { useWallet } from '../hooks/useWallet';
+import { useNetworks } from '../hooks/useNetworks';
 import { useSlotMachine } from '../hooks/useSlotMachine';
 
 // Inline GameHeader component to avoid import issues
@@ -125,7 +125,10 @@ const GameHeader: React.FC<{
                 <div className="bg-white/10 rounded px-2 py-1 text-xs">
                   {formatAddress(account)}
                 </div>
-                <button onClick={onDisconnect} className="bg-red-500/30 hover:bg-red-500/50 text-red-300 hover:text-white rounded-lg px-3 py-2 text-sm font-medium transition-all">
+                <button 
+                  onClick={onDisconnect}
+                  className="bg-red-500/30 hover:bg-red-500/50 text-red-300 hover:text-white rounded-lg px-3 py-2 text-sm font-medium transition-all"
+                >
                   <LogOut size={14} className="inline mr-2" />
                   Disconnect
                 </button>
@@ -158,14 +161,23 @@ const GameHeader: React.FC<{
 };
 
 const GamePage: React.FC = () => {
-  // All hooks
+  // Separate hooks like the working module-3 examples
   const {
-    account, chainId, balance, connecting, isConnected, connectWallet, disconnectWallet,
-  } = useWeb3();
+    // Wallet state
+    account, isConnected, connecting, balance,
+    // Actions
+    connectWallet, disconnectWallet,
+  } = useWallet();
 
   const {
-    currentChain, isSupported, switchToLocal, switchToMainnet, switchToSepolia, isPending: isSwitchPending,
-  } = useNetworkSwitcher();
+    // Network state  
+    currentNetwork, isNetworkSupported, switchingNetwork,
+    // Actions
+    switchToNetwork,
+  } = useNetworks();
+
+  // Get chainId from currentNetwork
+  const chainId = currentNetwork?.chainId;
 
   const {
     displayLCD, betAmount, needsApproval, chipBalance, isApproving, isSpinningTx,
@@ -216,9 +228,11 @@ const GamePage: React.FC = () => {
         <GameHeader
           isConnected={false} account={account} balance={balance} connecting={connecting}
           onConnect={connectWallet} onDisconnect={disconnectWallet} chainId={chainId}
-          currentChain={currentChain} isSupported={isSupported} onSwitchToLocal={switchToLocal}
-          onSwitchToMainnet={switchToMainnet} onSwitchToSepolia={switchToSepolia}
-          isSwitchPending={isSwitchPending} poolETH={formattedPoolETH} ethPrice={ethPrice} chipRate={chipRate}
+          currentChain={currentNetwork} isSupported={isNetworkSupported} 
+          onSwitchToLocal={() => switchToNetwork('hardhat')}
+          onSwitchToMainnet={() => switchToNetwork('mainnet')} 
+          onSwitchToSepolia={() => switchToNetwork('sepolia')}
+          isSwitchPending={switchingNetwork} poolETH={formattedPoolETH} ethPrice={ethPrice} chipRate={chipRate}
         />
 
         <main className="container mx-auto px-4 py-8">
@@ -255,9 +269,11 @@ const GamePage: React.FC = () => {
       <GameHeader
         isConnected={true} account={account} balance={balance} connecting={connecting}
         onConnect={connectWallet} onDisconnect={disconnectWallet} chainId={chainId}
-        currentChain={currentChain} isSupported={isSupported} onSwitchToLocal={switchToLocal}
-        onSwitchToMainnet={switchToMainnet} onSwitchToSepolia={switchToSepolia}
-        isSwitchPending={isSwitchPending}
+        currentChain={currentNetwork} isSupported={isNetworkSupported} 
+        onSwitchToLocal={() => switchToNetwork('hardhat')}
+        onSwitchToMainnet={() => switchToNetwork('mainnet')} 
+        onSwitchToSepolia={() => switchToNetwork('sepolia')}
+        isSwitchPending={switchingNetwork}
       />
 
       <main className="container mx-auto px-4 py-4">

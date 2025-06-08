@@ -795,7 +795,7 @@ function generateAllContracts() {
                 storedEdges: nonLoseEdgeCases.length,
                 loseCasesRemoved
             });
-            
+        
             fs.writeFileSync(`./contracts/PayoutTables${reelCount}.sol`, contracts);
         console.log(`✅ Generated PayoutTables${reelCount}.sol (${sizeKB}KB) ${edgeCases.length > 5000 ? '[BIT-PACKED]' : '[STANDARD]'}`);
             console.log(`   Stored: ${nonLoseEdgeCases.length}/${edgeCases.length} edge cases (removed ${loseCasesRemoved} LOSE cases)`);
