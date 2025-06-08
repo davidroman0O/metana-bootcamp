@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import SlotMachine from './SlotMachine';
+import SlotMachine, { SlotMachineRef } from './SlotMachine';
 
 // Symbol definitions - matching SlotMachine component
 const SYMBOLS = [
@@ -10,33 +10,6 @@ const SYMBOLS = [
   { id: 5, emoji: '🚀', name: 'ROCKET', color: '#a855f7' },    // Purple
   { id: 6, emoji: '🐵', name: 'JACKPOT', color: '#facc15' }    // Gold
 ];
-
-interface SlotMachineRef {
-  // Core API
-  startSpin: (targetSymbols?: number[]) => boolean;
-  forceStop: () => boolean;
-  
-  // State queries
-  getState: () => string;
-  isReady: () => boolean;
-  isSpinning: () => boolean;
-  
-  // Display control
-  updateDisplayMessage: (message: string) => void;
-  getDisplayMessage: () => string;
-  
-  // Individual reel control
-  setReelTarget: (reelIndex: number, symbol: number) => boolean;
-  setAllReelTargets: (symbols: number[]) => boolean;
-  
-  // Reveal order control APIs
-  setAllReelTargetsSequential: (symbols: number[]) => boolean;
-  setAllReelTargetsSimultaneous: (symbols: number[]) => boolean;
-  setReelTargetWithRevealOrder: (reelIndex: number, symbol: number, revealOrder: number) => boolean;
-  
-  // Utility
-  reset: () => void;
-}
 
 const FlexibleSlotDemo: React.FC = () => {
   const [selectedReelCount, setSelectedReelCount] = useState(3);

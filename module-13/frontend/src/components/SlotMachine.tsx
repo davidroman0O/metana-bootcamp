@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 import SlotMachineLever from './Lever';
 import IndividualReel from './IndividualReel';
+import LCDDisplay, { LCDDisplayRef } from './LCDDisplay';
 import { useAppMode } from '../contexts/AppModeContext';
 import '../styles/SlotMachine.css';
 
@@ -93,6 +94,24 @@ interface SlotMachineRef {
   setAllReelTargetsSimultaneous: (symbols: number[]) => boolean;
   setReelTargetWithRevealOrder: (reelIndex: number, symbol: number, revealOrder: number) => boolean;
   
+  // LCD Display API - exposed from LCDDisplay component
+  lcd: {
+    setMessage: (message: string) => void;
+    getMessage: () => string;
+    clear: () => void;
+    setIdlePattern: () => void;
+    setSpinningPattern: () => void;
+    setWinPattern: (amount?: number) => void;
+    setErrorPattern: () => void;
+    startBlinking: (interval?: number) => void;
+    stopBlinking: () => void;
+    flashMessage: (message: string, duration?: number) => void;
+    setMotivationalQuote: () => void;
+    setASCIIAnimation: (type: 'dots' | 'bars' | 'arrows') => void;
+    stopAnimation: () => void;
+    setCustomPattern: (pattern: string) => void;
+  };
+  
   // Utility
   reset: () => void;
 }
@@ -111,6 +130,7 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
 
   const { isControlledMode, isAnimatedMode } = useAppMode();
   const leverRef = useRef<any>(null);
+  const lcdRef = useRef<LCDDisplayRef>(null);
   
   // Dynamic reel refs instead of fixed reel1Ref, reel2Ref, reel3Ref
   const reelRefs = useRef<Array<React.RefObject<any>>>(
@@ -271,6 +291,9 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
     setLogMessages([]);
     setLeverDisabled(false);
     
+    // Set LCD to idle pattern
+    lcdRef.current?.setIdlePattern();
+    
     // Clear any timers
     if (transitionTimerRef.current) {
       clearTimeout(transitionTimerRef.current);
@@ -286,6 +309,9 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
   const handleSpinningUpEntry = () => {
     setDisplayMessage('Starting spin...');
     setLeverDisabled(true);
+    
+    // Set LCD to spinning pattern
+    lcdRef.current?.setSpinningPattern();
     
     // Reset completion tracking for new spin
     reelCompletionsRef.current = Array(validReelCount).fill(false);
@@ -371,11 +397,13 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
 
   const handleSpinningEntry = () => {
     setDisplayMessage('Spinning...');
+    // LCD already set to spinning pattern in handleSpinningUpEntry
     // Wait for external stop commands (lever or programmatic)
   };
 
   const handleEvaluatingResultEntry = () => {
     setDisplayMessage('Calculating result...');
+    // Keep LCD showing spinning pattern until result is evaluated
     
     // Small delay before evaluation for smoothness
     transitionTimerRef.current = setTimeout(() => {
@@ -846,8 +874,12 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
     
     if (totalPayout > 0) {
       setDisplayMessage(`WIN! ${totalPayout} CHIPS!`);
+      // Set LCD to win pattern with payout amount
+      lcdRef.current?.setWinPattern(totalPayout);
     } else {
       setDisplayMessage('No win this time...');
+      // Flash a motivational message on LCD
+      lcdRef.current?.flashMessage('NEXT TIME!', 2000);
     }
     
     // Notify parent of result
@@ -933,7 +965,24 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
     setAllReelTargets,
     setAllReelTargetsSequential: setAllReelTargetsSequential,
     setAllReelTargetsSimultaneous: setAllReelTargetsSimultaneous,
-    setReelTargetWithRevealOrder: setReelTargetWithRevealOrder
+    setReelTargetWithRevealOrder: setReelTargetWithRevealOrder,
+    // LCD Display API - forward to LCD component
+    lcd: {
+      setMessage: (message: string) => lcdRef.current?.setMessage(message),
+      getMessage: () => lcdRef.current?.getMessage() || '',
+      clear: () => lcdRef.current?.clear(),
+      setIdlePattern: () => lcdRef.current?.setIdlePattern(),
+      setSpinningPattern: () => lcdRef.current?.setSpinningPattern(),
+      setWinPattern: (amount?: number) => lcdRef.current?.setWinPattern(amount),
+      setErrorPattern: () => lcdRef.current?.setErrorPattern(),
+      startBlinking: (interval?: number) => lcdRef.current?.startBlinking(interval),
+      stopBlinking: () => lcdRef.current?.stopBlinking(),
+      flashMessage: (message: string, duration?: number) => lcdRef.current?.flashMessage(message, duration),
+      setMotivationalQuote: () => lcdRef.current?.setMotivationalQuote(),
+      setASCIIAnimation: (type: 'dots' | 'bars' | 'arrows') => lcdRef.current?.setASCIIAnimation(type),
+      stopAnimation: () => lcdRef.current?.stopAnimation(),
+      setCustomPattern: (pattern: string) => lcdRef.current?.setCustomPattern(pattern)
+    }
   }));
 
   // Handle coin insert
@@ -946,14 +995,9 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
     <div className="slot-machine-container">
       {/* Main slot machine frame */}
       <div className="slot-frame" ref={slotFrameRef}>
-        {/* Header */}
-        <div className="slot-header">
-          <span className="slot-title">🐒 APE ESCAPE 🙈</span>
-          {/* Mode indicator */}
-          {/* <div className="text-xs text-center mt-1">
-            {isControlledMode && <span className="text-purple-400">⚡ CONTROLLED MODE</span>}
-            {isAnimatedMode && <span className="text-orange-400">🎬 ANIMATED DEMO</span>}
-          </div> */}
+        {/* Header - LCD Display at top */}
+        <div className="slot-header" style={{ marginBottom: '5px' }}>
+          <LCDDisplay ref={lcdRef} />
         </div>
 
         {/* Independent Reels Container */}
@@ -979,27 +1023,8 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
           </div>
         </div>
 
-        {/* LCD display bar */}
-        <div className="lcd-display-bar">
-          <div className="display-screen">
-            {isAnimatedMode ? "🎬 AUTO DEMO - Watch the magic happen!" : displayMessage}
-          </div>
-          
-          {displayMessage && (
-            <div className="game-message">
-              {displayMessage}
-            </div>
-          )}
-          
-          {logMessages.length > 0 && (
-            <div className="log-messages">
-              {logMessages.map((msg, i) => (
-                <div key={i} className="log-message">{msg}</div>
-              ))}
-            </div>
-          )}
-          
-          {/* Status indicator showing machine readiness */}
+        {/* State display bar at bottom */}
+        <div className="state-display-bar">
           <div className="status-indicator">
             <div className={`status-light ${currentStateRef.current === MACHINE_STATE_IDLE ? 'ready' : 'busy'}`}></div>
             <span className="status-text">
@@ -1012,6 +1037,15 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
                     : 'EVALUATING'}
             </span>
           </div>
+          
+          {/* Results messages when there's a win */}
+          {logMessages.length > 0 && (
+            <div className="win-messages">
+              {logMessages.map((msg, i) => (
+                <div key={i} className="win-message" style={{color: '#00ff00', fontSize: '12px'}}>{msg}</div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Coin slot at the bottom of the machine frame */}
@@ -1048,4 +1082,5 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
 
 SlotMachine.displayName = 'SlotMachine';
 
-export default SlotMachine; 
+export default SlotMachine;
+export type { SlotMachineRef }; 
