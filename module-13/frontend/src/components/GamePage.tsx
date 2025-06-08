@@ -197,6 +197,10 @@ const GamePage: React.FC = () => {
 
   const slotMachineRef = useRef<any>(null);
   const [selectedReelCount, setSelectedReelCount] = useState<number>(3);
+  
+  // Chip insert tease popup state
+  const [showChipTease, setShowChipTease] = useState(false);
+  const [chipTeaseMessage, setChipTeaseMessage] = useState('');
 
   // Stop animation when user connects
   useEffect(() => {
@@ -270,24 +274,47 @@ const GamePage: React.FC = () => {
     }
   };
 
+  // Handle chip insert when disconnected - show funny popup
+  const handleChipInsertTease = () => {
+    const { QuoteManager } = require('../utils/quotes');
+    const teaseMessage = QuoteManager.getChipInsertTeaseQuote();
+    setChipTeaseMessage(teaseMessage);
+    setShowChipTease(true);
+    
+    // Hide popup after 4 seconds
+    setTimeout(() => {
+      setShowChipTease(false);
+    }, 4000);
+  };
+
   // Disconnected mode
   if (!isConnected) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
-        <GameHeader
-          isConnected={false} account={account} balance={balance} connecting={connecting}
-          onConnect={connectWallet} onDisconnect={disconnectWallet} chainId={chainId}
-          currentChain={currentNetwork} isSupported={isNetworkSupported} 
-          onSwitchToLocal={() => switchToNetwork('hardhat')}
-          onSwitchToMainnet={() => switchToNetwork('mainnet')} 
-          onSwitchToSepolia={() => switchToNetwork('sepolia')}
-          isSwitchPending={switchingNetwork} poolETH={formattedPoolETH} ethPrice={ethPrice} chipRate={chipRate}
-        />
-
         <main className="container mx-auto px-4 py-8">
           <div className="text-center space-y-6">
+            {/* Pool info display integrated into main content */}
+            <div className="flex justify-center mb-6">
+              <div className="flex items-center space-x-4 bg-black/40 rounded-xl px-6 py-3 border border-gray-600">
+                <div className="text-center">
+                  <div className="text-lg font-bold text-blue-400">{formattedPoolETH || '0'} ETH</div>
+                  <div className="text-xs text-gray-500">Pool</div>
+                </div>
+                <div className="w-px h-8 bg-gray-600"></div>
+                <div className="text-center">
+                  <div className="text-lg font-bold text-green-400">{ethPrice || '$0'}</div>
+                  <div className="text-xs text-gray-500">ETH Price</div>
+                </div>
+                <div className="w-px h-8 bg-gray-600"></div>
+                <div className="text-center">
+                  <div className="text-lg font-bold text-yellow-400">{chipRate || '0'}</div>
+                  <div className="text-xs text-gray-500">CHIPS Rate</div>
+                </div>
+              </div>
+            </div>
+
             <h1 className="text-5xl font-bold text-white mb-4 bg-gradient-to-r from-yellow-400 via-red-500 to-pink-600 bg-clip-text text-transparent">
-              🎰 Ape Escape
+              🎰 The Leverage Lounge
             </h1>
             <p className="text-xl text-gray-300">Provably Fair Degen Slot Machine</p>
             <p className="text-lg text-yellow-400">Watch the magic happen... then connect for the real deal!</p>
@@ -301,6 +328,9 @@ const GamePage: React.FC = () => {
                 onStateChange={handleSlotStateChange}
                 isConnected={false}
                 reelCount={3}
+                onCoinInsert={handleChipInsertTease}
+                showChipPopup={showChipTease}
+                chipPopupMessage={chipTeaseMessage}
               />
             </div>
 

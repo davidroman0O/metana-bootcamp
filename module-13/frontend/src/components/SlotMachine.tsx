@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
+import React, { useRef, useEffect, useState, forwardRef, useImperativeHandle, useCallback } from 'react';
 import SlotMachineLever from './Lever';
 import IndividualReel from './IndividualReel';
 import LCDDisplay, { LCDDisplayRef } from './LCDDisplay';
@@ -67,8 +67,11 @@ const REEL_STOP_RANDOMNESS = 200; // ±ms random variation for natural feel
 interface SlotMachineProps {
   onResult?: (symbols: number[], payout: number, payoutType: string) => void;
   onStateChange?: (state: string) => void;
+  onCoinInsert?: () => void;
   isConnected?: boolean;
   reelCount?: number; // Number of reels (default: 3, min: 1, max: 10)
+  showChipPopup?: boolean; // Show the chip insert popup
+  chipPopupMessage?: string; // Message for the popup
 }
 
 interface SlotMachineRef {
@@ -122,8 +125,11 @@ interface SlotMachineRef {
 const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
   onResult,
   onStateChange,
+  onCoinInsert,
   isConnected = false,
-  reelCount = 3
+  reelCount = 3,
+  showChipPopup = false,
+  chipPopupMessage = ''
 }, ref) => {
   // Validate reelCount
   const validReelCount = Math.min(Math.max(reelCount, 1), 10); // Clamp between 1-10
@@ -174,6 +180,55 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
   // Refs for dynamic lever positioning
   const slotFrameRef = useRef<HTMLDivElement>(null);
   const leverContainerRef = useRef<HTMLDivElement>(null);
+  const coinSlotRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+
+  // Popup positioning state
+  const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0 });
+
+  // Calculate popup position based on coin slot
+  const updatePopupPosition = useCallback(() => {
+    if (coinSlotRef.current && popupRef.current) {
+      const coinSlotRect = coinSlotRef.current.getBoundingClientRect();
+      const popupRect = popupRef.current.getBoundingClientRect();
+      
+      // Calculate bottom center of coin slot
+      const coinSlotBottomCenter = {
+        x: coinSlotRect.left + (coinSlotRect.width / 2),
+        y: coinSlotRect.bottom
+      };
+      
+      // Position popup with its center aligned to coin slot bottom center
+      const newPosition = {
+        left: coinSlotBottomCenter.x - (popupRect.width / 2),
+        top: coinSlotBottomCenter.y + 8 // 8px gap below coin slot
+      };
+      
+      setPopupPosition(newPosition);
+      
+      console.log(`🎯 Popup positioned at: ${newPosition.left}, ${newPosition.top} (coin slot bottom center: ${coinSlotBottomCenter.x}, ${coinSlotBottomCenter.y})`);
+    }
+  }, []);
+
+  // Update popup position when it becomes visible or on resize
+  useEffect(() => {
+    if (showChipPopup) {
+      // Small delay to ensure popup is rendered before calculating position
+      const timer = setTimeout(() => {
+        updatePopupPosition();
+      }, 10);
+      
+      // Update position on window resize
+      window.addEventListener('resize', updatePopupPosition);
+      window.addEventListener('scroll', updatePopupPosition);
+      
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener('resize', updatePopupPosition);
+        window.removeEventListener('scroll', updatePopupPosition);
+      };
+    }
+  }, [showChipPopup, updatePopupPosition]);
 
   // Helper function to check if ALL reels are truly ready
   const areAllReelsReady = (): boolean => {
@@ -1010,6 +1065,7 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
   const handleCoin = async () => {
     console.log('💰 Coin inserted');
     // This would integrate with the parent's coin handling logic
+    onCoinInsert?.();
   };
 
   return (
@@ -1061,7 +1117,7 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
         </div>
 
         {/* Coin slot at the bottom of the machine frame */}
-        <div className="coin-slot-bottom">
+        <div className="coin-slot-bottom" ref={coinSlotRef}>
           <div
             className="coin-slot-button"
             onClick={handleCoin}
@@ -1088,11 +1144,29 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
           />
         </div>
       </div>
+
+      {/* Chip Insert Tease Popup - positioned with JavaScript relative to coin slot */}
+      {showChipPopup && (
+        <div 
+          ref={popupRef}
+          className="fixed z-50 max-w-xs bg-red-600/95 text-white p-3 rounded-xl border-2 border-red-400 shadow-2xl animate-bounce"
+          style={{
+            top: `${popupPosition.top}px`,
+            left: `${popupPosition.left}px`,
+          }}
+        >
+          <div className="text-center font-bold text-sm">{chipPopupMessage}</div>
+          <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-full w-0 h-0 border-l-8 border-r-8 border-b-8 border-l-transparent border-r-transparent border-b-red-600"></div>
+          
+          {/* Glowing effect */}
+          <div className="absolute inset-0 bg-red-500/30 rounded-xl animate-pulse"></div>
+        </div>
+      )}
     </div>
   );
 });
 
 SlotMachine.displayName = 'SlotMachine';
 
-export default SlotMachine;
+export default SlotMachine; 
 export type { SlotMachineRef }; 

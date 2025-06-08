@@ -22,6 +22,7 @@ export interface QuoteSystem {
   };
   motivational: string[];
   connect_incentives: string[];
+  chip_insert_teases: string[];
 }
 
 export const QUOTE_SYSTEM: QuoteSystem = {
@@ -425,6 +426,25 @@ export const QUOTE_SYSTEM: QuoteSystem = {
     "Connect for legendary status!",
     "Unlock your true potential!",
     "Real winners connect wallets!"
+  ],
+
+  // Funny quotes when disconnected users click INSERT CHIPS
+  chip_insert_teases: [
+    "Nice try! 🤡 But you need a wallet first!",
+    "CHIPS? What CHIPS? Connect wallet = Get CHIPS!",
+    "Trying to pay with Monopoly money? 😂",
+    "Insert wallet first, CHIPS second! 🦊",
+    "404: Wallet not found! Connect to insert CHIPS!",
+    "That's not how this works... Connect first! 🤦‍♂️",
+    "Clicking won't generate CHIPS, mate! Connect wallet!",
+    "Real apes connect wallets before inserting! 🦍",
+    "Empty pockets? Connect wallet and fill them! 💰",
+    "This ain't Chuck E. Cheese! Connect for real CHIPS!",
+    "Simulation mode: ON. Real mode: Connect wallet! 🎮",
+    "Want CHIPS? Step 1: Connect. Step 2: Profit! 📈",
+    "Wallet goes brrr, CHIPS go brrr! Connect now! 🔥",
+    "Cannot compute CHIPS without wallet connection! 🤖",
+    "Instructions unclear? Connect wallet first! 😅"
   ]
 };
 
@@ -457,6 +477,10 @@ export class QuoteManager {
 
   static getConnectIncentiveQuote(): string {
     return this.getRandomQuote(QUOTE_SYSTEM.connect_incentives);
+  }
+
+  static getChipInsertTeaseQuote(): string {
+    return this.getRandomQuote(QUOTE_SYSTEM.chip_insert_teases);
   }
 
   // Advanced combination detection
