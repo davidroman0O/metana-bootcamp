@@ -46,9 +46,9 @@ const PhoneHelpLine: React.FC<PhoneHelpLineProps> = ({ isConnected }) => {
     <div className="phone-helpline fixed bottom-6 right-6 z-50">
       {/* Tooltip Message */}
       {showMessage && (
-        <div className="message-tooltip absolute bottom-16 right-0 max-w-xs bg-black/90 text-white p-4 rounded-lg border border-gray-600 shadow-xl">
-          <div className="text-sm">{currentMessage}</div>
-          <div className="absolute bottom-0 right-6 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-black/90 transform translate-y-full"></div>
+        <div className="message-tooltip absolute bottom-16 right-0 w-96 bg-black/90 text-white p-6 rounded-xl border border-gray-600 shadow-2xl">
+          <div className="text-base leading-relaxed">{currentMessage}</div>
+          <div className="absolute bottom-0 right-8 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-black/90 transform translate-y-full"></div>
         </div>
       )}
 

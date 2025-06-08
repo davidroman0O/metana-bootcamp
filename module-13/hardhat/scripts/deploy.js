@@ -183,12 +183,23 @@ async function main() {
     });
     console.log(`✅ Contract pool funded with 1000 ETH`);
     
+    // Fund specific test address with ETH for testing
+    const testAddress = "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86";
+    console.log(`💰 Funding test address ${testAddress} with 500 ETH...`);
+    await lastDevAccount.sendTransaction({
+      to: testAddress,
+      value: ethers.utils.parseEther("500")
+    });
+    console.log(`✅ Test address funded with 500 ETH`);
+    
     // Verify balances
     const deployerBalance = await deployer.getBalance();
     const contractBalance = await ethers.provider.getBalance(degenSlots.address);
+    const testAddressBalance = await ethers.provider.getBalance(testAddress);
     console.log(`📊 Final balances:`);
     console.log(`   💰 Deployer: ${ethers.utils.formatEther(deployerBalance)} ETH`);
     console.log(`   🏦 Contract Pool: ${ethers.utils.formatEther(contractBalance)} ETH`);
+    console.log(`   🧪 Test Address: ${ethers.utils.formatEther(testAddressBalance)} ETH`);
     console.log(`   💎 Pool Value: ~$${(parseFloat(ethers.utils.formatEther(contractBalance)) * 1834.80).toFixed(2)}`);
   }
 
@@ -230,7 +241,12 @@ async function main() {
     initialFunding: network.chainId === 31337 ? "1000.0" : 
                    (process.env.FUND_INITIAL_LIQUIDITY === "true" ? "10.0" : "0.0"),
     developmentMode: network.chainId === 31337,
-    poolBalance: ethers.utils.formatEther(await ethers.provider.getBalance(degenSlots.address))
+    poolBalance: ethers.utils.formatEther(await ethers.provider.getBalance(degenSlots.address)),
+    testAddressFunding: network.chainId === 31337 ? {
+      address: "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86",
+      amount: "500.0",
+      balance: ethers.utils.formatEther(await ethers.provider.getBalance("0x92145c8e548A87DFd716b1FD037a5e476a1f2a86"))
+    } : null
   };
 
   // Ensure deployments directory exists

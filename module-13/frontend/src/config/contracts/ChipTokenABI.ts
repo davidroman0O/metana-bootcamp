@@ -1,5 +1,5 @@
 // Auto-generated ABI for ChipToken contract
-// Generated at: 2025-06-08T17:31:39.892Z
+// Generated at: 2025-06-08T17:36:54.267Z
 
 export const ChipTokenABI = [
   {
