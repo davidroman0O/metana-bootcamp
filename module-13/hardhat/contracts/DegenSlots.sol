@@ -583,7 +583,7 @@ contract DegenSlots is
         chipPrice = 1e18 / 5; // 1 CHIP = $0.20, so 0.2 ETH worth at current price
         
         (, int256 ethPriceUSD, , , ) = ethUsdPriceFeed.latestRoundData();
-        ethPrice = uint256(ethPriceUSD) * 100; // Convert to cents
+        ethPrice = uint256(ethPriceUSD) / 1e6; // Convert from 8 decimals to cents (2 decimals)
         
         return (totalETH, chipPrice, ethPrice);
     }

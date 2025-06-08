@@ -18,11 +18,11 @@ module.exports = {
   },
   networks: {
     hardhat: {
-      // Disable forking to use pure local network for testing large contracts
-      // forking: {
-      //   url: "https://eth-mainnet.g.alchemy.com/v2/UlgUe5NUoeezq_0_AxTSKl0qpQQeHSKV",
-      //   blockNumber: 18500000 // Use a recent block
-      // },
+      // Enable forking to access real mainnet contracts like Chainlink and Compound
+      forking: {
+        url: "https://eth-mainnet.g.alchemy.com/v2/UlgUe5NUoeezq_0_AxTSKl0qpQQeHSKV",
+        blockNumber: 18500000 // Use a recent block
+      },
       // Disable contract size limit for local testing
       allowUnlimitedContractSize: true,
       // Use local network settings for maximum flexibility
@@ -39,7 +39,11 @@ module.exports = {
     },
     localhost: {
       url: "http://127.0.0.1:8545",
-      allowUnlimitedContractSize: true
+      allowUnlimitedContractSize: true,
+      // Gas settings for forked mainnet node
+      gasPrice: 50000000000, // 50 gwei
+      gas: 30000000,
+      blockGasLimit: 30000000
     },
     sepolia: {
       url: "https://eth-sepolia.g.alchemy.com/v2/UlgUe5NUoeezq_0_AxTSKl0qpQQeHSKV",

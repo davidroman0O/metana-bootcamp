@@ -142,6 +142,9 @@ async function main() {
   console.log("   💰 Deployer CHIP Balance:", chipBalance.toString());
   console.log("   📊 PayoutTables7 Chunks: 8 contracts deployed");
 
+  // Get network info for subsequent steps
+  const network = await hre.ethers.provider.getNetwork();
+
   // Step 6: Fund with initial liquidity (optional)
   if (process.env.FUND_INITIAL_LIQUIDITY === "true") {
     console.log("\n💰 Funding with initial liquidity...");
@@ -153,11 +156,104 @@ async function main() {
     console.log(`✅ Funded with ${ethers.utils.formatEther(fundAmount)} ETH`);
   }
 
+  // Step 6a: Auto-fund for local development (Hardhat networks)
+  if (network.chainId === 31337) {
+    console.log("\n🏗️  Local Hardhat development detected - Auto-funding for testing...");
+    
+    // Get development accounts (hardhat provides 20 accounts with 10,000 ETH each)
+    const accounts = await ethers.getSigners();
+    const lastDevAccount = accounts[19]; // Use the last account (#19)
+    
+    console.log(`💳 Using dev account ${lastDevAccount.address} for funding`);
+    console.log(`💰 Dev account balance: ${ethers.utils.formatEther(await lastDevAccount.getBalance())} ETH`);
+    
+    // Transfer 1000 ETH to deployer for operational funds
+    console.log("🚀 Transferring 1000 ETH to deployer for operational funds...");
+    await lastDevAccount.sendTransaction({
+      to: deployer.address,
+      value: ethers.utils.parseEther("1000")
+    });
+    console.log(`✅ Deployer funded with 1000 ETH`);
+    
+    // Send 1000 ETH to contract pool for realistic testing
+    console.log("🏦 Funding contract pool with 1000 ETH for realistic testing...");
+    await lastDevAccount.sendTransaction({
+      to: degenSlots.address,
+      value: ethers.utils.parseEther("1000")
+    });
+    console.log(`✅ Contract pool funded with 1000 ETH`);
+    
+    // Verify balances
+    const deployerBalance = await deployer.getBalance();
+    const contractBalance = await ethers.provider.getBalance(degenSlots.address);
+    console.log(`📊 Final balances:`);
+    console.log(`   💰 Deployer: ${ethers.utils.formatEther(deployerBalance)} ETH`);
+    console.log(`   🏦 Contract Pool: ${ethers.utils.formatEther(contractBalance)} ETH`);
+    console.log(`   💎 Pool Value: ~$${(parseFloat(ethers.utils.formatEther(contractBalance)) * 1834.80).toFixed(2)}`);
+  }
+
   console.log("\n🎉 Deployment completed successfully!");
   console.log("\n📝 Next steps:");
   console.log("1. Update Chainlink VRF subscription to add DegenSlots as consumer");
   console.log("2. Verify contracts on block explorer");
   console.log("3. Test the deployment with small transactions");
+  
+  // Step 7: Save deployment data to file
+  console.log("\n💾 Saving deployment data...");
+  const deploymentData = {
+    network: {
+      name: hre.network.name,
+      chainId: network.chainId,
+      timestamp: new Date().toISOString()
+    },
+    contracts: {
+      DegenSlots: {
+        address: degenSlots.address,
+        constructor: {
+          vrfCoordinator: CHAINLINK_VRF_COORDINATOR,
+          keyHash: CHAINLINK_KEY_HASH,
+          subscriptionId: CHAINLINK_SUBSCRIPTION_ID,
+          ethUsdPriceFeed: ETH_USD_PRICE_FEED,
+          cETH: COMPOUND_CETH,
+          comptroller: COMPOUND_COMPTROLLER
+        }
+      },
+      ChipToken: {
+        address: chipToken.address
+      },
+      PayoutTables: {
+        address: payoutTables.address
+      }
+    },
+    deployer: deployer.address,
+    blockNumber: await ethers.provider.getBlockNumber(),
+    initialFunding: network.chainId === 31337 ? "1000.0" : 
+                   (process.env.FUND_INITIAL_LIQUIDITY === "true" ? "10.0" : "0.0"),
+    developmentMode: network.chainId === 31337,
+    poolBalance: ethers.utils.formatEther(await ethers.provider.getBalance(degenSlots.address))
+  };
+
+  // Ensure deployments directory exists
+  const deploymentsDir = path.join(__dirname, "../deployments");
+  if (!fs.existsSync(deploymentsDir)) {
+    fs.mkdirSync(deploymentsDir, { recursive: true });
+  }
+
+  // Save deployment data
+  const deploymentFile = path.join(deploymentsDir, `deployment-${network.chainId}.json`);
+  fs.writeFileSync(deploymentFile, JSON.stringify(deploymentData, null, 2));
+  console.log(`✅ Deployment data saved to: ${deploymentFile}`);
+
+  // Step 8: Auto-extract addresses to frontend
+  console.log("\n🔄 Auto-extracting addresses to frontend...");
+  try {
+    const extractAddresses = require('./extract-addresses.js');
+    await extractAddresses();
+    console.log("✅ Frontend configuration updated automatically");
+  } catch (error) {
+    console.warn("⚠️  Auto-extraction failed:", error.message);
+    console.warn("Please run manually: npm run extract-addresses");
+  }
   
   return {
     payoutTables: payoutTables.address,
@@ -186,4 +282,4 @@ main()
     process.exit(1);
   });
 
-module.exports = main; 
+module.exports = main;

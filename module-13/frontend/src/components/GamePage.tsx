@@ -209,21 +209,126 @@ const GamePage: React.FC = () => {
     }
   }, [isConnected, stopAnimation]);
 
-  // Contract data
+  // Contract data with improved error handling and debugging
   const addresses = CONTRACT_ADDRESSES[chainId || 31337] || {};
-  const { data: poolStats } = useReadContract({
-    address: addresses.DEGEN_SLOTS, abi: DegenSlotsABI, functionName: 'getPoolStats',
-    query: { enabled: !!addresses.DEGEN_SLOTS },
-  });
-  const { data: chipsFromETH } = useReadContract({
-    address: addresses.DEGEN_SLOTS, abi: DegenSlotsABI, functionName: 'calculateChipsFromETH',
-    args: [BigInt(1e18)], query: { enabled: !!addresses.DEGEN_SLOTS },
+  
+  console.log('🔍 Contract Debug Info:', {
+    chainId,
+    currentNetwork: currentNetwork?.name,
+    addresses,
+    degenSlotsAddress: addresses.DEGEN_SLOTS
   });
 
-  // Format data
-  const formattedPoolETH = poolStats ? formatEther(poolStats[0] as bigint) : '0';
-  const ethPrice = poolStats ? `$${(Number(poolStats[2] as bigint) / 100).toFixed(0)}` : '$0';
-  const chipRate = chipsFromETH ? parseFloat(formatEther(chipsFromETH as bigint)).toFixed(0) : '0';
+  // First, let's check if the contract exists by trying to get its code
+  const { data: contractCode } = useReadContract({
+    address: addresses.DEGEN_SLOTS,
+    abi: [],
+    functionName: 'getPoolStats', // This will fail but tell us if contract exists
+    query: { 
+      enabled: false, // Disabled for now
+    },
+  });
+
+  // Let's try a simple view call first to see if contract exists
+  const { 
+    data: poolStats, 
+    error: poolStatsError, 
+    isLoading: poolStatsLoading,
+    isSuccess: poolStatsSuccess 
+  } = useReadContract({
+    address: addresses.DEGEN_SLOTS, 
+    abi: DegenSlotsABI, 
+    functionName: 'getPoolStats',
+    query: { 
+      enabled: !!addresses.DEGEN_SLOTS,
+      retry: 3,
+      refetchInterval: 10000, // Refetch every 10 seconds
+    },
+  });
+
+  const { 
+    data: chipsFromETH, 
+    error: chipsFromETHError, 
+    isLoading: chipsFromETHLoading,
+    isSuccess: chipsFromETHSuccess 
+  } = useReadContract({
+    address: addresses.DEGEN_SLOTS, 
+    abi: DegenSlotsABI, 
+    functionName: 'calculateChipsFromETH',
+    args: [BigInt(1e18)], // 1 ETH
+    query: { 
+      enabled: !!addresses.DEGEN_SLOTS,
+      retry: 3,
+      refetchInterval: 10000, // Refetch every 10 seconds
+    },
+  });
+
+  // Enhanced debug logging
+  console.log('📊 Contract Data Debug:', {
+    contractAddress: addresses.DEGEN_SLOTS,
+    poolStats: poolStats ? poolStats : 'null/empty',
+    poolStatsError: poolStatsError?.message || 'none',
+    poolStatsLoading,
+    poolStatsSuccess,
+    chipsFromETH: chipsFromETH ? chipsFromETH : 'null/empty',
+    chipsFromETHError: chipsFromETHError?.message || 'none',
+    chipsFromETHLoading,
+    chipsFromETHSuccess
+  });
+
+  if (poolStatsError) {
+    console.error('❌ Pool Stats Error Details:', poolStatsError);
+  }
+  if (chipsFromETHError) {
+    console.error('❌ Chips From ETH Error Details:', chipsFromETHError);
+  }
+
+  if (poolStats) {
+    console.log('🎰 Pool Stats Raw Data:', poolStats);
+  }
+  if (chipsFromETH) {
+    console.log('🪙 Chips from ETH Raw Data:', chipsFromETH);
+  }
+
+  // Format data with better error handling
+  const formattedPoolETH = (() => {
+    try {
+      if (!poolStats || !Array.isArray(poolStats)) return '0.0';
+      const poolAmount = poolStats[0] as bigint;
+      return parseFloat(formatEther(poolAmount)).toFixed(2);
+    } catch (error) {
+      console.error('Error formatting pool ETH:', error);
+      return '0.0';
+    }
+  })();
+
+  const ethPrice = (() => {
+    try {
+      if (!poolStats || !Array.isArray(poolStats)) return '$0';
+      if (!poolStats[2]) return '$0';
+      const priceInCents = Number(poolStats[2] as bigint);
+      return `$${(priceInCents / 100).toFixed(0)}`;
+    } catch (error) {
+      console.error('Error formatting ETH price:', error);
+      return '$0';
+    }
+  })();
+
+  const chipRate = (() => {
+    try {
+      if (!chipsFromETH) return '0';
+      const chipsAmount = parseFloat(formatEther(chipsFromETH as bigint));
+      return chipsAmount.toFixed(0);
+    } catch (error) {
+      console.error('Error formatting chip rate:', error);
+      return '0';
+    }
+  })();
+
+  // Show loading states in UI
+  const displayPoolETH = poolStatsLoading ? 'Loading...' : formattedPoolETH;
+  const displayEthPrice = poolStatsLoading ? 'Loading...' : ethPrice;
+  const displayChipRate = chipsFromETHLoading ? 'Loading...' : chipRate;
 
   // Reel configs
   const reelConfigs = [
@@ -297,18 +402,18 @@ const GamePage: React.FC = () => {
             <div className="flex justify-center mb-6">
               <div className="flex items-center space-x-4 bg-black/40 rounded-xl px-6 py-3 border border-gray-600">
                 <div className="text-center">
-                  <div className="text-lg font-bold text-blue-400">{formattedPoolETH || '0'} ETH</div>
+                  <div className="text-lg font-bold text-blue-400">{displayPoolETH || '0'} ETH</div>
                   <div className="text-xs text-gray-500">Pool</div>
                 </div>
                 <div className="w-px h-8 bg-gray-600"></div>
                 <div className="text-center">
-                  <div className="text-lg font-bold text-green-400">{ethPrice || '$0'}</div>
+                  <div className="text-lg font-bold text-green-400">{displayEthPrice || '$0'}</div>
                   <div className="text-xs text-gray-500">ETH Price</div>
                 </div>
                 <div className="w-px h-8 bg-gray-600"></div>
                 <div className="text-center">
-                  <div className="text-lg font-bold text-yellow-400">{chipRate || '0'}</div>
-                  <div className="text-xs text-gray-500">CHIPS Rate</div>
+                  <div className="text-lg font-bold text-yellow-400">{displayChipRate || '0'}</div>
+                  <div className="text-xs text-gray-500">CHIPS/ETH</div>
                 </div>
               </div>
             </div>
@@ -497,15 +602,15 @@ const GamePage: React.FC = () => {
               <div className="space-y-1 text-xs mb-2">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Prize Pool:</span>
-                  <span className="text-blue-400 font-medium">{formattedPoolETH} ETH</span>
+                  <span className="text-blue-400 font-medium">{displayPoolETH} ETH</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">ETH Price:</span>
-                  <span className="text-green-400 font-medium">{ethPrice}</span>
+                  <span className="text-green-400 font-medium">{displayEthPrice}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">CHIPS/ETH:</span>
-                  <span className="text-yellow-400 font-medium">{chipRate}</span>
+                  <span className="text-yellow-400 font-medium">{displayChipRate}</span>
                 </div>
               </div>
               
@@ -566,7 +671,7 @@ const GamePage: React.FC = () => {
                   className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg text-sm">
                   Buy CHIPS
                 </button>
-                <div className="text-xs text-gray-400">Expected: ~{chipRate} CHIPS</div>
+                <div className="text-xs text-gray-400">Expected: ~{displayChipRate} CHIPS per ETH</div>
               </div>
             </div>
 
