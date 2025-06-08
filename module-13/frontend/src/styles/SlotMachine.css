@@ -343,6 +343,31 @@ body {
   letter-spacing: 1px;
   width: 100%;
   box-sizing: border-box;
+  min-height: 72px;
+  max-height: 72px;
+  overflow: hidden; /* Prevent text overflow */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.lcd-line {
+  width: 100%;
+  overflow: hidden;
+  line-height: 1.2;
+  text-align: center;
+  /* Allow text to wrap naturally within the line */
+  word-wrap: break-word;
+  /* Ensure text doesn't get horizontally truncated */
+}
+
+.lcd-line-1 {
+  margin-bottom: 2px;
+}
+
+.lcd-line-2 {
+  font-size: 14px; /* Slightly smaller for second line */
 }
 
 .game-message {
@@ -559,6 +584,12 @@ button:disabled {
   .display-screen {
     font-size: 14px;
     padding: 8px;
+    min-height: 64px;
+    max-height: 64px;
+  }
+  
+  .lcd-line-2 {
+    font-size: 12px; /* Even smaller for mobile second line */
   }
   
   .independent-reels-container {

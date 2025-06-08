@@ -4,6 +4,7 @@ import '../styles/SlotMachine.css';
 interface LCDDisplayProps {
   initialMessage?: string;
   className?: string;
+  maxLineLength?: number; // Characters per line
 }
 
 interface LCDDisplayRef {
@@ -33,14 +34,56 @@ interface LCDDisplayRef {
 }
 
 const LCDDisplay = forwardRef<LCDDisplayRef, LCDDisplayProps>(({
-  initialMessage = "888 888 888",
-  className = ""
+  initialMessage = "Ready for glory?",
+  className = "",
+  maxLineLength = 20
 }, ref) => {
   const [currentMessage, setCurrentMessage] = useState<string>(initialMessage);
   const [isBlinking, setIsBlinking] = useState<boolean>(false);
   const [animationTimer, setAnimationTimer] = useState<NodeJS.Timeout | null>(null);
   const [blinkTimer, setBlinkTimer] = useState<NodeJS.Timeout | null>(null);
   const [showMessage, setShowMessage] = useState<boolean>(true);
+
+  // Split long messages into two lines intelligently
+  const splitMessage = (message: string): { line1: string; line2: string } => {
+    if (message.length <= maxLineLength) {
+      return { line1: message, line2: '' };
+    }
+
+    // Try to split at word boundaries first
+    const words = message.split(' ');
+    let line1 = '';
+    let line2 = '';
+    
+    // Build first line up to maxLineLength
+    for (const word of words) {
+      const testLine = line1 ? `${line1} ${word}` : word;
+      if (testLine.length <= maxLineLength) {
+        line1 = testLine;
+      } else {
+        // Start second line with remaining words
+        const remainingWords = words.slice(words.indexOf(word));
+        line2 = remainingWords.join(' ');
+        break;
+      }
+    }
+
+    // If second line is too long, truncate it
+    if (line2.length > maxLineLength) {
+      line2 = line2.substring(0, maxLineLength - 3) + '...';
+    }
+
+    // If we couldn't split at word boundaries and still have a very long first word
+    if (!line1 && message.length > maxLineLength) {
+      line1 = message.substring(0, maxLineLength);
+      line2 = message.substring(maxLineLength, maxLineLength * 2);
+      if (line2.length > maxLineLength) {
+        line2 = line2.substring(0, maxLineLength - 3) + '...';
+      }
+    }
+
+    return { line1, line2 };
+  };
 
   // Motivational quotes for future use
   const motivationalQuotes = [
@@ -89,7 +132,7 @@ const LCDDisplay = forwardRef<LCDDisplayRef, LCDDisplayProps>(({
   };
 
   const setIdlePattern = () => {
-    setMessage("888 888 888");
+    setMessage("Fortune favors the brave!");
   };
 
   const setSpinningPattern = () => {
@@ -189,12 +232,26 @@ const LCDDisplay = forwardRef<LCDDisplayRef, LCDDisplayProps>(({
     };
   }, []);
 
+  // Split the current message into lines
+  const { line1, line2 } = splitMessage(currentMessage);
+
   return (
     <div className={`lcd-display-bar ${className}`}>
       <div className="display-screen">
-        <span style={{ visibility: showMessage ? 'visible' : 'hidden' }}>
-          {currentMessage}
-        </span>
+        <div 
+          className="lcd-line lcd-line-1"
+          style={{ visibility: showMessage ? 'visible' : 'hidden' }}
+        >
+          {line1}
+        </div>
+        {line2 && (
+          <div 
+            className="lcd-line lcd-line-2"
+            style={{ visibility: showMessage ? 'visible' : 'hidden' }}
+          >
+            {line2}
+          </div>
+        )}
       </div>
     </div>
   );

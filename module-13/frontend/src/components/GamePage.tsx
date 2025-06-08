@@ -19,6 +19,7 @@ import PhoneHelpLine from './PhoneHelpLine';
 import { useWallet } from '../hooks/useWallet';
 import { useNetworks } from '../hooks/useNetworks';
 import { useSlotMachine } from '../hooks/useSlotMachine';
+import { useSlotAnimator } from '../hooks/useSlotAnimator';
 
 // Inline GameHeader component to avoid import issues
 const GameHeader: React.FC<{
@@ -184,8 +185,25 @@ const GamePage: React.FC = () => {
     callbackOnLever, handleSlotResult, approveChipsForPlay, buyChipsWithETH, setBetAmount,
   } = useSlotMachine(chainId);
 
+  // Slot animation system for disconnected users
+  const {
+    slotMachineRef: animatedSlotRef,
+    stopAnimation,
+  } = useSlotAnimator({
+    reelCount: 3, // Always use 3 reels for disconnected demo
+    autoStart: true, // Auto-start the animation automatically
+    cyclePause: 4000 // Slightly longer pause between cycles
+  });
+
   const slotMachineRef = useRef<any>(null);
   const [selectedReelCount, setSelectedReelCount] = useState<number>(3);
+
+  // Stop animation when user connects
+  useEffect(() => {
+    if (isConnected) {
+      stopAnimation();
+    }
+  }, [isConnected, stopAnimation]);
 
   // Contract data
   const addresses = CONTRACT_ADDRESSES[chainId || 31337] || {};
@@ -215,10 +233,41 @@ const GamePage: React.FC = () => {
   // Event handlers
   const handleSlotResultWrapper = (symbols: number[], payout: number, payoutType: string) => {
     handleSlotResult(symbols, payout, payoutType);
+    
+    // Show result quote in connected mode
+    if (isConnected && slotMachineRef.current?.lcd) {
+      const { QuoteManager } = require('../utils/quotes');
+      const resultQuote = QuoteManager.getResultQuote(symbols);
+      setTimeout(() => {
+        slotMachineRef.current?.lcd?.setMessage(resultQuote);
+      }, 1000);
+    }
   };
 
   const handleSlotStateChange = (state: string) => {
-    // Handle state changes if needed
+    // Show state-appropriate quotes in connected mode
+    if (isConnected && slotMachineRef.current?.lcd) {
+      const { QuoteManager } = require('../utils/quotes');
+      let quote = '';
+      
+      switch (state) {
+        case 'spinning':
+          quote = QuoteManager.getStateQuote('spinning');
+          break;
+        case 'idle':
+          quote = QuoteManager.getStateQuote('idle');
+          break;
+        case 'evaluating_result':
+          quote = QuoteManager.getStateQuote('evaluating');
+          break;
+        default:
+          quote = QuoteManager.getMotivationalQuote();
+      }
+      
+      if (quote) {
+        slotMachineRef.current.lcd.setMessage(quote);
+      }
+    }
   };
 
   // Disconnected mode
@@ -241,21 +290,81 @@ const GamePage: React.FC = () => {
               🎰 Ape Escape
             </h1>
             <p className="text-xl text-gray-300">Provably Fair Degen Slot Machine</p>
-            <p className="text-lg text-yellow-400">Connect your wallet to start playing with real CHIPS!</p>
+            <p className="text-lg text-yellow-400">Watch the magic happen... then connect for the real deal!</p>
 
-            <div className="flex justify-center">
+            {/* Animated Slot Machine */}
+            <div className="flex justify-center mb-6">
               <SlotMachine
-                key="slot-machine-disconnected-3"
-                ref={slotMachineRef} onResult={handleSlotResultWrapper} onStateChange={handleSlotStateChange}
-                isConnected={false} reelCount={3}
+                key="slot-machine-animated-demo"
+                ref={animatedSlotRef}
+                onResult={handleSlotResultWrapper}
+                onStateChange={handleSlotStateChange}
+                isConnected={false}
+                reelCount={3}
               />
             </div>
 
+            {/* Connect Wallet CTA */}
+            <div className="bg-gradient-to-r from-yellow-500/20 via-red-500/20 to-pink-500/20 rounded-xl p-6 border border-yellow-500/30 max-w-2xl mx-auto">
+              <h3 className="text-2xl font-bold text-yellow-400 mb-3">🔥 Ready for the Real Deal?</h3>
+              <p className="text-lg text-gray-300 mb-4">
+                This is just a taste! Connect your wallet to play with real CHIPS and win real rewards!
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 text-sm">
+                <div className="bg-black/40 rounded-lg p-3 border border-green-500/30">
+                  <div className="text-green-400 font-bold">🎰 Real Gameplay</div>
+                  <div className="text-gray-300">Play with actual CHIPS tokens</div>
+                </div>
+                <div className="bg-black/40 rounded-lg p-3 border border-blue-500/30">
+                  <div className="text-blue-400 font-bold">🏆 Real Rewards</div>
+                  <div className="text-gray-300">Win real ETH and CHIPS</div>
+                </div>
+                <div className="bg-black/40 rounded-lg p-3 border border-purple-500/30">
+                  <div className="text-purple-400 font-bold">⚡ VRF Powered</div>
+                  <div className="text-gray-300">Provably fair randomness</div>
+                </div>
+              </div>
+              
+              <button
+                onClick={connectWallet}
+                disabled={connecting}
+                className="bg-gradient-to-r from-yellow-500 to-red-500 hover:from-yellow-600 hover:to-red-600 text-black font-bold text-lg px-8 py-3 rounded-lg transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:scale-100"
+              >
+                {connecting ? '🔄 Connecting...' : '🦊 Connect Wallet & Play!'}
+              </button>
+            </div>
+
+            {/* Payout Information */}
             <div className="flex flex-wrap justify-center gap-2 text-sm">
               <span className="bg-yellow-600 px-3 py-1 rounded-full">🐵 Jackpot: 666x</span>
               <span className="bg-purple-600 px-3 py-1 rounded-full">🚀🚀🚀 Ultra: 555x</span>
               <span className="bg-blue-600 px-3 py-1 rounded-full">💎💎💎 Mega: 444x</span>
               <span className="bg-green-600 px-3 py-1 rounded-full">📈📈📈 Big: 333x</span>
+            </div>
+
+            {/* Feature Highlights */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 max-w-4xl mx-auto mt-8">
+              <div className="bg-black/20 rounded-lg p-4 border border-gray-600">
+                <div className="text-2xl mb-2">⚡</div>
+                <div className="text-sm font-bold text-yellow-400">Instant Payouts</div>
+                <div className="text-xs text-gray-400">Win and withdraw immediately</div>
+              </div>
+              <div className="bg-black/20 rounded-lg p-4 border border-gray-600">
+                <div className="text-2xl mb-2">🔒</div>
+                <div className="text-sm font-bold text-green-400">Provably Fair</div>
+                <div className="text-xs text-gray-400">Chainlink VRF powered</div>
+              </div>
+              <div className="bg-black/20 rounded-lg p-4 border border-gray-600">
+                <div className="text-2xl mb-2">💎</div>
+                <div className="text-sm font-bold text-blue-400">Multiple Stakes</div>
+                <div className="text-xs text-gray-400">3-7 reels, your choice</div>
+              </div>
+              <div className="bg-black/20 rounded-lg p-4 border border-gray-600">
+                <div className="text-2xl mb-2">🚀</div>
+                <div className="text-sm font-bold text-purple-400">DeFi Integrated</div>
+                <div className="text-xs text-gray-400">Leverage & lending options</div>
+              </div>
             </div>
           </div>
         </main>

@@ -94,6 +94,9 @@ interface SlotMachineRef {
   setAllReelTargetsSimultaneous: (symbols: number[]) => boolean;
   setReelTargetWithRevealOrder: (reelIndex: number, symbol: number, revealOrder: number) => boolean;
   
+  // Lever control API
+  pullLever: (intensity?: number) => boolean;
+  
   // LCD Display API - exposed from LCDDisplay component
   lcd: {
     setMessage: (message: string) => void;
@@ -951,6 +954,23 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
     };
   }, []);
 
+  // Lever control implementation
+  const pullLever = (intensity: number = 1.0): boolean => {
+    if (!leverRef.current) {
+      console.warn('Lever ref not available');
+      return false;
+    }
+    
+    if (currentStateRef.current !== MACHINE_STATE_IDLE) {
+      console.warn('Cannot pull lever, machine not in idle state');
+      return false;
+    }
+    
+    console.log(`🎮 Programmatically pulling lever with intensity ${intensity}`);
+    leverRef.current.triggerPull(intensity);
+    return true;
+  };
+
   // Expose API to parent
   useImperativeHandle(ref, () => ({
     startSpin,
@@ -966,6 +986,7 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
     setAllReelTargetsSequential: setAllReelTargetsSequential,
     setAllReelTargetsSimultaneous: setAllReelTargetsSimultaneous,
     setReelTargetWithRevealOrder: setReelTargetWithRevealOrder,
+    pullLever,
     // LCD Display API - forward to LCD component
     lcd: {
       setMessage: (message: string) => lcdRef.current?.setMessage(message),
@@ -1037,15 +1058,6 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
                     : 'EVALUATING'}
             </span>
           </div>
-          
-          {/* Results messages when there's a win */}
-          {logMessages.length > 0 && (
-            <div className="win-messages">
-              {logMessages.map((msg, i) => (
-                <div key={i} className="win-message" style={{color: '#00ff00', fontSize: '12px'}}>{msg}</div>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* Coin slot at the bottom of the machine frame */}
