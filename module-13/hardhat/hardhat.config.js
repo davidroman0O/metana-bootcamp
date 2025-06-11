@@ -29,7 +29,8 @@ module.exports = {
       chainId: 31337,
       // High gas settings for large contract deployments
       blockGasLimit: 30000000,
-      gasPrice: 8000000000,
+      // gasPrice: 8000000000, 
+      gasPrice: 30000000000,
       // Use default hardhat accounts
     },
     hardhat_local: {

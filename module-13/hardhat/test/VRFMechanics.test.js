@@ -2,7 +2,7 @@ const { expect } = require("chai");
 const { ethers, upgrades } = require("hardhat");
 
 describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
-  let degenSlots, payoutTables, chipToken;
+  let casinoSlot, payoutTables;
   let payoutTables3, payoutTables4;
   let owner, player1, player2;
   
@@ -13,21 +13,12 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
   before(async function () {
     [owner, player1, player2] = await ethers.getSigners();
 
-    // Deploy TestToken for testing
-    const TestToken = await ethers.getContractFactory("TestToken");
-    chipToken = await TestToken.deploy(
-      "Test Chips",
-      "TCHIPS", 
-      ethers.utils.parseEther("1000000") // 1M initial supply
-    );
-    await chipToken.deployed();
-
     // Deploy Mock VRF Coordinator
     const MockVRFCoordinator = await ethers.getContractFactory("MockVRFCoordinator");
     const mockVRFCoordinator = await MockVRFCoordinator.deploy();
     await mockVRFCoordinator.deployed();
 
-    // Use dummy addresses for Compound since mocking is built into DegenSlotsTest
+    // Use dummy addresses for Compound since mocking is built into CasinoSlotTest
     const dummyCEthAddress = ethers.Wallet.createRandom().address;
     const dummyComptrollerAddress = ethers.Wallet.createRandom().address;
 
@@ -50,77 +41,66 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
     );
     await payoutTables.deployed();
 
-    // Deploy with upgradeable proxy on mainnet fork
-    const DegenSlotsTest = await ethers.getContractFactory("DegenSlotsTest");
-    degenSlots = await upgrades.deployProxy(
-      DegenSlotsTest,
+    // Deploy CasinoSlotTest with upgradeable proxy
+    const CasinoSlotTest = await ethers.getContractFactory("CasinoSlotTest");
+    casinoSlot = await upgrades.deployProxy(
+      CasinoSlotTest,
       [
         1, // VRF subscription ID
-        chipToken.address,
         ETH_USD_PRICE_FEED,
         payoutTables.address,
         mockVRFCoordinator.address,
         CHAINLINK_KEY_HASH,
-        dummyCEthAddress, // Dummy address - mocking is built into DegenSlotsTest
-        dummyComptrollerAddress, // Dummy address - mocking is built into DegenSlotsTest
+        dummyCEthAddress, // Dummy address - mocking is built into CasinoSlotTest
+        dummyComptrollerAddress, // Dummy address - mocking is built into CasinoSlotTest
         owner.address
       ],
       { kind: "uups" }
     );
-    await degenSlots.deployed();
+    await casinoSlot.deployed();
 
     // Add ETH to contract for payouts (one time)
     await owner.sendTransaction({
-      to: degenSlots.address,
+      to: casinoSlot.address,
       value: ethers.utils.parseEther("100") // Reduced amount
     });
   });
 
   beforeEach(async function () {
-    // Only refresh player balances and reset state, not deploy contracts
-    const player1Balance = await chipToken.balanceOf(player1.address);
-    const player2Balance = await chipToken.balanceOf(player2.address);
-    
     // Reset any accumulated winnings to ensure test isolation
-    const player1Winnings = await degenSlots.playerWinnings(player1.address);
-    const player2Winnings = await degenSlots.playerWinnings(player2.address);
+    const player1Winnings = await casinoSlot.playerWinnings(player1.address);
+    const player2Winnings = await casinoSlot.playerWinnings(player2.address);
     
     if (player1Winnings.gt(0)) {
-      await degenSlots.connect(player1).withdrawWinnings();
+      await casinoSlot.connect(player1).withdrawWinnings();
     }
     if (player2Winnings.gt(0)) {
-      await degenSlots.connect(player2).withdrawWinnings();
+      await casinoSlot.connect(player2).withdrawWinnings();
     }
+    
+    // Give players chips using the buyChips function
+    const player1Balance = await casinoSlot.balanceOf(player1.address);
+    const player2Balance = await casinoSlot.balanceOf(player2.address);
     
     // Only top up if needed (more efficient)
     if (player1Balance.lt(ethers.utils.parseEther("1000"))) {
-      await chipToken.transfer(player1.address, ethers.utils.parseEther("5000"));
+      await casinoSlot.connect(player1).buyChips({ value: ethers.utils.parseEther("1") }); // Buy chips with 1 ETH
     }
     if (player2Balance.lt(ethers.utils.parseEther("1000"))) {
-      await chipToken.transfer(player2.address, ethers.utils.parseEther("5000"));
-    }
-    
-    // Refresh approvals
-    await chipToken.connect(player1).approve(degenSlots.address, ethers.utils.parseEther("10000"));
-    await chipToken.connect(player2).approve(degenSlots.address, ethers.utils.parseEther("10000"));
-    
-    // Ensure contract has enough CHIPS for payouts
-    const contractBalance = await chipToken.balanceOf(degenSlots.address);
-    if (contractBalance.lt(ethers.utils.parseEther("10000"))) {
-      await chipToken.transfer(degenSlots.address, ethers.utils.parseEther("50000"));
+      await casinoSlot.connect(player2).buyChips({ value: ethers.utils.parseEther("1") }); // Buy chips with 1 ETH
     }
   });
 
   describe("Spin Request Mechanism", function () {
     it("Should store spin data correctly when requesting", async function () {
-      const tx = await degenSlots.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spin3Reels();
       const receipt = await tx.wait();
       
       const spinEvent = receipt.events.find(e => e.event === "SpinRequested");
       expect(spinEvent).to.not.be.undefined;
       
       const requestId = spinEvent.args.requestId;
-      const spin = await degenSlots.spins(requestId);
+      const spin = await casinoSlot.spins(requestId);
       
       expect(spin.player).to.equal(player1.address);
       expect(spin.betAmount).to.equal(ethers.utils.parseEther("1")); // 3-reel cost
@@ -130,20 +110,20 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
 
     it("Should transfer CHIPS correctly during spin", async function () {
       const reel3Cost = ethers.utils.parseEther("1");
-      const chipBalanceBefore = await chipToken.balanceOf(player1.address);
+      const chipBalanceBefore = await casinoSlot.balanceOf(player1.address);
       
-      await degenSlots.connect(player1).spin3Reels();
+      await casinoSlot.connect(player1).spin3Reels();
       
-      const chipBalanceAfter = await chipToken.balanceOf(player1.address);
+      const chipBalanceAfter = await casinoSlot.balanceOf(player1.address);
       expect(chipBalanceAfter).to.equal(chipBalanceBefore.sub(reel3Cost));
     });
 
     it("Should increment request IDs correctly", async function () {
-      const tx1 = await degenSlots.connect(player1).spin3Reels();
+      const tx1 = await casinoSlot.connect(player1).spin3Reels();
       const receipt1 = await tx1.wait();
       const event1 = receipt1.events.find(e => e.event === "SpinRequested");
       
-      const tx2 = await degenSlots.connect(player1).spin3Reels();
+      const tx2 = await casinoSlot.connect(player1).spin3Reels();
       const receipt2 = await tx2.wait();
       const event2 = receipt2.events.find(e => e.event === "SpinRequested");
       
@@ -151,11 +131,11 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
     });
 
     it("Should update prize pool correctly", async function () {
-      const initialPool = await degenSlots.totalPrizePool();
+      const initialPool = await casinoSlot.totalPrizePool();
       
-      await degenSlots.connect(player1).spin3Reels();
+      await casinoSlot.connect(player1).spin3Reels();
       
-      const finalPool = await degenSlots.totalPrizePool();
+      const finalPool = await casinoSlot.totalPrizePool();
       const expectedIncrease = ethers.utils.parseEther("0.95"); // 1 CHIP - 5% house edge
       expect(finalPool).to.equal(initialPool.add(expectedIncrease));
     });
@@ -163,7 +143,7 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
 
   describe("VRF Fulfillment with PayoutTables", function () {
     it("Should handle BIG WIN combinations (333)", async function () {
-      const tx = await degenSlots.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spin3Reels();
       const receipt = await tx.wait();
       const event = receipt.events.find(e => e.event === "SpinRequested");
       const requestId = event.args.requestId;
@@ -172,10 +152,10 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
       // Try 131090 (131088 gives [1,3,3], so add 2 to get [3,3,3])
       const randomValue = ethers.BigNumber.from("131090");
       
-      await degenSlots.testFulfillRandomWords(requestId, [randomValue]);
+      await casinoSlot.testFulfillRandomWords(requestId, [randomValue]);
       
-      const spin = await degenSlots.spins(requestId);
-      const reels = await degenSlots.getSpinReels(requestId);
+      const spin = await casinoSlot.spins(requestId);
+      const reels = await casinoSlot.getSpinReels(requestId);
       
       console.log("BIG WIN test - reels:", reels.map(r => r.toString()), "payoutType:", spin.payoutType.toString());
       expect(spin.settled).to.be.true;
@@ -189,7 +169,7 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
     });
 
     it("Should handle ULTRA WIN combinations (555)", async function () {
-      const tx = await degenSlots.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spin3Reels();
       const receipt = await tx.wait();
       const event = receipt.events.find(e => e.event === "SpinRequested");
       const requestId = event.args.requestId;
@@ -197,10 +177,10 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
       // Use the discovered working value for [5,5,5]
       const randomValue = ethers.BigNumber.from("262246");
       
-      await degenSlots.testFulfillRandomWords(requestId, [randomValue]);
+      await casinoSlot.testFulfillRandomWords(requestId, [randomValue]);
       
-      const spin = await degenSlots.spins(requestId);
-      const reels = await degenSlots.getSpinReels(requestId);
+      const spin = await casinoSlot.spins(requestId);
+      const reels = await casinoSlot.getSpinReels(requestId);
       console.log("ULTRA WIN test - reels:", reels.map(r => r.toString()), "payoutType:", spin.payoutType.toString());
       
       expect(spin.settled).to.be.true;
@@ -209,7 +189,7 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
     });
 
     it("Should handle losing combinations", async function () {
-      const tx = await degenSlots.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spin3Reels();
       const receipt = await tx.wait();
       const event = receipt.events.find(e => e.event === "SpinRequested");
       const requestId = event.args.requestId;
@@ -217,16 +197,16 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
       // Generate [1,2,3] losing combination - use value that gives mixed reels
       const randomValue = ethers.BigNumber.from("131328");
       
-      await degenSlots.testFulfillRandomWords(requestId, [randomValue]);
+      await casinoSlot.testFulfillRandomWords(requestId, [randomValue]);
       
-      const spin = await degenSlots.spins(requestId);
+      const spin = await casinoSlot.spins(requestId);
       expect(spin.settled).to.be.true;
       expect(spin.payoutType).to.equal(0); // LOSE
       expect(spin.payout).to.equal(0);
     });
 
     it("Should handle SPECIAL_COMBO (two rockets)", async function () {
-      const tx = await degenSlots.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spin3Reels();
       const receipt = await tx.wait();
       const event = receipt.events.find(e => e.event === "SpinRequested");
       const requestId = event.args.requestId;
@@ -234,10 +214,10 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
       // Use the discovered working value for [5,5,1]
       const randomValue = ethers.BigNumber.from("1150");
       
-      await degenSlots.testFulfillRandomWords(requestId, [randomValue]);
+      await casinoSlot.testFulfillRandomWords(requestId, [randomValue]);
       
-      const spin = await degenSlots.spins(requestId);
-      const reels = await degenSlots.getSpinReels(requestId);
+      const spin = await casinoSlot.spins(requestId);
+      const reels = await casinoSlot.getSpinReels(requestId);
       console.log("SPECIAL_COMBO test - reels:", reels.map(r => r.toString()), "payoutType:", spin.payoutType.toString());
       
       expect(spin.settled).to.be.true;
@@ -246,7 +226,7 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
     });
 
     it("Should prevent double fulfillment", async function () {
-      const tx = await degenSlots.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spin3Reels();
       const receipt = await tx.wait();
       const event = receipt.events.find(e => e.event === "SpinRequested");
       const requestId = event.args.requestId;
@@ -254,18 +234,18 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
       const randomValue = ethers.BigNumber.from("0x123456");
       
       // First fulfillment should work
-      await degenSlots.testFulfillRandomWords(requestId, [randomValue]);
+      await casinoSlot.testFulfillRandomWords(requestId, [randomValue]);
       
       // Second fulfillment should fail
       await expect(
-        degenSlots.testFulfillRandomWords(requestId, [randomValue])
+        casinoSlot.testFulfillRandomWords(requestId, [randomValue])
       ).to.be.revertedWith("Spin already settled");
     });
   });
 
   describe("Multi-Reel Mode Testing", function () {
     it("Should handle 4-reel spins correctly", async function () {
-      const tx = await degenSlots.connect(player1).spin4Reels();
+      const tx = await casinoSlot.connect(player1).spin4Reels();
       const receipt = await tx.wait();
       const event = receipt.events.find(e => e.event === "SpinRequested");
       const requestId = event.args.requestId;
@@ -275,10 +255,10 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
       // Use 3 + (3<<8) + (3<<16) + (3<<24) = 3 + 768 + 196608 + 50331648 = 50529027
       const randomValue = ethers.BigNumber.from("50529027");
       
-      await degenSlots.testFulfillRandomWords(requestId, [randomValue]);
+      await casinoSlot.testFulfillRandomWords(requestId, [randomValue]);
       
-      const spin = await degenSlots.spins(requestId);
-      const reels = await degenSlots.getSpinReels(requestId);
+      const spin = await casinoSlot.spins(requestId);
+      const reels = await casinoSlot.getSpinReels(requestId);
       
       expect(spin.settled).to.be.true;
       expect(spin.reelCount).to.equal(4);
@@ -288,27 +268,27 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
     });
 
     it("Should have correct costs for different reel modes", async function () {
-      expect(await degenSlots.getSpinCost(3)).to.equal(ethers.utils.parseEther("1"));
-      expect(await degenSlots.getSpinCost(4)).to.equal(ethers.utils.parseEther("10"));
-      expect(await degenSlots.getSpinCost(5)).to.equal(ethers.utils.parseEther("100"));
-      expect(await degenSlots.getSpinCost(6)).to.equal(ethers.utils.parseEther("500"));
-      expect(await degenSlots.getSpinCost(7)).to.equal(ethers.utils.parseEther("1000"));
+      expect(await casinoSlot.getSpinCost(3)).to.equal(ethers.utils.parseEther("1"));
+      expect(await casinoSlot.getSpinCost(4)).to.equal(ethers.utils.parseEther("10"));
+      expect(await casinoSlot.getSpinCost(5)).to.equal(ethers.utils.parseEther("100"));
+      expect(await casinoSlot.getSpinCost(6)).to.equal(ethers.utils.parseEther("500"));
+      expect(await casinoSlot.getSpinCost(7)).to.equal(ethers.utils.parseEther("1000"));
     });
   });
 
   describe("Player Winnings Management", function () {
     it("Should track player winnings correctly", async function () {
       // Execute a guaranteed winning spin
-      const tx = await degenSlots.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spin3Reels();
       const receipt = await tx.wait();
       const requestId = receipt.events.find(e => e.event === "SpinRequested").args.requestId;
       
       // Use the proven working value from the BIG WIN test
       const randomValue = ethers.BigNumber.from("131090");
-      await degenSlots.testFulfillRandomWords(requestId, [randomValue]);
+      await casinoSlot.testFulfillRandomWords(requestId, [randomValue]);
       
-      const spin = await degenSlots.spins(requestId);
-      const afterSpinStats = await degenSlots.getPlayerStats(player1.address);
+      const spin = await casinoSlot.spins(requestId);
+      const afterSpinStats = await casinoSlot.getPlayerStats(player1.address);
       
       expect(spin.payoutType).to.equal(3); // BIG_WIN
       expect(spin.payout).to.equal(ethers.utils.parseEther("10")); // 10x * 1 CHIP
@@ -317,61 +297,61 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
 
     it("Should allow withdrawing winnings", async function () {
       // First ensure we have winnings from a guaranteed win
-      const tx = await degenSlots.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spin3Reels();
       const receipt = await tx.wait();
       const requestId = receipt.events.find(e => e.event === "SpinRequested").args.requestId;
       
       // Use proven working value
       const randomValue = ethers.BigNumber.from("131090");
-      await degenSlots.testFulfillRandomWords(requestId, [randomValue]);
+      await casinoSlot.testFulfillRandomWords(requestId, [randomValue]);
       
-      const winningsBefore = await degenSlots.playerWinnings(player1.address);
+      const winningsBefore = await casinoSlot.playerWinnings(player1.address);
       expect(winningsBefore).to.be.gt(0);
       
-      const initialBalance = await chipToken.balanceOf(player1.address);
+      const initialBalance = await casinoSlot.balanceOf(player1.address);
       
-      await degenSlots.connect(player1).withdrawWinnings();
+      await casinoSlot.connect(player1).withdrawWinnings();
       
-      const finalBalance = await chipToken.balanceOf(player1.address);
+      const finalBalance = await casinoSlot.balanceOf(player1.address);
       expect(finalBalance).to.equal(initialBalance.add(winningsBefore));
       
-      const finalWinnings = await degenSlots.playerWinnings(player1.address);
+      const finalWinnings = await casinoSlot.playerWinnings(player1.address);
       expect(finalWinnings).to.equal(0);
     });
   });
 
   describe("Complete Workflow Testing", function () {
     it("Should execute complete spin-to-payout workflow", async function () {
-      const initialChips = await chipToken.balanceOf(player1.address);
+      const initialChips = await casinoSlot.balanceOf(player1.address);
       const reel3Cost = ethers.utils.parseEther("1");
       
       // Step 1: Execute spin
-      const tx = await degenSlots.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spin3Reels();
       const receipt = await tx.wait();
       const requestId = receipt.events.find(e => e.event === "SpinRequested").args.requestId;
       
       // Step 2: Verify chips were deducted
-      const afterSpinChips = await chipToken.balanceOf(player1.address);
+      const afterSpinChips = await casinoSlot.balanceOf(player1.address);
       expect(afterSpinChips).to.equal(initialChips.sub(reel3Cost));
       
       // Step 3: Fulfill VRF with proven working combination
       const randomValue = ethers.BigNumber.from("131090");
-      await degenSlots.testFulfillRandomWords(requestId, [randomValue]);
+      await casinoSlot.testFulfillRandomWords(requestId, [randomValue]);
       
       // Step 4: Verify payout
-      const spin = await degenSlots.spins(requestId);
+      const spin = await casinoSlot.spins(requestId);
       const expectedPayout = reel3Cost.mul(10); // BIG_WIN = 10x
       expect(spin.payout).to.equal(expectedPayout);
       
       // Step 5: Verify player winnings updated
-      const currentWinnings = await degenSlots.playerWinnings(player1.address);
+      const currentWinnings = await casinoSlot.playerWinnings(player1.address);
       expect(currentWinnings).to.be.gte(expectedPayout); // May have previous winnings
       
       // Step 6: Withdraw and verify final balance
-      const balanceBeforeWithdraw = await chipToken.balanceOf(player1.address);
+      const balanceBeforeWithdraw = await casinoSlot.balanceOf(player1.address);
       
-      await degenSlots.connect(player1).withdrawWinnings();
-      const finalChips = await chipToken.balanceOf(player1.address);
+      await casinoSlot.connect(player1).withdrawWinnings();
+      const finalChips = await casinoSlot.balanceOf(player1.address);
       expect(finalChips).to.equal(balanceBeforeWithdraw.add(currentWinnings));
     });
 
@@ -381,7 +361,7 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
       
       // Create 3 spins
       for (let i = 0; i < 3; i++) {
-        const tx = await degenSlots.connect(player1).spin3Reels();
+        const tx = await casinoSlot.connect(player1).spin3Reels();
         const receipt = await tx.wait();
         const event = receipt.events.find(e => e.event === "SpinRequested");
         spins.push(event.args.requestId);
@@ -397,7 +377,7 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
       let totalExpectedPayout = ethers.BigNumber.from(0);
       
       for (let i = 0; i < spins.length; i++) {
-        await degenSlots.testFulfillRandomWords(spins[i], [ethers.BigNumber.from(outcomes[i].random)]);
+        await casinoSlot.testFulfillRandomWords(spins[i], [ethers.BigNumber.from(outcomes[i].random)]);
         
         const expectedPayout = reel3Cost.mul(outcomes[i].multiplier);
         totalExpectedPayout = totalExpectedPayout.add(expectedPayout);
@@ -408,39 +388,39 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
       expect(totalExpectedPayout).to.equal(expectedTotal);
       
       // Verify total winnings (may include previous winnings from other tests)
-      const playerWinnings = await degenSlots.playerWinnings(player1.address);
+      const playerWinnings = await casinoSlot.playerWinnings(player1.address);
       expect(playerWinnings).to.be.gte(expectedTotal);
     });
   });
 
   describe("Prize Pool Integration", function () {
     it("Should handle jackpot payouts from prize pool", async function () {
-      const initialPool = await degenSlots.totalPrizePool();
+      const initialPool = await casinoSlot.totalPrizePool();
       expect(initialPool).to.be.gt(0); // Should have ETH from beforeEach
       
-      const tx = await degenSlots.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spin3Reels();
       const receipt = await tx.wait();
       const requestId = receipt.events.find(e => e.event === "SpinRequested").args.requestId;
       
       // Prize pool after the spin (which adds to it)
-      const poolAfterSpin = await degenSlots.totalPrizePool();
+      const poolAfterSpin = await casinoSlot.totalPrizePool();
       
       // Use the discovered working value for [6,6,6]
       const randomValue = ethers.BigNumber.from("328463");
-      await degenSlots.testFulfillRandomWords(requestId, [randomValue]);
+      await casinoSlot.testFulfillRandomWords(requestId, [randomValue]);
       
-      const spin = await degenSlots.spins(requestId);
-      const reels = await degenSlots.getSpinReels(requestId);
+      const spin = await casinoSlot.spins(requestId);
+      const reels = await casinoSlot.getSpinReels(requestId);
       console.log("JACKPOT test - reels:", reels.map(r => r.toString()), "payoutType:", spin.payoutType.toString());
       
       expect(spin.payoutType).to.equal(7); // JACKPOT
       
-      // Jackpot should be 50% of prize pool at the time of the spin
-      const expectedJackpot = poolAfterSpin.div(2);
+      // Jackpot should be 25% of prize pool at the time of the spin (updated from 50% for security)
+      const expectedJackpot = poolAfterSpin.div(4); // Changed from div(2) to div(4) = 25%
       // Increased tolerance to account for prize pool fluctuations from other tests
       expect(spin.payout).to.be.closeTo(expectedJackpot, ethers.utils.parseEther("1.0"));
       
-      const finalPool = await degenSlots.totalPrizePool();
+      const finalPool = await casinoSlot.totalPrizePool();
       expect(finalPool).to.be.lt(poolAfterSpin);
     });
   });
@@ -488,18 +468,18 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
       const testValues = [1, 257, 513, 65793, 66049, 131329, 197121]; // Strategic values based on bit patterns
       
       for (const testValue of testValues) {
-        const tx = await degenSlots.connect(player1).spin3Reels();
+        const tx = await casinoSlot.connect(player1).spin3Reels();
         const receipt = await tx.wait();
         const event = receipt.events.find(e => e.event === "SpinRequested");
         const requestId = event.args.requestId;
         
-        await degenSlots.testFulfillRandomWords(requestId, [ethers.BigNumber.from(testValue)]);
-        const reels = await degenSlots.getSpinReels(requestId);
+        await casinoSlot.testFulfillRandomWords(requestId, [ethers.BigNumber.from(testValue)]);
+        const reels = await casinoSlot.getSpinReels(requestId);
         const combinationKey = parseInt(reels.map(r => r.toString()).join(''));
         const payoutType = await payoutTables.getPayoutType(3, combinationKey);
         
         if (payoutType > 0) { // Found a winner!
-          const spin = await degenSlots.spins(requestId);
+          const spin = await casinoSlot.spins(requestId);
           
           console.log(`✓ WINNER FOUND!`);
           console.log(`Random value: ${testValue}`);
@@ -514,7 +494,7 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
           expect(spin.payout).to.be.gt(0);
           
           // Test player winnings
-          const playerStats = await degenSlots.getPlayerStats(player1.address);
+          const playerStats = await casinoSlot.getPlayerStats(player1.address);
           expect(playerStats.winnings).to.be.gt(0);
           
           foundWinner = true;

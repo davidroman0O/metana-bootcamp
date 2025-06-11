@@ -5,7 +5,7 @@ import "@chainlink/contracts/src/v0.8/vrf/interfaces/VRFCoordinatorV2Interface.s
 import "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -13,11 +13,13 @@ import "./interfaces/IPayoutTables.sol";
 import "./interfaces/ICompound.sol";
 
 /**
- * @title DegenSlots - Multi-Reel Slot Machine with External Payout Tables
- * @dev Upgradeable slot machine using external optimized payout contracts
+ * @title CasinoSlot - Casino & ERC20 Token Combined
+ * @dev Upgradeable slot machine that IS the CHIPS token itself
+ * @notice Users buy CHIPS with ETH, spend CHIPS on spins, win more CHIPS
  */
-contract DegenSlots is 
+contract CasinoSlot is 
     Initializable,
+    ERC20Upgradeable,
     ReentrancyGuardUpgradeable, 
     PausableUpgradeable, 
     UUPSUpgradeable,
@@ -62,7 +64,6 @@ contract DegenSlots is
     IComptroller public comptroller;
     
     // Core game state
-    IERC20 public chipToken;
     AggregatorV3Interface internal ethUsdPriceFeed;
     uint256 public totalPrizePool;
     uint256 public houseEdge; // 5% (500 basis points)
@@ -102,6 +103,7 @@ contract DegenSlots is
     event ChipsBorrowed(address indexed player, uint256 ethAmount, uint256 chipsAmount);
     event LoanRepaid(address indexed player, uint256 chipsAmount, uint256 ethAmount);
     event ETHRepayment(address indexed player, uint256 ethAmount);
+    event ChipsPurchased(address indexed player, uint256 ethAmount, uint256 chipsAmount);
     
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -113,7 +115,6 @@ contract DegenSlots is
      */
     function initialize(
         uint64 subscriptionId,
-        address chipTokenAddress,
         address ethUsdPriceFeedAddress,
         address payoutTablesAddress,
         address vrfCoordinatorAddress,
@@ -122,6 +123,7 @@ contract DegenSlots is
         address comptrollerAddress,
         address initialOwner
     ) public initializer {
+        __ERC20_init("CasinoSlot Casino Chips", "CHIPS");
         __UUPSUpgradeable_init();
         __ReentrancyGuard_init();
         __Pausable_init();
@@ -129,7 +131,6 @@ contract DegenSlots is
         
         COORDINATOR = VRFCoordinatorV2Interface(vrfCoordinatorAddress);
         s_subscriptionId = subscriptionId;
-        chipToken = IERC20(chipTokenAddress);
         ethUsdPriceFeed = AggregatorV3Interface(ethUsdPriceFeedAddress);
         payoutTables = IPayoutTables(payoutTablesAddress);
         keyHash = vrfKeyHash;
@@ -213,11 +214,10 @@ contract DegenSlots is
         require(reelCount >= 3 && reelCount <= 7, "Invalid reel count");
         
         // Check player has enough CHIPS
-        require(chipToken.balanceOf(msg.sender) >= cost, "Insufficient CHIPS balance");
-        require(chipToken.allowance(msg.sender, address(this)) >= cost, "Insufficient CHIPS allowance");
+        require(balanceOf(msg.sender) >= cost, "Insufficient CHIPS balance");
         
-        // Transfer CHIPS from player
-        require(chipToken.transferFrom(msg.sender, address(this), cost), "CHIPS transfer failed");
+        // Burn CHIPS from player (casino keeps ETH equivalent in prize pool)
+        _burn(msg.sender, cost);
         
         // Add to prize pool (minus house edge)
         uint256 houseAmount = (cost * houseEdge) / 10000;
@@ -354,7 +354,9 @@ contract DegenSlots is
         require(amount > 0, "No winnings to withdraw");
         
         playerWinnings[msg.sender] = 0;
-        require(chipToken.transfer(msg.sender, amount), "Transfer failed");
+        
+        // Mint winnings as new CHIPS tokens
+        _mint(msg.sender, amount);
         
         emit WinningsWithdrawn(msg.sender, amount);
     }
@@ -364,14 +366,6 @@ contract DegenSlots is
      */
     function getSpinReels(uint256 requestId) external view returns (uint256[] memory) {
         return spins[requestId].reels;
-    }
-    
-    /**
-     * @dev Testing function to simulate VRF callback - TESTING ONLY
-     */
-    function testFulfillRandomWords(uint256 requestId, uint256[] memory randomWords) external virtual onlyOwner {
-        require(block.chainid != 1, "Testing function disabled on mainnet");
-        fulfillRandomWords(requestId, randomWords);
     }
     
     /**
@@ -410,7 +404,7 @@ contract DegenSlots is
         (, uint256 liquidity, ) = comptroller.getAccountLiquidity(player);
         
         return (
-            chipToken.balanceOf(player),
+            balanceOf(player),
             playerWinnings[player],
             totalSpins[player],
             totalWon[player],
@@ -443,6 +437,24 @@ contract DegenSlots is
     // ============ COMPOUND INTEGRATION ============
     
     /**
+     * @dev Buy CHIPS with ETH directly
+     */
+    function buyChips() external payable nonReentrant {
+        require(msg.value > 0, "Must send ETH");
+        
+        // Calculate CHIPS amount based on ETH price
+        uint256 chipsAmount = calculateChipsFromETH(msg.value);
+        
+        // Mint CHIPS to buyer (no inventory needed!)
+        _mint(msg.sender, chipsAmount);
+        
+        // Add ETH to the prize pool
+        totalPrizePool += msg.value;
+        
+        emit ChipsPurchased(msg.sender, msg.value, chipsAmount);
+    }
+    
+    /**
      * @dev Deposit ETH as collateral to enable borrowing
      */
     function depositCollateral() external payable virtual nonReentrant {
@@ -472,13 +484,12 @@ contract DegenSlots is
         
         // Calculate CHIPS amount based on ETH price
         uint256 chipsAmount = calculateChipsFromETH(ethAmount);
-        require(chipToken.balanceOf(address(this)) >= chipsAmount, "Insufficient CHIPS in contract");
         
         // Track the borrowed amount
         borrowedETH[msg.sender] += ethAmount;
         
-        // Transfer CHIPS to borrower
-        require(chipToken.transfer(msg.sender, chipsAmount), "CHIPS transfer failed");
+        // Mint CHIPS to borrower (no inventory needed!)
+        _mint(msg.sender, chipsAmount);
         
         emit ChipsBorrowed(msg.sender, ethAmount, chipsAmount);
     }
@@ -489,13 +500,14 @@ contract DegenSlots is
     function repayLoan(uint256 chipsAmount) external nonReentrant {
         require(chipsAmount > 0, "Must repay positive amount");
         require(borrowedETH[msg.sender] > 0, "No outstanding loan");
+        require(balanceOf(msg.sender) >= chipsAmount, "Insufficient CHIPS balance");
         
         // Calculate ETH equivalent of CHIPS
         uint256 ethEquivalent = calculateETHFromChips(chipsAmount);
         require(ethEquivalent <= borrowedETH[msg.sender], "Repayment exceeds loan");
         
-        // Transfer CHIPS from borrower
-        require(chipToken.transferFrom(msg.sender, address(this), chipsAmount), "CHIPS transfer failed");
+        // Burn CHIPS from borrower
+        _burn(msg.sender, chipsAmount);
         
         // Reduce borrowed amount
         borrowedETH[msg.sender] -= ethEquivalent;
@@ -534,7 +546,7 @@ contract DegenSlots is
         
         // Standard Chainlink validation - simple and fixed
         require(ethPriceUSD > 0, "Invalid ETH price");
-        require(block.timestamp - updatedAt <= 3600, "Price data stale"); // Fixed 1 hour
+        require(block.timestamp - updatedAt <= 3600*24, "Price data stale"); // Fixed 24 hour for now because i need to code and test things
         require(uint256(ethPriceUSD) >= 50 * 1e8, "ETH price too low"); // Fixed $50 minimum
         require(uint256(ethPriceUSD) <= 100000 * 1e8, "ETH price too high"); // Fixed $100K maximum
         

@@ -14,13 +14,38 @@ async function main() {
   console.log("🚀 Deploying contracts with the account:", deployer.address);
   console.log("💰 Account balance:", (await deployer.getBalance()).toString());
   
-  // Mainnet addresses (update for your target network)
-  const CHAINLINK_VRF_COORDINATOR = "0x271682DEB8C4E0901D1a1550aD2e64D568E69909";
-  const CHAINLINK_KEY_HASH = "0x8af398995b04c28e9951adb9721ef74c74f93e6a478f39e7e0777be13527e7ef";
-  const CHAINLINK_SUBSCRIPTION_ID = 1; // Update with your subscription ID
-  const ETH_USD_PRICE_FEED = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419";
-  const COMPOUND_CETH = "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5";
-  const COMPOUND_COMPTROLLER = "0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B";
+  // Get network info
+  const network = await hre.ethers.provider.getNetwork();
+  
+  // Configure Chainlink addresses based on network
+  let CHAINLINK_VRF_COORDINATOR, CHAINLINK_KEY_HASH, CHAINLINK_SUBSCRIPTION_ID, ETH_USD_PRICE_FEED, COMPOUND_CETH, COMPOUND_COMPTROLLER;
+  
+  if (network.chainId === 31337) {
+    // Local development - use mocks
+    console.log("🏗️  Local development detected - deploying mocks...");
+    
+    // Deploy MockVRFCoordinator first
+    const MockVRFCoordinator = await ethers.getContractFactory("MockVRFCoordinator");
+    const mockVRFCoordinator = await MockVRFCoordinator.deploy();
+    await mockVRFCoordinator.deployed();
+    
+    CHAINLINK_VRF_COORDINATOR = mockVRFCoordinator.address;
+    CHAINLINK_KEY_HASH = "0x8af398995b04c28e9951adb9721ef74c74f93e6a478f39e7e0777be13527e7ef"; // Dummy hash
+    CHAINLINK_SUBSCRIPTION_ID = 1; // Dummy ID
+    ETH_USD_PRICE_FEED = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"; // Mainnet address (forked)
+    COMPOUND_CETH = "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5"; // Mainnet address (forked)
+    COMPOUND_COMPTROLLER = "0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B"; // Mainnet address (forked)
+    
+    console.log(`✅ MockVRFCoordinator deployed: ${CHAINLINK_VRF_COORDINATOR}`);
+  } else {
+    // Mainnet/testnet addresses
+    CHAINLINK_VRF_COORDINATOR = "0x271682DEB8C4E0901D1a1550aD2e64D568E69909";
+    CHAINLINK_KEY_HASH = "0x8af398995b04c28e9951adb9721ef74c74f93e6a478f39e7e0777be13527e7ef";
+    CHAINLINK_SUBSCRIPTION_ID = 1; // Update with your subscription ID
+    ETH_USD_PRICE_FEED = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419";
+    COMPOUND_CETH = "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5";
+    COMPOUND_COMPTROLLER = "0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B";
+  }
 
   // Step 1: Deploy PayoutTables System (Complete version)
   console.log("\n🎰 Deploying PayoutTables System (ALL tables)...");
@@ -83,28 +108,13 @@ async function main() {
   console.log("✅ PayoutTables API deployed to:", payoutTables.address);
   console.log("🎉 ALL payout tables deployed with full 7-reel chunked system!");
 
-  // Step 2: Deploy ChipToken
-  console.log("\n📦 Deploying ChipToken...");
-  const ChipToken = await ethers.getContractFactory("ChipToken");
-  const chipToken = await upgrades.deployProxy(
-    ChipToken,
-    [deployer.address], // initialOwner
-    {
-      kind: 'uups',
-      initializer: 'initialize'
-    }
-  );
-  await chipToken.deployed();
-  console.log("💎 ChipToken deployed to:", chipToken.address);
-
-  // Step 3: Deploy DegenSlots with correct parameter order
-  console.log("\n🎰 Deploying DegenSlots...");
-  const DegenSlots = await ethers.getContractFactory("DegenSlots");
-  const degenSlots = await upgrades.deployProxy(
-    DegenSlots,
+  // Step 2: Deploy CasinoSlot (which is now both casino AND token)
+  console.log("\n🎰 Deploying CasinoSlot Casino-Token...");
+  const CasinoSlot = await ethers.getContractFactory("CasinoSlot");
+  const casinoSlot = await upgrades.deployProxy(
+    CasinoSlot,
     [
       CHAINLINK_SUBSCRIPTION_ID,    // uint64 subscriptionId
-      chipToken.address,            // address chipTokenAddress
       ETH_USD_PRICE_FEED,          // address ethUsdPriceFeedAddress  
       payoutTables.address,        // address payoutTablesAddress
       CHAINLINK_VRF_COORDINATOR,   // address vrfCoordinatorAddress
@@ -118,39 +128,32 @@ async function main() {
       initializer: 'initialize'
     }
   );
-  await degenSlots.deployed();
-  console.log("🎰 DegenSlots deployed to:", degenSlots.address);
+  await casinoSlot.deployed();
+  console.log("🎰 CasinoSlot Casino-Token deployed to:", casinoSlot.address);
 
-  // Step 4: Transfer ChipToken ownership to DegenSlots
-  console.log("\n🔄 Transferring ChipToken ownership to DegenSlots...");
-  await chipToken.transferOwnership(degenSlots.address);
-  console.log("✅ ChipToken ownership transferred");
-
-  // Step 5: Verify deployment
+  // Step 3: Verify deployment
   console.log("\n🔍 Verifying deployment...");
-  const chipBalance = await chipToken.balanceOf(deployer.address);
-  const degenOwner = await degenSlots.owner();
-  const chipOwner = await chipToken.owner();
+  const casinoOwner = await casinoSlot.owner();
+  const tokenName = await casinoSlot.name();
+  const tokenSymbol = await casinoSlot.symbol();
+  const totalSupply = await casinoSlot.totalSupply();
   
   console.log("📊 Deployment Summary:");
   console.log("   🎰 PayoutTables:", payoutTables.address);
-  console.log("   💎 ChipToken:", chipToken.address);
-  console.log("   🎰 DegenSlots:", degenSlots.address);
+  console.log("   🎰 CasinoSlot Casino-Token:", casinoSlot.address);
   console.log("   🧩 PayoutTables7 Router:", payoutTables7.address);
-  console.log("   👑 DegenSlots Owner:", degenOwner);
-  console.log("   👑 ChipToken Owner:", chipOwner);
-  console.log("   💰 Deployer CHIP Balance:", chipBalance.toString());
+  console.log("   👑 CasinoSlot Owner:", casinoOwner);
+  console.log("   🪙 Token Name:", tokenName);
+  console.log("   🪙 Token Symbol:", tokenSymbol);
+  console.log("   💰 Total CHIPS Supply:", ethers.utils.formatEther(totalSupply), "CHIPS");
   console.log("   📊 PayoutTables7 Chunks: 8 contracts deployed");
-
-  // Get network info for subsequent steps
-  const network = await hre.ethers.provider.getNetwork();
 
   // Step 6: Fund with initial liquidity (optional)
   if (process.env.FUND_INITIAL_LIQUIDITY === "true") {
     console.log("\n💰 Funding with initial liquidity...");
     const fundAmount = ethers.utils.parseEther("10"); // 10 ETH
     await deployer.sendTransaction({
-      to: degenSlots.address,
+      to: casinoSlot.address,
       value: fundAmount
     });
     console.log(`✅ Funded with ${ethers.utils.formatEther(fundAmount)} ETH`);
@@ -167,34 +170,39 @@ async function main() {
     console.log(`💳 Using dev account ${lastDevAccount.address} for funding`);
     console.log(`💰 Dev account balance: ${ethers.utils.formatEther(await lastDevAccount.getBalance())} ETH`);
     
-    // Transfer 1000 ETH to deployer for operational funds
-    console.log("🚀 Transferring 1000 ETH to deployer for operational funds...");
+    console.log("\n🎲 Local VRF setup complete using MockVRFCoordinator");
+    console.log("   📝 Mock VRF coordinator deployed at contract initialization");
+    console.log("   🧪 Use the vrf-fulfiller.js script to automatically fulfill VRF requests");
+    console.log("   💡 Tip: Run 'npm run vrf-fulfiller' to auto-fulfill VRF requests");
+    
+    // Transfer 30 ETH to deployer for operational funds
+    console.log("🚀 Transferring 30 ETH to deployer for operational funds...");
     await lastDevAccount.sendTransaction({
       to: deployer.address,
-      value: ethers.utils.parseEther("1000")
+      value: ethers.utils.parseEther("30")
     });
-    console.log(`✅ Deployer funded with 1000 ETH`);
+    console.log(`✅ Deployer funded with 30 ETH`);
     
-    // Send 1000 ETH to contract pool for realistic testing
-    console.log("🏦 Funding contract pool with 1000 ETH for realistic testing...");
+    // Send 10 ETH to contract pool for realistic testing
+    console.log("🏦 Funding contract pool with 10 ETH for realistic testing...");
     await lastDevAccount.sendTransaction({
-      to: degenSlots.address,
-      value: ethers.utils.parseEther("1000")
+      to: casinoSlot.address,
+      value: ethers.utils.parseEther("10")
     });
-    console.log(`✅ Contract pool funded with 1000 ETH`);
+    console.log(`✅ Contract pool funded with 10 ETH`);
     
     // Fund specific test address with ETH for testing
     const testAddress = "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86";
-    console.log(`💰 Funding test address ${testAddress} with 500 ETH...`);
+    console.log(`💰 Funding test address ${testAddress} with 5 ETH...`);
     await lastDevAccount.sendTransaction({
       to: testAddress,
-      value: ethers.utils.parseEther("500")
+      value: ethers.utils.parseEther("5")
     });
-    console.log(`✅ Test address funded with 500 ETH`);
+    console.log(`✅ Test address funded with 5 ETH`);
     
     // Verify balances
     const deployerBalance = await deployer.getBalance();
-    const contractBalance = await ethers.provider.getBalance(degenSlots.address);
+    const contractBalance = await ethers.provider.getBalance(casinoSlot.address);
     const testAddressBalance = await ethers.provider.getBalance(testAddress);
     console.log(`📊 Final balances:`);
     console.log(`   💰 Deployer: ${ethers.utils.formatEther(deployerBalance)} ETH`);
@@ -204,10 +212,18 @@ async function main() {
   }
 
   console.log("\n🎉 Deployment completed successfully!");
-  console.log("\n📝 Next steps:");
-  console.log("1. Update Chainlink VRF subscription to add DegenSlots as consumer");
-  console.log("2. Verify contracts on block explorer");
-  console.log("3. Test the deployment with small transactions");
+  
+  if (network.chainId === 31337) {
+    console.log("\n📝 Next steps for LOCAL DEVELOPMENT:");
+    console.log("1. 🧪 Run tests: npm test");
+    console.log("2. 🎲 Auto-fulfill VRF: npm run vrf-fulfiller");
+    console.log("3. 🎰 Test spins with mock VRF coordinator");
+  } else {
+    console.log("\n📝 Next steps for MAINNET/TESTNET:");
+    console.log("1. Update Chainlink VRF subscription to add CasinoSlot as consumer");
+    console.log("2. Verify contracts on block explorer");
+    console.log("3. Test the deployment with small transactions");
+  }
   
   // Step 7: Save deployment data to file
   console.log("\n💾 Saving deployment data...");
@@ -218,8 +234,8 @@ async function main() {
       timestamp: new Date().toISOString()
     },
     contracts: {
-      DegenSlots: {
-        address: degenSlots.address,
+      CasinoSlot: {
+        address: casinoSlot.address,
         constructor: {
           vrfCoordinator: CHAINLINK_VRF_COORDINATOR,
           keyHash: CHAINLINK_KEY_HASH,
@@ -229,22 +245,19 @@ async function main() {
           comptroller: COMPOUND_COMPTROLLER
         }
       },
-      ChipToken: {
-        address: chipToken.address
-      },
       PayoutTables: {
         address: payoutTables.address
       }
     },
     deployer: deployer.address,
     blockNumber: await ethers.provider.getBlockNumber(),
-    initialFunding: network.chainId === 31337 ? "1000.0" : 
+    initialFunding: network.chainId === 31337 ? "10.0" : 
                    (process.env.FUND_INITIAL_LIQUIDITY === "true" ? "10.0" : "0.0"),
     developmentMode: network.chainId === 31337,
-    poolBalance: ethers.utils.formatEther(await ethers.provider.getBalance(degenSlots.address)),
+    poolBalance: ethers.utils.formatEther(await ethers.provider.getBalance(casinoSlot.address)),
     testAddressFunding: network.chainId === 31337 ? {
       address: "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86",
-      amount: "500.0",
+      amount: "5.0",
       balance: ethers.utils.formatEther(await ethers.provider.getBalance("0x92145c8e548A87DFd716b1FD037a5e476a1f2a86"))
     } : null
   };
@@ -275,8 +288,7 @@ async function main() {
     payoutTables: payoutTables.address,
     payoutTables7Router: payoutTables7.address,
     payoutTables7Chunks: payoutTables7Chunks,
-    chipToken: chipToken.address,
-    degenSlots: degenSlots.address
+    casinoSlot: casinoSlot.address
   };
 }
 
@@ -288,8 +300,7 @@ main()
     console.log("PayoutTables:", addresses.payoutTables);
     console.log("PayoutTables7 Router:", addresses.payoutTables7Router);
     console.log("PayoutTables7 Chunks:", addresses.payoutTables7Chunks);
-    console.log("ChipToken:", addresses.chipToken);
-    console.log("DegenSlots:", addresses.degenSlots);
+    console.log("CasinoSlot:", addresses.casinoSlot);
     process.exit(0);
   })
   .catch((error) => {

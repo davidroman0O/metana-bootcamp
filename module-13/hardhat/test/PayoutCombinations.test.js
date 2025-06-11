@@ -2,27 +2,18 @@ const { expect } = require("chai");
 const { ethers, upgrades } = require("hardhat");
 
 describe("🎰 Payout Combinations", function () {
-  let degenSlots, chipToken, payoutTables, payoutTables3;
+  let casinoSlot, payoutTables, payoutTables3;
   let mockVRFCoordinator, owner, player1;
 
   before(async function () {
     [owner, player1] = await ethers.getSigners();
-
-    // Deploy TestToken for testing
-    const TestToken = await ethers.getContractFactory("TestToken");
-    chipToken = await TestToken.deploy(
-      "Test Chips",
-      "TCHIPS", 
-      ethers.utils.parseEther("1000000")
-    );
-    await chipToken.deployed();
 
     // Deploy Mock VRF Coordinator
     const MockVRFCoordinator = await ethers.getContractFactory("MockVRFCoordinator");
     mockVRFCoordinator = await MockVRFCoordinator.deploy();
     await mockVRFCoordinator.deployed();
 
-    // Use dummy addresses for Compound since mocking is built into DegenSlotsTest
+    // Use dummy addresses for Compound since mocking is built into CasinoSlotTest
     const dummyCEthAddress = ethers.Wallet.createRandom().address;
     const dummyComptrollerAddress = ethers.Wallet.createRandom().address;
 
@@ -46,24 +37,23 @@ describe("🎰 Payout Combinations", function () {
     );
     await payoutTables.deployed();
 
-    // Deploy DegenSlotsTest with correct parameters
-    const DegenSlotsTest = await ethers.getContractFactory("DegenSlotsTest");
-    degenSlots = await upgrades.deployProxy(
-      DegenSlotsTest,
+    // Deploy CasinoSlotTest with correct parameters
+    const CasinoSlotTest = await ethers.getContractFactory("CasinoSlotTest");
+    casinoSlot = await upgrades.deployProxy(
+      CasinoSlotTest,
       [
         1, // VRF subscription ID
-        chipToken.address,
-        ethers.constants.AddressZero, // Mock price feed
+        "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419", // Real ETH/USD price feed for forked network
         payoutTables.address,
         mockVRFCoordinator.address,
         "0x8af398995b04c28e9951adb9721ef74c74f93e6a478f39e7e0777be13527e7ef", // keyHash
-        dummyCEthAddress, // Dummy address - mocking is built into DegenSlotsTest
-        dummyComptrollerAddress, // Dummy address - mocking is built into DegenSlotsTest
+        dummyCEthAddress, // Dummy address - mocking is built into CasinoSlotTest
+        dummyComptrollerAddress, // Dummy address - mocking is built into CasinoSlotTest
         owner.address // Initial owner
       ],
       { kind: "uups" }
     );
-    await degenSlots.deployed();
+    await casinoSlot.deployed();
   });
 
   // PayoutType enum mapping from IPayoutTables
@@ -155,26 +145,25 @@ describe("🎰 Payout Combinations", function () {
     });
   });
 
-  describe("DegenSlots Integration", function () {
+  describe("CasinoSlot Integration", function () {
     it("Should use external payout tables correctly", async function () {
-      const gameStats = await degenSlots.getGameStats();
+      const gameStats = await casinoSlot.getGameStats();
       expect(gameStats.payoutTablesAddress).to.equal(payoutTables.address);
     });
 
     it("Should calculate payouts using external tables", async function () {
-      // Setup CHIPS for testing
-      await chipToken.transfer(player1.address, ethers.utils.parseEther("10"));
-      await chipToken.connect(player1).approve(degenSlots.address, ethers.utils.parseEther("10"));
+      // Buy CHIPS for testing
+      await casinoSlot.connect(player1).buyChips({ value: ethers.utils.parseEther("1") });
       
       // Request a spin
-      const tx = await degenSlots.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spin3Reels();
       const receipt = await tx.wait();
       const requestId = receipt.events.find(e => e.event === "SpinRequested").args.requestId;
       
       // Mock VRF response to generate specific combination
-      await degenSlots.testFulfillRandomWords(requestId, [ethers.BigNumber.from("0x03030303")]); // Should generate 444
+      await casinoSlot.testFulfillRandomWords(requestId, [ethers.BigNumber.from("0x03030303")]); // Should generate 444
       
-      const spin = await degenSlots.spins(requestId);
+      const spin = await casinoSlot.spins(requestId);
       expect(spin.settled).to.be.true;
       expect(spin.payoutType).to.equal(PayoutType.MEGA_WIN); // Triple diamonds
     });

@@ -25,11 +25,9 @@ async function extractAddresses() {
     console.log("📊 Read deployment data for network:", deploymentData.network.chainId);
 
     // Extract contract addresses
-    const degenSlotsAddress = deploymentData.contracts.DegenSlots.address;
-    const chipTokenAddress = deploymentData.contracts.ChipToken.address;
+    const casinoSlotAddress = deploymentData.contracts.CasinoSlot.address;
 
-    console.log("DegenSlots address:", degenSlotsAddress);
-    console.log("ChipToken address:", chipTokenAddress);
+    console.log("CasinoSlot address:", casinoSlotAddress);
 
     // Frontend config directory
     const frontendConfigDir = path.join(__dirname, "../../frontend/src/config/contracts");
@@ -46,8 +44,7 @@ async function extractAddresses() {
 
     // Generate network + environment specific file
     await generateNetworkEnvFile(frontendConfigDir, networkName, environment, {
-      degenSlotsAddress,
-      chipTokenAddress,
+      casinoSlotAddress,
       deploymentData
     });
 
@@ -91,7 +88,7 @@ function mapEnvironment(nodeEnv) {
   return envMap[nodeEnv] || 'dev';
 }
 
-async function generateNetworkEnvFile(configDir, network, env, { degenSlotsAddress, chipTokenAddress, deploymentData }) {
+async function generateNetworkEnvFile(configDir, network, env, { casinoSlotAddress, deploymentData }) {
   const filename = `${network}-${env}.ts`;
   const exportName = `${network.toUpperCase()}_${env.toUpperCase()}_DEPLOYMENT`;
   
@@ -103,8 +100,7 @@ import type { NetworkDeployment } from './types';
 
 export const ${exportName}: NetworkDeployment = {
   addresses: {
-    DEGEN_SLOTS: "${degenSlotsAddress}",
-    CHIP_TOKEN: "${chipTokenAddress}",${chainlinkAddresses ? `
+    CASINO_SLOT: "${casinoSlotAddress}",${chainlinkAddresses ? `
     VRF_COORDINATOR: "${chainlinkAddresses.vrfCoordinator}",
     ETH_USD_PRICE_FEED: "${chainlinkAddresses.ethUsdPriceFeed}",` : ''}
   },
@@ -130,8 +126,7 @@ export const ${exportName}: NetworkDeployment = {
 async function generateTypesFile(configDir) {
   const typesContent = `// Common types for all contract deployments
 export interface ContractAddresses {
-  DEGEN_SLOTS: \`0x\${string}\`;
-  CHIP_TOKEN: \`0x\${string}\`;
+  CASINO_SLOT: \`0x\${string}\`;
   PAYOUT_TABLES?: \`0x\${string}\`;
   VRF_COORDINATOR?: \`0x\${string}\`;
   ETH_USD_PRICE_FEED?: \`0x\${string}\`;
@@ -197,39 +192,17 @@ function getChainlinkAddresses(chainId) {
 async function generateABIs(configDir, deploymentData) {
   const artifactsDir = path.join(__dirname, "../artifacts/contracts");
   
-  // DegenSlots ABI
-  const degenSlotsArtifact = path.join(artifactsDir, "DegenSlots.sol/DegenSlots.json");
-  if (fs.existsSync(degenSlotsArtifact)) {
-    const artifact = JSON.parse(fs.readFileSync(degenSlotsArtifact, "utf8"));
-    const abiContent = `// Auto-generated ABI for DegenSlots contract
-// Generated at: ${deploymentData.network.timestamp}
-
-export const DegenSlotsABI = ${JSON.stringify(artifact.abi, null, 2)} as const;
-
-export type DegenSlotsABI = typeof DegenSlotsABI;
+  // CasinoSlot ABI (now includes ERC20 functionality)
+  const casinoSlotArtifact = JSON.parse(
+    fs.readFileSync(path.join(artifactsDir, "CasinoSlot.sol/CasinoSlot.json"), "utf8")
+  );
+  
+  const casinoSlotABI = `// Auto-generated CasinoSlot ABI
+export const CasinoSlotABI = ${JSON.stringify(casinoSlotArtifact.abi, null, 2)} as const;
 `;
-    
-    const abiFile = path.join(configDir, "DegenSlotsABI.ts");
-    fs.writeFileSync(abiFile, abiContent);
-    console.log("✅ Generated: DegenSlotsABI.ts");
-  }
-
-  // ChipToken ABI
-  const chipTokenArtifact = path.join(artifactsDir, "ChipToken.sol/ChipToken.json");
-  if (fs.existsSync(chipTokenArtifact)) {
-    const artifact = JSON.parse(fs.readFileSync(chipTokenArtifact, "utf8"));
-    const abiContent = `// Auto-generated ABI for ChipToken contract
-// Generated at: ${deploymentData.network.timestamp}
-
-export const ChipTokenABI = ${JSON.stringify(artifact.abi, null, 2)} as const;
-
-export type ChipTokenABI = typeof ChipTokenABI;
-`;
-    
-    const abiFile = path.join(configDir, "ChipTokenABI.ts");
-    fs.writeFileSync(abiFile, abiContent);
-    console.log("✅ Generated: ChipTokenABI.ts");
-  }
+  
+  fs.writeFileSync(path.join(configDir, "CasinoSlotABI.ts"), casinoSlotABI);
+  console.log("✅ Generated: CasinoSlotABI.ts");
 }
 
 async function updateIndexFile(configDir) {
@@ -255,8 +228,7 @@ import { SUPPORTED_CHAINS } from './types';
 ${imports}
 
 export * from './types';
-export * from './DegenSlotsABI';
-export * from './ChipTokenABI';
+export * from './CasinoSlotABI';
 
 ${exports}
 

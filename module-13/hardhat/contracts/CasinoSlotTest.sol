@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
-import "./DegenSlots.sol";
+import "./CasinoSlot.sol";
 
 /**
- * @title DegenSlotsTest - Testing contract that inherits from DegenSlots
+ * @title CasinoSlotTest - Testing contract that inherits from CasinoSlot
  * @dev This contract adds testing and mocking functions for development/testing  
  * @notice This contract should NEVER be deployed to production networks
  */
-contract DegenSlotsTest is DegenSlots {
+contract CasinoSlotTest is CasinoSlot {
     
     // Testing variables
     uint256 public testETHPriceUSD; // Mock ETH price for testing (in cents)
@@ -20,8 +20,8 @@ contract DegenSlotsTest is DegenSlots {
     uint256 public mockMintResult; // 0 = success, non-zero = error
     
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() DegenSlots() {
-        // Test contract - inherits from DegenSlots properly
+    constructor() CasinoSlot() {
+        // Test contract - inherits from CasinoSlot properly
         // Uses upgrades.deployProxy() for testing like your NFT examples
     }
     
@@ -31,7 +31,7 @@ contract DegenSlotsTest is DegenSlots {
      * @param randomWords Array of random numbers
      * @notice This function should only exist in test deployments
      */
-    function testFulfillRandomWords(uint256 requestId, uint256[] memory randomWords) external override onlyOwner {
+    function testFulfillRandomWords(uint256 requestId, uint256[] memory randomWords) external onlyOwner {
         // Only allow on testnets (not mainnet chainId 1)
         require(block.chainid != 1, "Testing function disabled on mainnet");
         
@@ -180,7 +180,7 @@ contract DegenSlotsTest is DegenSlots {
             uint256 chipsAmount = calculateChipsFromETH(ethAmount);
             
             // Debug: log the calculations
-            uint256 contractBalance = chipToken.balanceOf(address(this));
+            uint256 contractBalance = balanceOf(address(this));
             // Note: We can't use console.log in Solidity, but we can use events for debugging
             
             require(contractBalance >= chipsAmount, "Insufficient CHIPS in contract");
@@ -192,7 +192,7 @@ contract DegenSlotsTest is DegenSlots {
             mockAccountLiquidity[msg.sender] -= ethAmount;
             
             // Transfer CHIPS to borrower
-            require(chipToken.transfer(msg.sender, chipsAmount), "CHIPS transfer failed");
+            _transfer(address(this), msg.sender, chipsAmount);
             
             emit ChipsBorrowed(msg.sender, ethAmount, chipsAmount);
         } else {
@@ -201,10 +201,10 @@ contract DegenSlotsTest is DegenSlots {
             require(liquidity >= ethAmount, "Insufficient collateral");
             
             uint256 chipsAmount = calculateChipsFromETH(ethAmount);
-            require(chipToken.balanceOf(address(this)) >= chipsAmount, "Insufficient CHIPS in contract");
+            require(balanceOf(address(this)) >= chipsAmount, "Insufficient CHIPS in contract");
             
             borrowedETH[msg.sender] += ethAmount;
-            require(chipToken.transfer(msg.sender, chipsAmount), "CHIPS transfer failed");
+            _transfer(address(this), msg.sender, chipsAmount);
             
             emit ChipsBorrowed(msg.sender, ethAmount, chipsAmount);
         }
@@ -266,7 +266,7 @@ contract DegenSlotsTest is DegenSlots {
         }
         
         return (
-            chipToken.balanceOf(player),
+            balanceOf(player),
             playerWinnings[player],
             totalSpins[player],
             totalWon[player],

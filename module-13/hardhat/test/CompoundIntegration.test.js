@@ -2,35 +2,22 @@ const { expect } = require("chai");
 const { ethers, upgrades } = require("hardhat");
 
 describe("🏦 Compound Integration - Leveraged Gambling", function () {
-  let degenSlots, payoutTables, chipToken;
-  let payoutTables3, payoutTables4;
+  let casinoSlot, payoutTables, payoutTables3, payoutTables4;
   let owner, player1, player2;
   
-  // Real Mainnet addresses for forking
+  // Real mainnet addresses for mainnet fork testing
   const ETH_USD_PRICE_FEED = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"; // Real Chainlink ETH/USD feed
   const CHAINLINK_KEY_HASH = "0x8af398995b04c28e9951adb9721ef74c74f93e6a478f39e7e0777be13527e7ef"; // 500 gwei
 
   beforeEach(async function () {
     [owner, player1, player2] = await ethers.getSigners();
 
-    // Deploy real ChipToken with upgradeable proxy
-    const ChipToken = await ethers.getContractFactory("ChipToken");
-    chipToken = await upgrades.deployProxy(
-      ChipToken,
-      [owner.address],
-      { kind: "uups" }
-    );
-    await chipToken.deployed();
-
-    // Mint initial supply for testing
-    await chipToken.mint(owner.address, ethers.utils.parseEther("1000000"));
-
     // Deploy Mock VRF Coordinator
     const MockVRFCoordinator = await ethers.getContractFactory("MockVRFCoordinator");
     const mockVRFCoordinator = await MockVRFCoordinator.deploy();
     await mockVRFCoordinator.deployed();
 
-    // Use dummy addresses for Compound since mocking is built into DegenSlotsTest
+    // Use dummy addresses for Compound since mocking is built into CasinoSlotTest
     const dummyCEthAddress = ethers.Wallet.createRandom().address;
     const dummyComptrollerAddress = ethers.Wallet.createRandom().address;
 
@@ -54,40 +41,41 @@ describe("🏦 Compound Integration - Leveraged Gambling", function () {
     );
     await payoutTables.deployed();
 
-    // Deploy DegenSlotsTest with upgradeable proxy (like your working NFT examples)
-    const DegenSlotsTest = await ethers.getContractFactory("DegenSlotsTest");
-    degenSlots = await upgrades.deployProxy(
-      DegenSlotsTest,
+    // Deploy CasinoSlotTest with upgradeable proxy (like your working NFT examples)
+    const CasinoSlotTest = await ethers.getContractFactory("CasinoSlotTest");
+    casinoSlot = await upgrades.deployProxy(
+      CasinoSlotTest,
       [
         1, // VRF subscription ID
-        chipToken.address,
         ETH_USD_PRICE_FEED,
         payoutTables.address,
         mockVRFCoordinator.address,
         CHAINLINK_KEY_HASH,
-        dummyCEthAddress, // Dummy address - mocking is built into DegenSlotsTest
-        dummyComptrollerAddress, // Dummy address - mocking is built into DegenSlotsTest
+        dummyCEthAddress, // Dummy address - mocking is built into CasinoSlotTest
+        dummyComptrollerAddress, // Dummy address - mocking is built into CasinoSlotTest
         owner.address
       ],
       { kind: "uups" }
     );
-    await degenSlots.deployed();
+    await casinoSlot.deployed();
 
-    // Add CHIPS to the contract for borrowing (need more due to high ETH price)
-    await chipToken.transfer(degenSlots.address, ethers.utils.parseEther("500000")); // 500K CHIPS
+    // Owner buys lots of chips and transfers to contract for borrowing
+    await casinoSlot.connect(owner).buyChips({ value: ethers.utils.parseEther("100") }); // Owner buys 100 ETH worth
+    const ownerBalance = await casinoSlot.balanceOf(owner.address);
+    await casinoSlot.connect(owner).transfer(casinoSlot.address, ownerBalance); // Transfer all to contract
     
     // Debug: verify contract has CHIPS
-    const contractChipBalance = await chipToken.balanceOf(degenSlots.address);
+    const contractChipBalance = await casinoSlot.balanceOf(casinoSlot.address);
     console.log(`Contract CHIPS balance: ${ethers.utils.formatEther(contractChipBalance)}`);
   });
 
   describe("Debug CHIPS Calculation", function () {
     it("Should debug CHIPS calculation and contract balance", async function () {
-      const contractBalance = await chipToken.balanceOf(degenSlots.address);
+      const contractBalance = await casinoSlot.balanceOf(casinoSlot.address);
       console.log(`Contract CHIPS balance: ${ethers.utils.formatEther(contractBalance)}`);
       
       const ethAmount = ethers.utils.parseEther("0.01");
-      const chipsAmount = await degenSlots.calculateChipsFromETH(ethAmount);
+      const chipsAmount = await casinoSlot.calculateChipsFromETH(ethAmount);
       console.log(`0.01 ETH converts to: ${ethers.utils.formatEther(chipsAmount)} CHIPS`);
       
       console.log(`Contract has enough? ${contractBalance.gte(chipsAmount)}`);
@@ -100,7 +88,7 @@ describe("🏦 Compound Integration - Leveraged Gambling", function () {
     it("Should allow players to deposit ETH as collateral", async function () {
       const depositAmount = ethers.utils.parseEther("1"); // 1 ETH
       
-      const tx = await degenSlots.connect(player1).depositCollateral({ value: depositAmount });
+      const tx = await casinoSlot.connect(player1).depositCollateral({ value: depositAmount });
       const receipt = await tx.wait();
       
       // Check event was emitted
@@ -109,18 +97,18 @@ describe("🏦 Compound Integration - Leveraged Gambling", function () {
       expect(event.args.ethAmount).to.equal(depositAmount);
       
       // Check mock state was updated
-      const cEthBalance = await degenSlots.getMockCEthBalance(player1.address);
+      const cEthBalance = await casinoSlot.getMockCEthBalance(player1.address);
       expect(cEthBalance).to.equal(depositAmount);
       
       // Check account liquidity (75% collateral factor)
-      const liquidity = await degenSlots.getMockAccountLiquidity(player1.address);
+      const liquidity = await casinoSlot.getMockAccountLiquidity(player1.address);
       const expectedLiquidity = depositAmount.mul(75).div(100);
       expect(liquidity).to.equal(expectedLiquidity);
     });
 
     it("Should reject deposits of 0 ETH", async function () {
       await expect(
-        degenSlots.connect(player1).depositCollateral({ value: 0 })
+        casinoSlot.connect(player1).depositCollateral({ value: 0 })
       ).to.be.revertedWith("Must deposit ETH");
     });
 
@@ -128,13 +116,13 @@ describe("🏦 Compound Integration - Leveraged Gambling", function () {
       const deposit1 = ethers.utils.parseEther("1");
       const deposit2 = ethers.utils.parseEther("0.5");
       
-      await degenSlots.connect(player1).depositCollateral({ value: deposit1 });
-      await degenSlots.connect(player1).depositCollateral({ value: deposit2 });
+      await casinoSlot.connect(player1).depositCollateral({ value: deposit1 });
+      await casinoSlot.connect(player1).depositCollateral({ value: deposit2 });
       
-      const totalCEth = await degenSlots.getMockCEthBalance(player1.address);
+      const totalCEth = await casinoSlot.getMockCEthBalance(player1.address);
       expect(totalCEth).to.equal(deposit1.add(deposit2));
       
-      const totalLiquidity = await degenSlots.getMockAccountLiquidity(player1.address);
+      const totalLiquidity = await casinoSlot.getMockAccountLiquidity(player1.address);
       const expectedLiquidity = deposit1.add(deposit2).mul(75).div(100);
       expect(expectedLiquidity).to.equal(totalLiquidity);
     });
@@ -143,16 +131,16 @@ describe("🏦 Compound Integration - Leveraged Gambling", function () {
   describe("CHIPS Borrowing", function () {
     beforeEach(async function () {
       // Player1 deposits 2 ETH as collateral
-      await degenSlots.connect(player1).depositCollateral({ 
+      await casinoSlot.connect(player1).depositCollateral({ 
         value: ethers.utils.parseEther("2") 
       });
     });
 
     it("Should allow borrowing CHIPS against collateral", async function () {
       const borrowAmount = ethers.utils.parseEther("0.01"); // Borrow equivalent of 0.01 ETH (much smaller)
-      const initialChips = await chipToken.balanceOf(player1.address);
+      const initialChips = await casinoSlot.balanceOf(player1.address);
       
-      const tx = await degenSlots.connect(player1).borrowChips(borrowAmount);
+      const tx = await casinoSlot.connect(player1).borrowChips(borrowAmount);
       const receipt = await tx.wait();
       
       // Check event was emitted
@@ -161,15 +149,15 @@ describe("🏦 Compound Integration - Leveraged Gambling", function () {
       expect(event.args.ethAmount).to.equal(borrowAmount);
       
       // Check CHIPS were transferred to player
-      const finalChips = await chipToken.balanceOf(player1.address);
+      const finalChips = await casinoSlot.balanceOf(player1.address);
       expect(finalChips).to.be.gt(initialChips);
       
       // Check borrowed amount is tracked
-      const borrowedETH = await degenSlots.borrowedETH(player1.address);
+      const borrowedETH = await casinoSlot.borrowedETH(player1.address);
       expect(borrowedETH).to.equal(borrowAmount);
       
       // Check liquidity was reduced
-      const remainingLiquidity = await degenSlots.getMockAccountLiquidity(player1.address);
+      const remainingLiquidity = await casinoSlot.getMockAccountLiquidity(player1.address);
       const expectedLiquidity = ethers.utils.parseEther("2").mul(75).div(100).sub(borrowAmount);
       expect(remainingLiquidity).to.equal(expectedLiquidity);
     });
@@ -178,17 +166,17 @@ describe("🏦 Compound Integration - Leveraged Gambling", function () {
       const excessiveBorrow = ethers.utils.parseEther("2"); // More than 75% of 2 ETH
       
       await expect(
-        degenSlots.connect(player1).borrowChips(excessiveBorrow)
+        casinoSlot.connect(player1).borrowChips(excessiveBorrow)
       ).to.be.revertedWith("Insufficient collateral");
     });
 
     it("Should calculate CHIPS amount correctly based on ETH price", async function () {
       const borrowAmount = ethers.utils.parseEther("0.01"); // 0.01 ETH worth
-      const initialChips = await chipToken.balanceOf(player1.address);
+      const initialChips = await casinoSlot.balanceOf(player1.address);
       
-      await degenSlots.connect(player1).borrowChips(borrowAmount);
+      await casinoSlot.connect(player1).borrowChips(borrowAmount);
       
-      const finalChips = await chipToken.balanceOf(player1.address);
+      const finalChips = await casinoSlot.balanceOf(player1.address);
       const receivedChips = finalChips.sub(initialChips);
       
       // With ETH at ~$1800, 0.01 ETH = $18, so should get 90 CHIPS (5 CHIPS per $1)
@@ -200,27 +188,27 @@ describe("🏦 Compound Integration - Leveraged Gambling", function () {
     it("Should enable complete leveraged gambling cycle", async function () {
       // Step 1: Player deposits ETH collateral
       const collateralAmount = ethers.utils.parseEther("1");
-      await degenSlots.connect(player1).depositCollateral({ value: collateralAmount });
+      await casinoSlot.connect(player1).depositCollateral({ value: collateralAmount });
       
       // Step 2: Player borrows CHIPS
       const borrowAmount = ethers.utils.parseEther("0.01"); // Much smaller amount
-      await degenSlots.connect(player1).borrowChips(borrowAmount);
+      await casinoSlot.connect(player1).borrowChips(borrowAmount);
       
-      const borrowedChips = await chipToken.balanceOf(player1.address);
+      const borrowedChips = await casinoSlot.balanceOf(player1.address);
       expect(borrowedChips).to.be.gt(0);
       
       // Step 3: Player approves and gambles with borrowed CHIPS
-      await chipToken.connect(player1).approve(degenSlots.address, borrowedChips);
+      await casinoSlot.connect(player1).approve(casinoSlot.address, borrowedChips);
       
-      const tx = await degenSlots.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spin3Reels();
       const receipt = await tx.wait();
       const requestId = receipt.events.find(e => e.event === "SpinRequested").args.requestId;
       
       // Step 4: Mock a winning outcome
-      await degenSlots.testFulfillRandomWords(requestId, [ethers.BigNumber.from("131090")]); // [3,3,3] = BIG_WIN
+      await casinoSlot.testFulfillRandomWords(requestId, [ethers.BigNumber.from("131090")]); // [3,3,3] = BIG_WIN
       
       // Step 5: Player should have winnings
-      const playerStats = await degenSlots.getPlayerStats(player1.address);
+      const playerStats = await casinoSlot.getPlayerStats(player1.address);
       expect(playerStats.winnings).to.be.gt(0);
       expect(playerStats.borrowedAmount).to.equal(borrowAmount);
       
@@ -231,25 +219,25 @@ describe("🏦 Compound Integration - Leveraged Gambling", function () {
 
     it("Should allow repaying loan with CHIPS winnings", async function () {
       // Setup: deposit, borrow, win
-      await degenSlots.connect(player1).depositCollateral({ value: ethers.utils.parseEther("1") });
-      await degenSlots.connect(player1).borrowChips(ethers.utils.parseEther("0.01")); // Smaller amount
+      await casinoSlot.connect(player1).depositCollateral({ value: ethers.utils.parseEther("1") });
+      await casinoSlot.connect(player1).borrowChips(ethers.utils.parseEther("0.01")); // Smaller amount
       
-      const borrowedChips = await chipToken.balanceOf(player1.address);
-      await chipToken.connect(player1).approve(degenSlots.address, borrowedChips);
+      const borrowedChips = await casinoSlot.balanceOf(player1.address);
+      await casinoSlot.connect(player1).approve(casinoSlot.address, borrowedChips);
       
-      const tx = await degenSlots.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spin3Reels();
       const receipt = await tx.wait();
       const requestId = receipt.events.find(e => e.event === "SpinRequested").args.requestId;
-      await degenSlots.testFulfillRandomWords(requestId, [ethers.BigNumber.from("131090")]); // Win
+      await casinoSlot.testFulfillRandomWords(requestId, [ethers.BigNumber.from("131090")]); // Win
       
       // Withdraw winnings
-      await degenSlots.connect(player1).withdrawWinnings();
+      await casinoSlot.connect(player1).withdrawWinnings();
       
       // Repay loan with CHIPS
       const repayAmount = ethers.utils.parseEther("5"); // 5 CHIPS = $1 = some ETH equivalent
-      await chipToken.connect(player1).approve(degenSlots.address, repayAmount);
+      await casinoSlot.connect(player1).approve(casinoSlot.address, repayAmount);
       
-      const repayTx = await degenSlots.connect(player1).repayLoan(repayAmount);
+      const repayTx = await casinoSlot.connect(player1).repayLoan(repayAmount);
       const repayReceipt = await repayTx.wait();
       
       const repayEvent = repayReceipt.events.find(e => e.event === "LoanRepaid");
@@ -257,22 +245,22 @@ describe("🏦 Compound Integration - Leveraged Gambling", function () {
       expect(repayEvent.args.chipsAmount).to.equal(repayAmount);
       
       // Check debt was reduced
-      const finalDebt = await degenSlots.borrowedETH(player1.address);
+      const finalDebt = await casinoSlot.borrowedETH(player1.address);
       expect(finalDebt).to.be.lt(ethers.utils.parseEther("0.01"));
     });
 
     it("Should allow repaying loan with ETH directly", async function () {
       // Setup: deposit and borrow
-      await degenSlots.connect(player1).depositCollateral({ value: ethers.utils.parseEther("1") });
+      await casinoSlot.connect(player1).depositCollateral({ value: ethers.utils.parseEther("1") });
       const borrowAmount = ethers.utils.parseEther("0.01"); // Smaller amount
-      await degenSlots.connect(player1).borrowChips(borrowAmount);
+      await casinoSlot.connect(player1).borrowChips(borrowAmount);
       
-      const initialDebt = await degenSlots.borrowedETH(player1.address);
+      const initialDebt = await casinoSlot.borrowedETH(player1.address);
       expect(initialDebt).to.equal(borrowAmount);
       
       // Repay with ETH
       const repayAmount = ethers.utils.parseEther("0.005"); // Half the borrow amount
-      const repayTx = await degenSlots.connect(player1).repayLoanWithETH({ value: repayAmount });
+      const repayTx = await casinoSlot.connect(player1).repayLoanWithETH({ value: repayAmount });
       const repayReceipt = await repayTx.wait();
       
       const repayEvent = repayReceipt.events.find(e => e.event === "ETHRepayment");
@@ -280,11 +268,11 @@ describe("🏦 Compound Integration - Leveraged Gambling", function () {
       expect(repayEvent.args.ethAmount).to.equal(repayAmount);
       
       // Check debt was reduced
-      const finalDebt = await degenSlots.borrowedETH(player1.address);
+      const finalDebt = await casinoSlot.borrowedETH(player1.address);
       expect(finalDebt).to.equal(borrowAmount.sub(repayAmount));
       
       // Check liquidity was restored
-      const restoredLiquidity = await degenSlots.getMockAccountLiquidity(player1.address);
+      const restoredLiquidity = await casinoSlot.getMockAccountLiquidity(player1.address);
       expect(restoredLiquidity).to.be.gt(0);
     });
   });
@@ -292,38 +280,38 @@ describe("🏦 Compound Integration - Leveraged Gambling", function () {
   describe("Risk Management", function () {
     it("Should prevent borrowing without collateral", async function () {
       await expect(
-        degenSlots.connect(player1).borrowChips(ethers.utils.parseEther("0.1"))
+        casinoSlot.connect(player1).borrowChips(ethers.utils.parseEther("0.1"))
       ).to.be.revertedWith("Insufficient collateral");
     });
 
     it("Should prevent repaying more than owed", async function () {
-      await degenSlots.connect(player1).depositCollateral({ value: ethers.utils.parseEther("1") });
-      await degenSlots.connect(player1).borrowChips(ethers.utils.parseEther("0.01")); // Smaller amount
+      await casinoSlot.connect(player1).depositCollateral({ value: ethers.utils.parseEther("1") });
+      await casinoSlot.connect(player1).borrowChips(ethers.utils.parseEther("0.01")); // Smaller amount
       
       const excessiveRepay = ethers.utils.parseEther("0.1"); // Still more than borrowed
       await expect(
-        degenSlots.connect(player1).repayLoanWithETH({ value: excessiveRepay })
+        casinoSlot.connect(player1).repayLoanWithETH({ value: excessiveRepay })
       ).to.be.revertedWith("Repayment exceeds loan");
     });
 
     it("Should track multiple borrowers independently", async function () {
       // Player1 setup
-      await degenSlots.connect(player1).depositCollateral({ value: ethers.utils.parseEther("1") });
-      await degenSlots.connect(player1).borrowChips(ethers.utils.parseEther("0.01")); // Smaller amount
+      await casinoSlot.connect(player1).depositCollateral({ value: ethers.utils.parseEther("1") });
+      await casinoSlot.connect(player1).borrowChips(ethers.utils.parseEther("0.01")); // Smaller amount
       
       // Player2 setup  
-      await degenSlots.connect(player2).depositCollateral({ value: ethers.utils.parseEther("2") });
-      await degenSlots.connect(player2).borrowChips(ethers.utils.parseEther("0.02")); // Smaller amount
+      await casinoSlot.connect(player2).depositCollateral({ value: ethers.utils.parseEther("2") });
+      await casinoSlot.connect(player2).borrowChips(ethers.utils.parseEther("0.02")); // Smaller amount
       
       // Check independent tracking
-      const player1Debt = await degenSlots.borrowedETH(player1.address);
-      const player2Debt = await degenSlots.borrowedETH(player2.address);
+      const player1Debt = await casinoSlot.borrowedETH(player1.address);
+      const player2Debt = await casinoSlot.borrowedETH(player2.address);
       
       expect(player1Debt).to.equal(ethers.utils.parseEther("0.01"));
       expect(player2Debt).to.equal(ethers.utils.parseEther("0.02"));
       
-      const player1Stats = await degenSlots.getPlayerStats(player1.address);
-      const player2Stats = await degenSlots.getPlayerStats(player2.address);
+      const player1Stats = await casinoSlot.getPlayerStats(player1.address);
+      const player2Stats = await casinoSlot.getPlayerStats(player2.address);
       
       expect(player1Stats.borrowedAmount).to.equal(ethers.utils.parseEther("0.01"));
       expect(player2Stats.borrowedAmount).to.equal(ethers.utils.parseEther("0.02"));
@@ -334,24 +322,24 @@ describe("🏦 Compound Integration - Leveraged Gambling", function () {
     it("Should use real ETH price for CHIPS calculations", async function () {
       // Test that the contract can get ETH price and calculate CHIPS correctly
       const ethAmount = ethers.utils.parseEther("1");
-      const chipsAmount = await degenSlots.calculateChipsFromETH(ethAmount);
+      const chipsAmount = await casinoSlot.calculateChipsFromETH(ethAmount);
       
       expect(chipsAmount).to.be.gt(0);
       console.log(`1 ETH converts to ${ethers.utils.formatEther(chipsAmount)} CHIPS`);
       
       // Reverse calculation
-      const ethFromChips = await degenSlots.calculateETHFromChips(chipsAmount);
+      const ethFromChips = await casinoSlot.calculateETHFromChips(chipsAmount);
       expect(ethFromChips).to.be.closeTo(ethAmount, ethers.utils.parseEther("0.01"));
     });
 
     it("Should get pool statistics", async function () {
       // Add some ETH to contract
       await owner.sendTransaction({
-        to: degenSlots.address,
+        to: casinoSlot.address,
         value: ethers.utils.parseEther("5")
       });
       
-      const stats = await degenSlots.getPoolStats();
+      const stats = await casinoSlot.getPoolStats();
       expect(stats.totalETH).to.be.gt(0);
       expect(stats.chipPrice).to.be.gt(0);
       expect(stats.ethPrice).to.be.gt(0);

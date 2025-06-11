@@ -4,7 +4,7 @@
   "description": "Boomer's Last Hope - Degen Slot Machine Smart Contracts",
   "main": "index.js",
   "scripts": {
-    "start": "hardhat node --fork https://eth-mainnet.g.alchemy.com/v2/UlgUe5NUoeezq_0_AxTSKl0qpQQeHSKV",
+
     "compile": "hardhat compile",
     "test": "hardhat test --network hardhat",
     "test:gas": "REPORT_GAS=true hardhat test",
@@ -23,13 +23,15 @@
     
     "deploy": "hardhat run scripts/deploy.js --network localhost",
     "deploy:local": "hardhat run scripts/deploy.js --network localhost",
-    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
     "deploy:fork": "hardhat run scripts/deploy.js --network hardhat",
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
     "extract-addresses": "node scripts/extract-addresses.js",
     "measure-gas": "hardhat run scripts/measureGas.js --network hardhat",
     
     "node": "hardhat node",
     "node:fork": "hardhat node --fork https://eth-mainnet.g.alchemy.com/v2/UlgUe5NUoeezq_0_AxTSKl0qpQQeHSKV",
+    "vrf:fulfiller": "hardhat run scripts/vrf-fulfiller.js --network localhost",
+    "test-player": "hardhat run scripts/test-player.js --network localhost",
     "clean": "hardhat clean",
     "size": "hardhat size-contracts",
     "coverage": "hardhat coverage",
