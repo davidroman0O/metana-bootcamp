@@ -4,8 +4,7 @@ import { SUPPORTED_CHAINS } from './types';
 import { HARDHAT_DEV_DEPLOYMENT } from './hardhat-dev';
 
 export * from './types';
-export * from './DegenSlotsABI';
-export * from './ChipTokenABI';
+export * from './CasinoSlotABI';
 
 export { HARDHAT_DEV_DEPLOYMENT } from './hardhat-dev';
 

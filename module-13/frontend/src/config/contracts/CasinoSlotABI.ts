@@ -1,5 +1,5 @@
-// Auto-generated DegenSlots ABI
-export const DegenSlotsABI = [
+// Auto-generated CasinoSlot ABI
+export const CasinoSlotABI = [
   {
     "inputs": [],
     "stateMutability": "nonpayable",
@@ -461,7 +461,7 @@ export const DegenSlotsABI = [
       },
       {
         "indexed": false,
-        "internalType": "enum DegenSlots.PayoutType",
+        "internalType": "enum CasinoSlot.PayoutType",
         "name": "payoutType",
         "type": "uint8"
       },
@@ -1326,7 +1326,7 @@ export const DegenSlotsABI = [
         "type": "uint8"
       },
       {
-        "internalType": "enum DegenSlots.PayoutType",
+        "internalType": "enum CasinoSlot.PayoutType",
         "name": "payoutType",
         "type": "uint8"
       },

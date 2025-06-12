@@ -68,6 +68,7 @@ interface SlotMachineProps {
   onResult?: (symbols: number[], payout: number, payoutType: string) => void;
   onStateChange?: (state: string) => void;
   onCoinInsert?: () => void;
+  onLeverPull?: () => Promise<void>; // External lever callback
   isConnected?: boolean;
   reelCount?: number; // Number of reels (default: 3, min: 1, max: 10)
   showChipPopup?: boolean; // Show the chip insert popup
@@ -126,6 +127,7 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
   onResult,
   onStateChange,
   onCoinInsert,
+  onLeverPull,
   isConnected = false,
   reelCount = 3,
   showChipPopup = false,
@@ -974,6 +976,18 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
           return "Machine is busy!";
         }
         
+        // If connected and external lever handler provided, use it
+        if (isConnected && onLeverPull) {
+          try {
+            await onLeverPull();
+            return "External spin initiated!";
+          } catch (error) {
+            console.error('External lever pull failed:', error);
+            return "External spin failed!";
+          }
+        }
+        
+        // Otherwise, use internal demo logic
         // Start spin (no targets = random result)
         const success = startSpin();
         if (!success) {
@@ -992,7 +1006,7 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
         return "Spin started!";
       });
     }
-  }, [isAnimatedMode]);
+  }, [isAnimatedMode, isConnected, onLeverPull]);
 
   // Cleanup
   useEffect(() => {

@@ -1,30 +1,20 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { useReadContract } from 'wagmi';
+import React, { useState, useRef, useCallback } from 'react';
 import { formatEther } from 'viem';
-import { Wallet, Network, LogOut, Zap } from 'lucide-react';
-import type { Address } from 'viem';
+import toast from 'react-hot-toast';
 
-// Config imports
-import { DegenSlotsABI } from '../config/contracts/DegenSlotsABI';
-import { CONTRACT_ADDRESSES } from '../config/wagmi';
-
-// Contexts
-import { useAppMode } from '../contexts/AppModeContext';
-
-// Components - Import only what we need
-import SlotMachine from './SlotMachine';
+// Components
+import SlotMachine, { SlotMachineRef } from './SlotMachine';
 import PhoneHelpLine from './PhoneHelpLine';
 
 // Hooks
 import { useWallet } from '../hooks/useWallet';
 import { useNetworks } from '../hooks/useNetworks';
-import { useSlotMachine } from '../hooks/useSlotMachine';
-import { useSlotAnimator } from '../hooks/useSlotAnimator';
+import { useCasinoContract } from '../hooks/useCasinoContract';
 
 // Inline GameHeader component to avoid import issues
 const GameHeader: React.FC<{
   isConnected: boolean;
-  account: Address | undefined;
+  account: any;
   balance: string;
   connecting: boolean;
   onConnect: () => void;
@@ -93,9 +83,9 @@ const GameHeader: React.FC<{
               </div>
             ) : (
               <div className="flex items-center space-x-3 text-xs">
-                <span className="text-green-400">🎰 21.8% Win Rate</span>
-                <span className="text-yellow-400">🔒 Provably Fair</span>
-                <span className="text-purple-400">⚡ VRF Powered</span>
+                <span className="text-green-400">🎰 Provably Fair</span>
+                <span className="text-yellow-400">🔒 VRF Powered</span>
+                <span className="text-purple-400">⚡ Instant Payouts</span>
               </div>
             )}
           </div>
@@ -107,7 +97,6 @@ const GameHeader: React.FC<{
               <div className={`flex items-center space-x-2 px-2 py-1 rounded text-xs ${
                 isSupported ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
               }`}>
-                <Network size={12} />
                 <span>{currentChain.name}</span>
                 {!isSupported && (
                   <button onClick={onSwitchToLocal} disabled={isSwitchPending} className="ml-1 px-2 py-1 bg-blue-600 rounded text-white">
@@ -130,7 +119,6 @@ const GameHeader: React.FC<{
                   onClick={onDisconnect}
                   className="bg-red-500/30 hover:bg-red-500/50 text-red-300 hover:text-white rounded-lg px-3 py-2 text-sm font-medium transition-all"
                 >
-                  <LogOut size={14} className="inline mr-2" />
                   Disconnect
                 </button>
               </div>
@@ -150,7 +138,6 @@ const GameHeader: React.FC<{
       {/* Network Warning */}
       {isConnected && !isSupported && (
         <div className="bg-yellow-500/90 text-black p-2 text-center text-sm">
-          <Zap size={16} className="inline mr-2" />
           Switch to a supported network to play
           <button onClick={onSwitchToLocal} className="ml-2 bg-black/20 px-2 py-1 rounded">
             Switch to Local
@@ -162,235 +149,259 @@ const GameHeader: React.FC<{
 };
 
 const GamePage: React.FC = () => {
-  // Separate hooks like the working module-3 examples
+  // Wallet and network hooks
   const {
-    // Wallet state
-    account, isConnected, connecting, balance,
-    // Actions
-    connectWallet, disconnectWallet,
+    account,
+    isConnected,
+    connecting,
+    balance,
+    connectWallet,
+    disconnectWallet,
+    formatBalance,
   } = useWallet();
 
   const {
-    // Network state  
-    currentNetwork, isNetworkSupported, switchingNetwork,
-    // Actions
+    currentNetwork,
+    isNetworkSupported,
+    switchingNetwork,
     switchToNetwork,
   } = useNetworks();
 
-  // Get chainId from currentNetwork
-  const chainId = currentNetwork?.chainId;
-
+  // Casino contract hook - our main data source
   const {
-    displayLCD, betAmount, needsApproval, chipBalance, isApproving, isSpinningTx,
-    callbackOnLever, handleSlotResult, approveChipsForPlay, buyChipsWithETH, setBetAmount,
-  } = useSlotMachine(chainId);
-
-  // Slot animation system for disconnected users
-  const {
-    slotMachineRef: animatedSlotRef,
-    stopAnimation,
-  } = useSlotAnimator({
-    reelCount: 3, // Always use 3 reels for disconnected demo
-    autoStart: true, // Auto-start the animation automatically
-    cyclePause: 4000 // Slightly longer pause between cycles
-  });
-
-  const slotMachineRef = useRef<any>(null);
-  const [selectedReelCount, setSelectedReelCount] = useState<number>(3);
+    // Data states
+    playerStats,
+    gameStats,
+    spinCosts,
+    isLoadingData,
+    
+    // Transaction states
+    buyChipsState,
+    spinState,
+    depositCollateralState,
+    borrowChipsState,
+    repayLoanState,
+    
+    // Spin management
+    selectedReelCount,
+    setSelectedReelCount,
+    currentAllowance,
+    
+    // Contract functions
+    buyChips,
+    approveChips,
+    spinReels,
+    depositCollateral,
+    borrowChips,
+    repayLoan,
+    repayLoanWithETH,
+    
+    // Helper functions
+    canSpin,
+    getCurrentSpinCost,
+    calculateExpectedChips,
+    refreshAllData,
+  } = useCasinoContract();
   
-  // Chip insert tease popup state
-  const [showChipTease, setShowChipTease] = useState(false);
-  const [chipTeaseMessage, setChipTeaseMessage] = useState('');
+  // Local UI state
+  const [gamePhase, setGamePhase] = useState<'idle' | 'selecting' | 'approving' | 'spinning' | 'result'>('idle');
+  const [ethAmount, setEthAmount] = useState<string>('0.1');
 
-  // Stop animation when user connects
-  useEffect(() => {
-    if (isConnected) {
-      stopAnimation();
-    }
-  }, [isConnected, stopAnimation]);
-
-  // Contract data with improved error handling and debugging
-  const addresses = CONTRACT_ADDRESSES[chainId || 31337] || {};
+  // Credit/Loan UI state
+  const [collateralAmount, setCollateralAmount] = useState<string>('0.5');
+  const [borrowAmount, setBorrowAmount] = useState<string>('0.1');
+  const [repayChipsAmount, setRepayChipsAmount] = useState<string>('');
+  const [repayETHAmount, setRepayETHAmount] = useState<string>('');
   
-  console.log('🔍 Contract Debug Info:', {
-    chainId,
-    currentNetwork: currentNetwork?.name,
-    addresses,
-    degenSlotsAddress: addresses.DEGEN_SLOTS
-  });
+  // Refs
+  const slotMachineRef = useRef<SlotMachineRef>(null);
 
-  // First, let's check if the contract exists by trying to get its code
-  const { data: contractCode } = useReadContract({
-    address: addresses.DEGEN_SLOTS,
-    abi: [],
-    functionName: 'getPoolStats', // This will fail but tell us if contract exists
-    query: { 
-      enabled: false, // Disabled for now
-    },
-  });
+  // Reel configs
+  const reelConfigs = [
+    { count: 3, cost: formatEther(spinCosts.reels3), price: '$0.20', name: 'Classic', color: 'bg-green-600' },
+    { count: 4, cost: formatEther(spinCosts.reels4), price: '$2.00', name: 'Extended', color: 'bg-blue-600' },
+    { count: 5, cost: formatEther(spinCosts.reels5), price: '$20', name: 'Premium', color: 'bg-purple-600' },
+    { count: 6, cost: formatEther(spinCosts.reels6), price: '$100', name: 'High Roller', color: 'bg-red-600' },
+    { count: 7, cost: formatEther(spinCosts.reels7), price: '$200', name: 'Whale Mode', color: 'bg-yellow-600' },
+  ];
 
-  // Let's try a simple view call first to see if contract exists
-  const { 
-    data: poolStats, 
-    error: poolStatsError, 
-    isLoading: poolStatsLoading,
-    isSuccess: poolStatsSuccess 
-  } = useReadContract({
-    address: addresses.DEGEN_SLOTS, 
-    abi: DegenSlotsABI, 
-    functionName: 'getPoolStats',
-    query: { 
-      enabled: !!addresses.DEGEN_SLOTS,
-      retry: 3,
-      refetchInterval: 10000, // Refetch every 10 seconds
-    },
-  });
+  // Demo mode for disconnected users
+  const startDemoSpin = useCallback(() => {
+    if (!slotMachineRef.current) return;
+    
+    const demoSymbols = Array(selectedReelCount).fill(0).map(() => Math.floor(Math.random() * 6) + 1);
+    slotMachineRef.current.startSpin(demoSymbols);
+    
+    setTimeout(() => {
+      slotMachineRef.current?.lcd.setMessage("DEMO MODE - Connect wallet to play for real!");
+    }, 3000);
+  }, [selectedReelCount]);
 
-  const { 
-    data: chipsFromETH, 
-    error: chipsFromETHError, 
-    isLoading: chipsFromETHLoading,
-    isSuccess: chipsFromETHSuccess 
-  } = useReadContract({
-    address: addresses.DEGEN_SLOTS, 
-    abi: DegenSlotsABI, 
-    functionName: 'calculateChipsFromETH',
-    args: [BigInt(1e18)], // 1 ETH
-    query: { 
-      enabled: !!addresses.DEGEN_SLOTS,
-      retry: 3,
-      refetchInterval: 10000, // Refetch every 10 seconds
-    },
-  });
-
-  // Enhanced debug logging
-  console.log('📊 Contract Data Debug:', {
-    contractAddress: addresses.DEGEN_SLOTS,
-    poolStats: poolStats ? poolStats : 'null/empty',
-    poolStatsError: poolStatsError?.message || 'none',
-    poolStatsLoading,
-    poolStatsSuccess,
-    chipsFromETH: chipsFromETH ? chipsFromETH : 'null/empty',
-    chipsFromETHError: chipsFromETHError?.message || 'none',
-    chipsFromETHLoading,
-    chipsFromETHSuccess
-  });
-
-  if (poolStatsError) {
-    console.error('❌ Pool Stats Error Details:', poolStatsError);
-  }
-  if (chipsFromETHError) {
-    console.error('❌ Chips From ETH Error Details:', chipsFromETHError);
-  }
-
-  if (poolStats) {
-    console.log('🎰 Pool Stats Raw Data:', poolStats);
-  }
-  if (chipsFromETH) {
-    console.log('🪙 Chips from ETH Raw Data:', chipsFromETH);
-  }
-
-  // Format data with better error handling
-  const formattedPoolETH = (() => {
-    try {
-      if (!poolStats || !Array.isArray(poolStats)) return '0.0';
-      const poolAmount = poolStats[0] as bigint;
-      return parseFloat(formatEther(poolAmount)).toFixed(2);
-    } catch (error) {
-      console.error('Error formatting pool ETH:', error);
-      return '0.0';
+  // Phase 2: Insert chips (approve spending)
+  const handleChipInsert = useCallback(async () => {
+    if (!isConnected) {
+      toast.error('Please connect your wallet');
+      return;
     }
-  })();
 
-  const ethPrice = (() => {
-    try {
-      if (!poolStats || !Array.isArray(poolStats)) return '$0';
-      if (!poolStats[2]) return '$0';
-      const priceInCents = Number(poolStats[2] as bigint);
-      return `$${(priceInCents / 100).toFixed(0)}`;
-    } catch (error) {
-      console.error('Error formatting ETH price:', error);
-      return '$0';
+    const cost = getCurrentSpinCost();
+    
+    // Check if user has enough chips
+    if (playerStats.chipBalance < cost) {
+      toast.error('Insufficient CHIPS! Buy more or use credit.');
+      return;
     }
-  })();
 
-  const chipRate = (() => {
+    // Check if already approved
+    if (currentAllowance >= cost) {
+      setGamePhase('spinning');
+      slotMachineRef.current?.lcd.setMessage("Ready to spin! Pull the lever!");
+      return;
+    }
+
+    // Need approval
+    setGamePhase('approving');
+    slotMachineRef.current?.lcd.setMessage("Approving CHIPS spending...");
+    
+    const hash = await approveChips(cost);
+    if (hash) {
+      setGamePhase('spinning');
+      slotMachineRef.current?.lcd.setMessage("CHIPS approved! Pull the lever!");
+    } else {
+      setGamePhase('selecting');
+      slotMachineRef.current?.lcd.setMessage("Approval failed. Try again.");
+    }
+  }, [isConnected, getCurrentSpinCost, playerStats.chipBalance, currentAllowance, approveChips]);
+
+  // Phase 3: Pull lever (execute spin)
+  const handleLeverPull = useCallback(async () => {
+    if (!canSpin()) {
+      toast.error('Cannot spin - check CHIPS balance and approval');
+      return;
+  }
+
+    setGamePhase('spinning');
+    slotMachineRef.current?.lcd.setMessage("Spinning... Waiting for VRF...");
+    
+    // Start slot machine animation
+    slotMachineRef.current?.startSpin();
+    
+    // Execute blockchain transaction
+    const hash = await spinReels(selectedReelCount);
+    
+    if (hash) {
+      // Transaction successful - VRF will eventually call back
+      setTimeout(() => {
+        // In real implementation, this would come from VRF callback
+        const mockResult = Array(selectedReelCount).fill(0).map(() => Math.floor(Math.random() * 6) + 1);
+        handleSpinResult(mockResult, 0n, 0);
+      }, 5000);
+    } else {
+      setGamePhase('selecting');
+      slotMachineRef.current?.lcd.setMessage("Spin failed. Try again.");
+    }
+  }, [canSpin, spinReels, selectedReelCount]);
+
+  // Phase 4: Handle spin result
+  const handleSpinResult = useCallback((symbols: number[], payout: bigint, payoutType: number) => {
+    setGamePhase('result');
+
+    // Update slot machine with result
+    slotMachineRef.current?.setAllReelTargets(symbols);
+    
+    if (payout > 0n) {
+      slotMachineRef.current?.lcd.setWinPattern(Number(formatEther(payout)));
+      toast.success(`You won ${formatEther(payout)} CHIPS!`);
+    } else {
+      slotMachineRef.current?.lcd.setMessage("No win this time. Try again!");
+    }
+    
+    // Auto-reset after showing result
+    setTimeout(() => {
+      setGamePhase('idle');
+      slotMachineRef.current?.lcd.setIdlePattern();
+      refreshAllData(); // Refresh all data
+    }, 3000);
+  }, [refreshAllData]);
+
+  // Buy chips handler
+  const handleBuyChips = useCallback(async () => {
+    const hash = await buyChips(ethAmount);
+    if (hash) {
+      toast.success('CHIPS purchased successfully!');
+    }
+  }, [buyChips, ethAmount]);
+
+  // Credit/Loan handlers
+  const handleDepositCollateral = useCallback(async () => {
+    const hash = await depositCollateral(collateralAmount);
+    if (hash) {
+      toast.success(`Collateral of ${collateralAmount} ETH deposited successfully!`);
+    }
+  }, [depositCollateral, collateralAmount]);
+
+  const handleBorrowChips = useCallback(async () => {
+    const hash = await borrowChips(borrowAmount);
+    if (hash) {
+      toast.success(`CHIPS borrowed for ${borrowAmount} ETH worth!`);
+    }
+  }, [borrowChips, borrowAmount]);
+
+  const handleRepayWithChips = useCallback(async () => {
+    const hash = await repayLoan(repayChipsAmount);
+    if (hash) {
+      toast.success(`Loan repaid with ${repayChipsAmount} CHIPS!`);
+      setRepayChipsAmount(''); // Clear input
+    }
+  }, [repayLoan, repayChipsAmount]);
+
+  const handleRepayWithETH = useCallback(async () => {
+    const hash = await repayLoanWithETH(repayETHAmount);
+    if (hash) {
+      toast.success(`Loan repaid with ${repayETHAmount} ETH!`);
+      setRepayETHAmount(''); // Clear input
+    }
+  }, [repayLoanWithETH, repayETHAmount]);
+
+  // Calculate expected CHIPS amount
+  const expectedChips = (() => {
     try {
-      if (!chipsFromETH) return '0';
-      const chipsAmount = parseFloat(formatEther(chipsFromETH as bigint));
-      return chipsAmount.toFixed(0);
-    } catch (error) {
-      console.error('Error formatting chip rate:', error);
+      return calculateExpectedChips(ethAmount).toString();
+    } catch {
       return '0';
     }
   })();
 
-  // Show loading states in UI
-  const displayPoolETH = poolStatsLoading ? 'Loading...' : formattedPoolETH;
-  const displayEthPrice = poolStatsLoading ? 'Loading...' : ethPrice;
-  const displayChipRate = chipsFromETHLoading ? 'Loading...' : chipRate;
+  // Network switching handlers
+  const handleSwitchToLocal = () => switchToNetwork('hardhat');
+  const handleSwitchToSepolia = () => switchToNetwork('sepolia');
+  const handleSwitchToMainnet = () => switchToNetwork('mainnet');
 
-  // Reel configs
-  const reelConfigs = [
-    { count: 3, cost: 1, price: '$0.20', name: 'Classic', color: 'bg-green-600' },
-    { count: 4, cost: 10, price: '$2.00', name: 'Extended', color: 'bg-blue-600' },
-    { count: 5, cost: 100, price: '$20', name: 'Premium', color: 'bg-purple-600' },
-    { count: 6, cost: 500, price: '$100', name: 'High Roller', color: 'bg-red-600' },
-    { count: 7, cost: 1000, price: '$200', name: 'Whale Mode', color: 'bg-yellow-600' },
-  ];
+  // Get chainId from currentNetwork
+  const chainId = currentNetwork?.chainId;
 
-  // Event handlers
-  const handleSlotResultWrapper = (symbols: number[], payout: number, payoutType: string) => {
-    handleSlotResult(symbols, payout, payoutType);
-    
-    // Show result quote in connected mode
-    if (isConnected && slotMachineRef.current?.lcd) {
-      const { QuoteManager } = require('../utils/quotes');
-      const resultQuote = QuoteManager.getResultQuote(symbols);
-      setTimeout(() => {
-        slotMachineRef.current?.lcd?.setMessage(resultQuote);
-      }, 1000);
+  // Format player stats
+  const playerBalance = formatEther(playerStats.chipBalance);
+  const playerWinnings = formatEther(playerStats.winnings);
+  const totalSpins = Number(playerStats.totalSpins);
+  const totalWon = formatEther(playerStats.totalWon);
+  const borrowedAmount = formatEther(playerStats.borrowedAmount);
+  const borrowingPower = formatEther(playerStats.accountLiquidity);
+
+  // Format game stats
+  const formattedPoolETH = formatEther(gameStats.prizePool);
+  const ethPrice = gameStats.ethPrice;
+  const chipRate = gameStats.chipRate;
+
+  // Calculate USD value of CHIPS balance
+  const chipBalanceUSD = (() => {
+    try {
+      const chipsBalance = parseFloat(playerBalance);
+      return (chipsBalance * 0.20).toFixed(2);
+    } catch (error) {
+      return '0.00';
     }
-  };
-
-  const handleSlotStateChange = (state: string) => {
-    // Show state-appropriate quotes in connected mode
-    if (isConnected && slotMachineRef.current?.lcd) {
-      const { QuoteManager } = require('../utils/quotes');
-      let quote = '';
-      
-      switch (state) {
-        case 'spinning':
-          quote = QuoteManager.getStateQuote('spinning');
-          break;
-        case 'idle':
-          quote = QuoteManager.getStateQuote('idle');
-          break;
-        case 'evaluating_result':
-          quote = QuoteManager.getStateQuote('evaluating');
-          break;
-        default:
-          quote = QuoteManager.getMotivationalQuote();
-      }
-      
-      if (quote) {
-        slotMachineRef.current.lcd.setMessage(quote);
-      }
-    }
-  };
-
-  // Handle chip insert when disconnected - show funny popup
-  const handleChipInsertTease = () => {
-    const { QuoteManager } = require('../utils/quotes');
-    const teaseMessage = QuoteManager.getChipInsertTeaseQuote();
-    setChipTeaseMessage(teaseMessage);
-    setShowChipTease(true);
-    
-    // Hide popup after 4 seconds
-    setTimeout(() => {
-      setShowChipTease(false);
-    }, 4000);
-  };
+  })();
 
   // Disconnected mode
   if (!isConnected) {
@@ -402,17 +413,17 @@ const GamePage: React.FC = () => {
             <div className="flex justify-center mb-6">
               <div className="flex items-center space-x-4 bg-black/40 rounded-xl px-6 py-3 border border-gray-600">
                 <div className="text-center">
-                  <div className="text-lg font-bold text-blue-400">{displayPoolETH || '0'} ETH</div>
+                  <div className="text-lg font-bold text-blue-400">{formattedPoolETH || '0'} ETH</div>
                   <div className="text-xs text-gray-500">Pool</div>
                 </div>
                 <div className="w-px h-8 bg-gray-600"></div>
                 <div className="text-center">
-                  <div className="text-lg font-bold text-green-400">{displayEthPrice || '$0'}</div>
-                  <div className="text-xs text-gray-500">ETH Price</div>
+                  <div className="text-lg font-bold text-green-400">{ethPrice || '$0'}</div>
+                  <div className="text-xs text-gray-500">ETH</div>
                 </div>
                 <div className="w-px h-8 bg-gray-600"></div>
                 <div className="text-center">
-                  <div className="text-lg font-bold text-yellow-400">{displayChipRate || '0'}</div>
+                  <div className="text-lg font-bold text-yellow-400">{chipRate || '0'}</div>
                   <div className="text-xs text-gray-500">CHIPS/ETH</div>
                 </div>
               </div>
@@ -428,14 +439,16 @@ const GamePage: React.FC = () => {
             <div className="flex justify-center mb-6">
               <SlotMachine
                 key="slot-machine-animated-demo"
-                ref={animatedSlotRef}
-                onResult={handleSlotResultWrapper}
-                onStateChange={handleSlotStateChange}
+                ref={slotMachineRef}
+                onResult={() => {
+                  slotMachineRef.current?.lcd.setMessage("DEMO - Connect wallet for real play!");
+                }}
+                onStateChange={(state) => {
+                  console.log('Slot machine state:', state);
+                }}
                 isConnected={false}
                 reelCount={3}
-                onCoinInsert={handleChipInsertTease}
-                showChipPopup={showChipTease}
-                chipPopupMessage={chipTeaseMessage}
+                onCoinInsert={startDemoSpin}
               />
             </div>
 
@@ -446,21 +459,6 @@ const GamePage: React.FC = () => {
                 This is just a taste! Connect your wallet to play with real CHIPS and win real rewards!
               </p>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 text-sm">
-                <div className="bg-black/40 rounded-lg p-3 border border-green-500/30">
-                  <div className="text-green-400 font-bold">🎰 Real Gameplay</div>
-                  <div className="text-gray-300">Play with actual CHIPS tokens</div>
-                </div>
-                <div className="bg-black/40 rounded-lg p-3 border border-blue-500/30">
-                  <div className="text-blue-400 font-bold">🏆 Real Rewards</div>
-                  <div className="text-gray-300">Win real ETH and CHIPS</div>
-                </div>
-                <div className="bg-black/40 rounded-lg p-3 border border-purple-500/30">
-                  <div className="text-purple-400 font-bold">⚡ VRF Powered</div>
-                  <div className="text-gray-300">Provably fair randomness</div>
-                </div>
-              </div>
-              
               <button
                 onClick={connectWallet}
                 disabled={connecting}
@@ -468,38 +466,6 @@ const GamePage: React.FC = () => {
               >
                 {connecting ? '🔄 Connecting...' : '🦊 Connect Wallet & Play!'}
               </button>
-            </div>
-
-            {/* Payout Information */}
-            <div className="flex flex-wrap justify-center gap-2 text-sm">
-              <span className="bg-yellow-600 px-3 py-1 rounded-full">🐵 Jackpot: 666x</span>
-              <span className="bg-purple-600 px-3 py-1 rounded-full">🚀🚀🚀 Ultra: 555x</span>
-              <span className="bg-blue-600 px-3 py-1 rounded-full">💎💎💎 Mega: 444x</span>
-              <span className="bg-green-600 px-3 py-1 rounded-full">📈📈📈 Big: 333x</span>
-            </div>
-
-            {/* Feature Highlights */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 max-w-4xl mx-auto mt-8">
-              <div className="bg-black/20 rounded-lg p-4 border border-gray-600">
-                <div className="text-2xl mb-2">⚡</div>
-                <div className="text-sm font-bold text-yellow-400">Instant Payouts</div>
-                <div className="text-xs text-gray-400">Win and withdraw immediately</div>
-              </div>
-              <div className="bg-black/20 rounded-lg p-4 border border-gray-600">
-                <div className="text-2xl mb-2">🔒</div>
-                <div className="text-sm font-bold text-green-400">Provably Fair</div>
-                <div className="text-xs text-gray-400">Chainlink VRF powered</div>
-              </div>
-              <div className="bg-black/20 rounded-lg p-4 border border-gray-600">
-                <div className="text-2xl mb-2">💎</div>
-                <div className="text-sm font-bold text-blue-400">Multiple Stakes</div>
-                <div className="text-xs text-gray-400">3-7 reels, your choice</div>
-              </div>
-              <div className="bg-black/20 rounded-lg p-4 border border-gray-600">
-                <div className="text-2xl mb-2">🚀</div>
-                <div className="text-sm font-bold text-purple-400">DeFi Integrated</div>
-                <div className="text-xs text-gray-400">Leverage & lending options</div>
-              </div>
             </div>
           </div>
         </main>
@@ -514,11 +480,21 @@ const GamePage: React.FC = () => {
         isConnected={true} account={account} balance={balance} connecting={connecting}
         onConnect={connectWallet} onDisconnect={disconnectWallet} chainId={chainId}
         currentChain={currentNetwork} isSupported={isNetworkSupported} 
-        onSwitchToLocal={() => switchToNetwork('hardhat')}
-        onSwitchToMainnet={() => switchToNetwork('mainnet')} 
-        onSwitchToSepolia={() => switchToNetwork('sepolia')}
+        onSwitchToLocal={handleSwitchToLocal}
+        onSwitchToMainnet={handleSwitchToMainnet} 
+        onSwitchToSepolia={handleSwitchToSepolia}
         isSwitchPending={switchingNetwork}
       />
+
+      {/* Loading Overlay */}
+      {isLoadingData && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-white/10 rounded-2xl p-8 text-center">
+            <div className="animate-spin w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+            <p className="text-white text-lg">Loading casino data...</p>
+          </div>
+        </div>
+      )}
 
       <main className="container mx-auto px-4 py-4">
         {/* Stacked layout with slot machine in center - Compact for single page */}
@@ -532,7 +508,7 @@ const GamePage: React.FC = () => {
                 {reelConfigs.map((config) => (
                   <button
                     key={config.count}
-                    onClick={() => setSelectedReelCount(config.count)}
+                    onClick={() => setSelectedReelCount(config.count as 3 | 4 | 5 | 6 | 7)}
                     className={`p-2 rounded-lg text-white font-medium transition-all text-sm ${
                       selectedReelCount === config.count ? config.color : 'bg-gray-700 hover:bg-gray-600'
                     }`}
@@ -547,7 +523,7 @@ const GamePage: React.FC = () => {
                 <div className="text-center">
                   <div className="text-sm text-gray-400">Selected:</div>
                   <div className="text-lg font-bold text-yellow-400">
-                    🪙 {reelConfigs.find(c => c.count === selectedReelCount)?.cost || 0} CHIPS
+                    🪙 {formatEther(getCurrentSpinCost())} CHIPS
                   </div>
                 </div>
               </div>
@@ -558,7 +534,7 @@ const GamePage: React.FC = () => {
               <h3 className="text-lg font-bold text-green-400 mb-2">💰 Your Balance</h3>
               <div className="text-center mb-2">
                 <div className="text-2xl font-bold text-green-400">
-                  🪙 {chipBalance ? parseFloat(formatEther(chipBalance)).toFixed(2) : '0.00'}
+                  🪙 {playerBalance}
                 </div>
                 <div className="text-sm text-gray-400">CHIPS Available</div>
               </div>
@@ -571,11 +547,11 @@ const GamePage: React.FC = () => {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">USD Value:</span>
-                  <span className="text-green-400 font-medium">~$0.00</span>
+                  <span className="text-green-400 font-medium">~${chipBalanceUSD}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Network:</span>
-                  <span className="text-purple-400 font-medium">Hardhat</span>
+                  <span className="text-purple-400 font-medium">{currentNetwork?.name || 'Unknown'}</span>
                 </div>
               </div>
               
@@ -583,15 +559,15 @@ const GamePage: React.FC = () => {
               <div className="space-y-1 text-xs">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Status:</span>
-                  <span className="text-yellow-400 font-medium">Ready to Play</span>
+                  <span className="text-yellow-400 font-medium">{canSpin() ? 'Ready to Play' : 'Need CHIPS/Approval'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-400">Daily Limit:</span>
-                  <span className="text-orange-400 font-medium">1000 CHIPS</span>
+                  <span className="text-gray-400">Pending Wins:</span>
+                  <span className="text-orange-400 font-medium">{playerWinnings} CHIPS</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-400">Today Used:</span>
-                  <span className="text-red-400 font-medium">0 CHIPS</span>
+                  <span className="text-gray-400">Borrowed:</span>
+                  <span className="text-red-400 font-medium">{borrowedAmount} ETH</span>
                 </div>
               </div>
             </div>
@@ -602,31 +578,23 @@ const GamePage: React.FC = () => {
               <div className="space-y-1 text-xs mb-2">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Prize Pool:</span>
-                  <span className="text-blue-400 font-medium">{displayPoolETH} ETH</span>
+                  <span className="text-blue-400 font-medium">{formattedPoolETH} ETH</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">ETH Price:</span>
-                  <span className="text-green-400 font-medium">{displayEthPrice}</span>
+                  <span className="text-green-400 font-medium">{ethPrice}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">CHIPS/ETH:</span>
-                  <span className="text-yellow-400 font-medium">{displayChipRate}</span>
+                  <span className="text-yellow-400 font-medium">{chipRate}</span>
                 </div>
               </div>
               
               {/* Live stats */}
               <div className="space-y-1 text-xs mb-2">
                 <div className="flex justify-between">
-                  <span className="text-gray-400">Online Now:</span>
-                  <span className="text-purple-400 font-medium">87 Players</span>
-                </div>
-                <div className="flex justify-between">
                   <span className="text-gray-400">24h Volume:</span>
-                  <span className="text-orange-400 font-medium">12.4 ETH</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">24h Spins:</span>
-                  <span className="text-cyan-400 font-medium">2,341</span>
+                  <span className="text-orange-400 font-medium">~{formattedPoolETH} ETH</span>
                 </div>
               </div>
               
@@ -634,15 +602,11 @@ const GamePage: React.FC = () => {
               <div className="space-y-1 text-xs">
                 <div className="flex justify-between">
                   <span className="text-gray-400">House Edge:</span>
-                  <span className="text-red-400 font-medium">2.5%</span>
+                  <span className="text-red-400 font-medium">5.0%</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">RTP:</span>
-                  <span className="text-green-400 font-medium">97.5%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Last Winner:</span>
-                  <span className="text-yellow-400 font-medium">5K CHIPS</span>
+                  <span className="text-green-400 font-medium">95.0%</span>
                 </div>
               </div>
             </div>
@@ -652,8 +616,18 @@ const GamePage: React.FC = () => {
           <div className="flex justify-center bg-black/20 rounded-xl p-3">
             <SlotMachine
               key={`slot-machine-${selectedReelCount}`}
-              ref={slotMachineRef} onResult={handleSlotResultWrapper} onStateChange={handleSlotStateChange}
-              isConnected={isConnected} reelCount={selectedReelCount}
+              ref={slotMachineRef}
+              onResult={(symbols, payout, payoutType) => {
+                // Convert number payout to bigint for our handler
+                handleSpinResult(symbols, BigInt(payout), typeof payoutType === 'string' ? 0 : payoutType);
+              }}
+              onStateChange={(state) => {
+                console.log('Slot machine state:', state);
+              }}
+              isConnected={isConnected}
+              reelCount={selectedReelCount}
+              onCoinInsert={handleChipInsert}
+              onLeverPull={handleLeverPull}
             />
           </div>
 
@@ -662,16 +636,74 @@ const GamePage: React.FC = () => {
             {/* Buy CHIPS */}
             <div className="bg-black/30 rounded-xl p-3 border border-gray-600">
               <h3 className="text-lg font-bold text-green-400 mb-2">💎 Buy CHIPS</h3>
+              
+              {/* Transaction Status Display */}
+              {buyChipsState.status === 'pending' && (
+                <div className="mb-3 p-3 rounded-lg border bg-orange-500/20 border-orange-500/50">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm font-bold text-orange-300">
+                      🔄 CHIPS Purchase in Progress
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-300">Amount:</span>
+                      <span className="text-orange-300 font-bold">{ethAmount} ETH</span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-300">Status:</span>
+                      <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-orange-400 rounded-full animate-pulse"></div>
+                        <span className="text-orange-300 font-medium">Confirming...</span>
+                      </div>
+                    </div>
+                    
+                    {buyChipsState.hash && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-300">Transaction:</span>
+                        <span className="text-blue-400 hover:text-blue-300 font-mono text-xs bg-gray-800/50 px-2 py-1 rounded">
+                          {buyChipsState.hash.slice(0, 8)}...{buyChipsState.hash.slice(-6)}
+                        </span>
+                    </div>
+                    )}
+                  </div>
+                    </div>
+                  )}
+              
               <div className="space-y-2">
-                <input
-                  type="number" placeholder="0.1" defaultValue="0.1"
-                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"
-                />
-                <button onClick={() => buyChipsWithETH('0.1')}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg text-sm">
-                  Buy CHIPS
+                <div className="relative">
+                  <input
+                    type="number" 
+                    placeholder="0.1" 
+                    value={ethAmount}
+                    onChange={(e) => setEthAmount(e.target.value)}
+                    min="0"
+                    step="0.01"
+                    disabled={buyChipsState.status === 'pending'}
+                    className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 pr-12 text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-blue-400 font-bold text-sm">
+                    ETH
+                  </div>
+                </div>
+                
+                <button 
+                  onClick={handleBuyChips}
+                  disabled={!isConnected || !ethAmount || parseFloat(ethAmount) <= 0 || buyChipsState.status === 'pending'}
+                  className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 rounded-lg text-sm transition-colors"
+                >
+                  {buyChipsState.status === 'pending' ? (
+                    <>🔄 Purchase in Progress...</>
+                  ) : (
+                    <>💰 Buy CHIPS with ETH</>
+                  )}
                 </button>
-                <div className="text-xs text-gray-400">Expected: ~{displayChipRate} CHIPS per ETH</div>
+                
+                <div className="text-xs text-gray-400 text-center">
+                  Send {ethAmount || '0'} ETH → Get ~{expectedChips} CHIPS
+                </div>
               </div>
             </div>
 
@@ -679,70 +711,164 @@ const GamePage: React.FC = () => {
             <div className="bg-black/30 rounded-xl p-3 border border-gray-600">
               <h3 className="text-lg font-bold text-red-400 mb-2">💳 Credit & Leverage</h3>
               
-              {/* CHIPS Balance - Compact */}
+              {/* Current Status - Compact */}
               <div className="bg-gray-800/50 rounded-lg p-2 mb-2 border border-gray-600">
+                <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="text-center">
-                  <div className="text-xl font-bold text-yellow-400">
-                    {chipBalance ? parseFloat(formatEther(chipBalance)).toFixed(2) : '0.00'}
+                    <div className="text-sm font-bold text-yellow-400">{playerBalance}</div>
+                    <div className="text-gray-400">CHIPS</div>
                   </div>
-                  <div className="text-xs text-gray-400">CHIPS Balance</div>
+                  <div className="text-center">
+                    <div className="text-sm font-bold text-red-400">{borrowedAmount}</div>
+                    <div className="text-gray-400">Debt ETH</div>
+                  </div>
+                </div>
+                <div className="text-center mt-1">
+                  <div className="text-xs font-bold text-blue-400">{borrowingPower} ETH Available</div>
                 </div>
               </div>
 
-              {/* Credit Stats - Compact */}
-              <div className="space-y-1 mb-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Collateral:</span>
-                  <span className="text-green-400 font-medium">0.00 ETH</span>
+              {/* Transaction Status Display */}
+              {(depositCollateralState.status === 'pending' || borrowChipsState.status === 'pending' || repayLoanState.status === 'pending') && (
+                <div className="mb-2 p-2 rounded-lg border bg-blue-500/20 border-blue-500/50">
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                    <span className="text-blue-300 text-xs font-medium">
+                      {depositCollateralState.status === 'pending' && 'Depositing collateral...'}
+                      {borrowChipsState.status === 'pending' && 'Borrowing CHIPS...'}
+                      {repayLoanState.status === 'pending' && 'Repaying loan...'}
+                    </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Power:</span>
-                  <span className="text-blue-400 font-medium">0 CHIPS</span>
                 </div>
+              )}
+
+              {/* Quick Actions */}
+              <div className="space-y-2">
+                {/* Deposit Collateral */}
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="number"
+                      placeholder="0.5"
+                      value={collateralAmount}
+                      onChange={(e) => setCollateralAmount(e.target.value)}
+                      min="0"
+                      step="0.01"
+                      disabled={depositCollateralState.status === 'pending'}
+                      className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-xs disabled:opacity-50"
+                    />
+                    <button
+                      onClick={handleDepositCollateral}
+                      disabled={!isConnected || !collateralAmount || parseFloat(collateralAmount) <= 0 || depositCollateralState.status === 'pending'}
+                      className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium px-3 py-1 rounded text-xs transition-colors"
+                    >
+                      💰 Deposit
+                    </button>
+                </div>
+                  <div className="text-xs text-gray-500">Deposit ETH as collateral</div>
               </div>
 
-              {/* Action Buttons */}
+                {/* Borrow CHIPS */}
               <div className="space-y-1">
-                <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-1 rounded-lg text-xs transition-colors">
-                  💰 Deposit
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="number"
+                      placeholder="0.1"
+                      value={borrowAmount}
+                      onChange={(e) => setBorrowAmount(e.target.value)}
+                      min="0"
+                      step="0.01"
+                      disabled={borrowChipsState.status === 'pending'}
+                      className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-xs disabled:opacity-50"
+                    />
+                <button 
+                      onClick={handleBorrowChips}
+                      disabled={!isConnected || !borrowAmount || parseFloat(borrowAmount) <= 0 || parseFloat(borrowingPower) === 0 || borrowChipsState.status === 'pending'}
+                      className="bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium px-3 py-1 rounded text-xs transition-colors"
+                >
+                      🚀 Borrow
                 </button>
-                <button className="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-medium py-1 rounded-lg text-xs transition-colors">
-                  🚀 Borrow
+                  </div>
+                  <div className="text-xs text-gray-500">Borrow CHIPS (ETH equivalent)</div>
+                </div>
+
+                {/* Repay Loan - Only show if user has debt */}
+                {parseFloat(borrowedAmount) > 0 && (
+                  <>
+                    <hr className="border-gray-600" />
+                    <div className="text-xs text-orange-400 font-medium">💳 Repay Loan</div>
+                    
+                    {/* Repay with CHIPS */}
+                    <div className="space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="number"
+                          placeholder="CHIPS"
+                          value={repayChipsAmount}
+                          onChange={(e) => setRepayChipsAmount(e.target.value)}
+                          min="0"
+                          step="0.01"
+                          disabled={repayLoanState.status === 'pending'}
+                          className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-xs disabled:opacity-50"
+                        />
+                <button 
+                          onClick={handleRepayWithChips}
+                          disabled={!isConnected || !repayChipsAmount || parseFloat(repayChipsAmount) <= 0 || parseFloat(playerBalance) < parseFloat(repayChipsAmount) || repayLoanState.status === 'pending'}
+                          className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium px-3 py-1 rounded text-xs transition-colors"
+                >
+                          🪙 Pay
                 </button>
+                      </div>
+                      <div className="text-xs text-gray-500">Repay with CHIPS</div>
+                    </div>
+
+                    {/* Repay with ETH */}
+                    <div className="space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="number"
+                          placeholder="ETH"
+                          value={repayETHAmount}
+                          onChange={(e) => setRepayETHAmount(e.target.value)}
+                          min="0"
+                          step="0.01"
+                          disabled={repayLoanState.status === 'pending'}
+                          className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-xs disabled:opacity-50"
+                        />
+                        <button
+                          onClick={handleRepayWithETH}
+                          disabled={!isConnected || !repayETHAmount || parseFloat(repayETHAmount) <= 0 || parseFloat(repayETHAmount) > parseFloat(borrowedAmount) || repayLoanState.status === 'pending'}
+                          className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium px-3 py-1 rounded text-xs transition-colors"
+                        >
+                          💎 Pay
+                        </button>
+                      </div>
+                      <div className="text-xs text-gray-500">Repay with ETH directly</div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
             {/* Player Stats */}
             <div className="bg-black/30 rounded-xl p-3 border border-gray-600">
               <h3 className="text-lg font-bold text-purple-400 mb-2">🏆 Your Stats</h3>
-              <div className="space-y-1 text-xs mb-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Win Rate:</span>
-                  <span className="text-green-400 font-medium">26.9%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Total Spins:</span>
-                  <span className="text-blue-400 font-medium">156</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Biggest Win:</span>
-                  <span className="text-yellow-400 font-medium">15K CHIPS</span>
-                </div>
-              </div>
-              
-              {/* Additional stats */}
               <div className="space-y-1 text-xs">
                 <div className="flex justify-between">
-                  <span className="text-gray-400">Total Wagered:</span>
-                  <span className="text-orange-400 font-medium">2.1K CHIPS</span>
+                  <span className="text-gray-400">Total Spins:</span>
+                  <span className="text-blue-400 font-medium">{totalSpins}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-400">Net P&L:</span>
-                  <span className="text-red-400 font-medium">-180 CHIPS</span>
+                  <span className="text-gray-400">Total Winnings:</span>
+                  <span className="text-yellow-400 font-medium">{totalWon} CHIPS</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-400">Streak:</span>
-                  <span className="text-purple-400 font-medium">3 Losses</span>
+                  <span className="text-gray-400">Pending Wins:</span>
+                  <span className="text-green-400 font-medium">{playerWinnings} CHIPS</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Borrowing Power:</span>
+                  <span className="text-purple-400 font-medium">{borrowingPower} ETH</span>
                 </div>
               </div>
             </div>
