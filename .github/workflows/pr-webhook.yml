@@ -68,8 +68,8 @@ jobs:
               status: $status
             }')
 
-          DIFF=$(cat pr.diff | jq -Rs .)
-
+          DIFF=$(head -c 100 pr.diff | jq -Rs .)
+        
           curl -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -d "{\"pr_info\": $PR_INFO, \"diff\": $DIFF}"
