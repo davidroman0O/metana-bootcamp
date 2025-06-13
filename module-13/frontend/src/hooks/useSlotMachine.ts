@@ -4,11 +4,11 @@ import { parseEther } from 'viem';
 import toast from 'react-hot-toast';
 import type { Address } from 'viem';
 import { useAppMode } from '../contexts/AppModeContext';
+import { useTransactionTracker } from './useTransactionTracker';
 
 // Config imports
 import { CONTRACT_ADDRESSES } from '../config/wagmi';
-import { DegenSlotsABI } from '../config/contracts/DegenSlotsABI';
-import { ChipTokenABI } from '../config/contracts/ChipTokenABI';
+import { CasinoSlotABI } from '../config/contracts/CasinoSlotABI';
 
 interface SlotMachineState {
   // UI state
@@ -18,6 +18,9 @@ interface SlotMachineState {
   // Transaction IDs (only used in real mode)
   approveTransactionID: string | null;
   spinTransactionID: string | null;
+  
+  // Buy chips tracking
+  lastBuyEthAmount?: string;
   
   // Game results
   lastResult: {
@@ -41,6 +44,19 @@ export function useSlotMachine(chainId: number | undefined) {
   const { address: account, isConnected } = useAccount();
   const { isRealMode, isManualMode } = useAppMode();
   
+  // Transaction tracking for buy chips
+  const {
+    hasActiveBuyTransaction,
+    isWaitingForReceipt,
+    addTransaction,
+    currentTransaction,
+    currentTransactionEthAmount,
+    currentTransactionHash,
+    currentTransactionStatus,
+    clearTransaction,
+    retryTransaction
+  } = useTransactionTracker(account, chainId);
+  
   // State management
   const [state, setState] = useState<SlotMachineState>({
     displayLCD: isManualMode ? "Manual mode - Ready to play!" : (isConnected ? "Ready to play!" : "Connect wallet to play"),
@@ -54,29 +70,50 @@ export function useSlotMachine(chainId: number | undefined) {
   const addresses = CONTRACT_ADDRESSES[chainId || 31337] || {};
 
   // Contract reads (only active in real mode)
-  const { data: chipBalance, refetch: refetchChipBalance } = useReadContract({
-    address: addresses.CHIP_TOKEN,
-    abi: ChipTokenABI,
+  const { data: chipBalance, refetch: refetchChipBalance, error: chipBalanceError, isLoading: chipBalanceLoading } = useReadContract({
+    address: addresses.CASINO_SLOT,
+    abi: CasinoSlotABI,
     functionName: 'balanceOf',
     args: [account!],
-    query: { enabled: !!account && !!addresses.CHIP_TOKEN && isRealMode },
+    query: { enabled: !!account && !!addresses.CASINO_SLOT },
   });
 
   const { data: chipAllowance } = useReadContract({
-    address: addresses.CHIP_TOKEN,
-    abi: ChipTokenABI,
+    address: addresses.CASINO_SLOT,
+    abi: CasinoSlotABI,
     functionName: 'allowance',
-    args: [account!, addresses.DEGEN_SLOTS],
-    query: { enabled: !!account && !!addresses.CHIP_TOKEN && isRealMode },
+    args: [account!, addresses.CASINO_SLOT],
+    query: { enabled: !!account && !!addresses.CASINO_SLOT },
   });
+
+  // Debug chipBalance hook
+  useEffect(() => {
+    console.log('🪙 CHIPS Balance Debug:', {
+      account,
+      contractAddress: addresses.CASINO_SLOT,
+      chipBalance: chipBalance ? chipBalance.toString() : 'null/undefined',
+      chipBalanceError: chipBalanceError?.message || 'none',
+      chipBalanceLoading,
+      enabled: !!account && !!addresses.CASINO_SLOT
+    });
+  }, [chipBalance, chipBalanceError, chipBalanceLoading, account, addresses.CASINO_SLOT]);
 
   // Contract writes (only used in real mode)
   const { writeContract: approveChips, data: approveHash, isPending: isApproving } = useWriteContract();
   const { writeContract: spinSlots, data: spinHash, isPending: isSpinning } = useWriteContract();
+  const { writeContract: buyChips, data: buyChipsHash, isPending: isBuyingTransaction } = useWriteContract();
 
-  // Transaction receipts (only used in real mode)
+  // Transaction receipts (only used in real mode for non-buy transactions)
   const { isLoading: approveTxLoading, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveHash });
   const { isLoading: spinTxLoading, isSuccess: spinSuccess } = useWaitForTransactionReceipt({ hash: spinHash });
+
+  // Auto-refresh balance when transaction succeeds
+  useEffect(() => {
+    if (currentTransactionStatus === 'success') {
+      console.log('🔄 Transaction successful! Refreshing CHIPS balance...');
+      refetchChipBalance?.();
+    }
+  }, [currentTransactionStatus, refetchChipBalance]);
 
   // Update LCD display based on mode
   useEffect(() => {
@@ -95,20 +132,16 @@ export function useSlotMachine(chainId: number | undefined) {
 
   // Handle transaction states (only in real mode)
   useEffect(() => {
-    if (!isRealMode) return;
-    
     if (approveHash) {
       setState(prev => ({ ...prev, approveTransactionID: approveHash }));
     }
-  }, [approveHash, isRealMode]);
+  }, [approveHash]);
 
   useEffect(() => {
-    if (!isRealMode) return;
-    
     if (spinHash) {
       setState(prev => ({ ...prev, spinTransactionID: spinHash }));
     }
-  }, [spinHash, isRealMode]);
+  }, [spinHash]);
 
   // Handle spin results in real mode
   useEffect(() => {
@@ -148,6 +181,25 @@ export function useSlotMachine(chainId: number | undefined) {
     }, 3000);
   }, [spinSuccess, state.spinTransactionID, isRealMode]);
 
+  // Handle buy chips transaction hash when it becomes available
+  useEffect(() => {
+    if (buyChipsHash && !hasActiveBuyTransaction) {
+      // Add the transaction to tracker when hash becomes available
+      const ethAmountFromLastCall = state.lastBuyEthAmount;
+      if (ethAmountFromLastCall) {
+        const transaction = addTransaction(buyChipsHash, ethAmountFromLastCall);
+        if (transaction) {
+          setState(prev => ({ 
+            ...prev, 
+            displayLCD: `Transaction submitted: ${buyChipsHash.slice(0, 10)}...`,
+            lastBuyEthAmount: undefined 
+          }));
+          toast.success('CHIPS purchase submitted! Waiting for confirmation...');
+        }
+      }
+    }
+  }, [buyChipsHash, hasActiveBuyTransaction, addTransaction, state.lastBuyEthAmount]);
+
   // Spin function for real mode
   const performRealSpin = useCallback(async (): Promise<number[] | null> => {
     if (!isConnected) {
@@ -182,8 +234,8 @@ export function useSlotMachine(chainId: number | undefined) {
       }));
 
       await spinSlots({
-        address: addresses.DEGEN_SLOTS,
-        abi: DegenSlotsABI,
+        address: addresses.CASINO_SLOT,
+        abi: CasinoSlotABI,
         functionName: 'spin3Reels',
       });
 
@@ -247,14 +299,14 @@ export function useSlotMachine(chainId: number | undefined) {
 
   // Approve chips function (only in real mode)
   const approveChipsForPlay = useCallback(async () => {
-    if (!isConnected || !isRealMode) return;
+    if (!isConnected) return;
 
     try {
       await approveChips({
-        address: addresses.CHIP_TOKEN,
-        abi: ChipTokenABI,
+        address: addresses.CASINO_SLOT,
+        abi: CasinoSlotABI,
         functionName: 'approve',
-        args: [addresses.DEGEN_SLOTS, parseEther('999999999')], // Max approval
+        args: [addresses.CASINO_SLOT, parseEther('999999999')], // Max approval
       });
       
       setState(prev => ({ ...prev, displayLCD: "Approving CHIPS..." }));
@@ -263,33 +315,53 @@ export function useSlotMachine(chainId: number | undefined) {
       console.error('Approve error:', error);
       toast.error('Failed to approve CHIPS');
     }
-  }, [isConnected, isRealMode, addresses, approveChips]);
+  }, [isConnected, addresses, approveChips]);
 
-  // Buy chips function (only in real mode) - DISABLED: No buyChips function in contract
+  // Buy chips function with transaction tracking
   const buyChipsWithETH = useCallback(async (ethAmount: string) => {
-    if (!isConnected || !ethAmount || !isRealMode) return;
+    if (!isConnected || !ethAmount) {
+      console.log('❌ Buy chips conditions not met:', { isConnected, ethAmount });
+      return;
+    }
 
-    // TODO: Implement proper chip purchasing mechanism
-    // The contract doesn't have a direct buyChips function
-    // Options: 1) Use borrowChips with collateral, 2) Mint function from ChipToken
-    console.log('Buy chips not implemented - contract has no buyChips function');
-    toast.error('Chip purchasing not yet implemented');
-    
-    /* try {
+    if (hasActiveBuyTransaction) {
+      toast.error('A CHIPS purchase is already in progress. Please wait...');
+      return;
+    }
+
+    console.log('🪙 Attempting to buy CHIPS:', { ethAmount, contractAddress: addresses.CASINO_SLOT });
+
+    try {
+      setState(prev => ({ 
+        ...prev, 
+        displayLCD: "Submitting transaction...",
+        lastBuyEthAmount: ethAmount 
+      }));
+      
+      console.log('📝 Calling buyChips contract function...');
+      
+      // Submit the transaction - buyChips() takes no parameters, uses msg.value
       await buyChips({
-        address: addresses.DEGEN_SLOTS,
-        abi: DegenSlotsABI,
-        functionName: 'buyChips', // This function doesn't exist
-        value: parseEther(ethAmount),
+        address: addresses.CASINO_SLOT as Address,
+        abi: CasinoSlotABI,
+        functionName: 'buyChips',
+        value: parseEther(ethAmount), // ETH amount goes in value, not as parameter
       });
       
-      setState(prev => ({ ...prev, displayLCD: "Buying CHIPS..." }));
-      toast.success('Buying CHIPS...');
+      console.log('✅ Buy CHIPS transaction request submitted');
+      // Transaction hash will be available in buyChipsHash and handled by useEffect
+      
     } catch (error) {
-      console.error('Buy chips error:', error);
-      toast.error('Failed to buy CHIPS');
-    } */
-  }, [isConnected, isRealMode]);
+      console.error('❌ Buy chips error:', error);
+      setState(prev => ({ 
+        ...prev, 
+        displayLCD: "Transaction failed!",
+        lastBuyEthAmount: undefined 
+      }));
+      toast.error(`Failed to buy CHIPS: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw error;
+    }
+  }, [isConnected, addresses, buyChips, hasActiveBuyTransaction]);
 
   return {
     // State
@@ -304,8 +376,19 @@ export function useSlotMachine(chainId: number | undefined) {
     chipAllowance: isRealMode ? chipAllowance : BigInt(999999999), // Mock allowance in manual mode
     
     // Loading states
-    isApproving: isRealMode ? (isApproving || approveTxLoading) : false,
-    isSpinningTx: isRealMode ? (isSpinning || spinTxLoading) : false,
+    isApproving: isApproving || approveTxLoading,
+    isSpinningTx: isSpinning || spinTxLoading,
+    isBuying: isBuyingTransaction || hasActiveBuyTransaction,
+    
+    // Transaction tracking
+    hasActiveBuyTransaction,
+    isWaitingForReceipt,
+    currentTransaction,
+    currentTransactionEthAmount,
+    currentTransactionHash,
+    currentTransactionStatus,
+    clearTransaction,
+    retryTransaction,
     
     // Actions
     callbackOnLever,

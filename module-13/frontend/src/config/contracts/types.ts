@@ -1,7 +1,6 @@
 // Common types for all contract deployments
 export interface ContractAddresses {
-  DEGEN_SLOTS: `0x${string}`;
-  CHIP_TOKEN: `0x${string}`;
+  CASINO_SLOT: `0x${string}`;
   PAYOUT_TABLES?: `0x${string}`;
   VRF_COORDINATOR?: `0x${string}`;
   ETH_USD_PRICE_FEED?: `0x${string}`;

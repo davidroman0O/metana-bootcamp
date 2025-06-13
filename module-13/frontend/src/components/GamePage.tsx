@@ -173,6 +173,7 @@ const GamePage: React.FC = () => {
     playerStats,
     gameStats,
     spinCosts,
+    compoundPosition,
     isLoadingData,
     
     // Transaction states
@@ -181,6 +182,7 @@ const GamePage: React.FC = () => {
     depositCollateralState,
     borrowChipsState,
     repayLoanState,
+    withdrawCollateralState,
     
     // Spin management
     selectedReelCount,
@@ -191,15 +193,21 @@ const GamePage: React.FC = () => {
     buyChips,
     approveChips,
     spinReels,
+    
+    // Compound functions
     depositCollateral,
-    borrowChips,
+    borrowChips: borrowChipsFromContract,
     repayLoan,
     repayLoanWithETH,
+    withdrawCollateral,
     
     // Helper functions
     canSpin,
     getCurrentSpinCost,
     calculateExpectedChips,
+    canWithdrawCollateral,
+    getCollateralizationRatio,
+    getLiquidationRisk,
     refreshAllData,
   } = useCasinoContract();
   
@@ -212,6 +220,7 @@ const GamePage: React.FC = () => {
   const [borrowAmount, setBorrowAmount] = useState<string>('0.1');
   const [repayChipsAmount, setRepayChipsAmount] = useState<string>('');
   const [repayETHAmount, setRepayETHAmount] = useState<string>('');
+  const [withdrawCollateralAmount, setWithdrawCollateralAmount] = useState<string>('');
   
   // Refs
   const slotMachineRef = useRef<SlotMachineRef>(null);
@@ -332,7 +341,7 @@ const GamePage: React.FC = () => {
     }
   }, [buyChips, ethAmount]);
 
-  // Credit/Loan handlers
+  // Credit/Loan handlers - Updated for new functions
   const handleDepositCollateral = useCallback(async () => {
     const hash = await depositCollateral(collateralAmount);
     if (hash) {
@@ -341,11 +350,11 @@ const GamePage: React.FC = () => {
   }, [depositCollateral, collateralAmount]);
 
   const handleBorrowChips = useCallback(async () => {
-    const hash = await borrowChips(borrowAmount);
+    const hash = await borrowChipsFromContract(borrowAmount);
     if (hash) {
       toast.success(`CHIPS borrowed for ${borrowAmount} ETH worth!`);
     }
-  }, [borrowChips, borrowAmount]);
+  }, [borrowChipsFromContract, borrowAmount]);
 
   const handleRepayWithChips = useCallback(async () => {
     const hash = await repayLoan(repayChipsAmount);
@@ -362,6 +371,15 @@ const GamePage: React.FC = () => {
       setRepayETHAmount(''); // Clear input
     }
   }, [repayLoanWithETH, repayETHAmount]);
+
+  // NEW: Withdraw collateral handler
+  const handleWithdrawCollateral = useCallback(async () => {
+    const hash = await withdrawCollateral(withdrawCollateralAmount);
+    if (hash) {
+      toast.success(`Withdrew ${withdrawCollateralAmount} ETH collateral!`);
+      setWithdrawCollateralAmount(''); // Clear input
+    }
+  }, [withdrawCollateral, withdrawCollateralAmount]);
 
   // Calculate expected CHIPS amount
   const expectedChips = (() => {
@@ -380,13 +398,14 @@ const GamePage: React.FC = () => {
   // Get chainId from currentNetwork
   const chainId = currentNetwork?.chainId;
 
-  // Format player stats
+  // Format player stats - Updated with new collateral data
   const playerBalance = formatEther(playerStats.chipBalance);
   const playerWinnings = formatEther(playerStats.winnings);
   const totalSpins = Number(playerStats.totalSpins);
   const totalWon = formatEther(playerStats.totalWon);
   const borrowedAmount = formatEther(playerStats.borrowedAmount);
   const borrowingPower = formatEther(playerStats.accountLiquidity);
+  const userCollateral = formatEther(playerStats.userCollateralETH);
 
   // Format game stats
   const formattedPoolETH = formatEther(gameStats.prizePool);
@@ -529,7 +548,7 @@ const GamePage: React.FC = () => {
               </div>
             </div>
 
-            {/* Your Balance */}
+            {/* Your Balance - Enhanced with collateral info */}
             <div className="bg-black/30 rounded-xl p-3 border border-gray-600">
               <h3 className="text-lg font-bold text-green-400 mb-2">💰 Your Balance</h3>
               <div className="text-center mb-2">
@@ -539,11 +558,15 @@ const GamePage: React.FC = () => {
                 <div className="text-sm text-gray-400">CHIPS Available</div>
               </div>
               
-              {/* Wallet info */}
+              {/* Enhanced wallet info with collateral */}
               <div className="space-y-1 text-xs mb-2">
                 <div className="flex justify-between">
                   <span className="text-gray-400">ETH Balance:</span>
                   <span className="text-blue-400 font-medium">{parseFloat(balance).toFixed(3)} ETH</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Collateral:</span>
+                  <span className="text-purple-400 font-medium">{parseFloat(userCollateral).toFixed(3)} ETH</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">USD Value:</span>
@@ -555,7 +578,7 @@ const GamePage: React.FC = () => {
                 </div>
               </div>
               
-              {/* Status & limits */}
+              {/* Status & limits - Enhanced with borrowing info */}
               <div className="space-y-1 text-xs">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Status:</span>
@@ -569,12 +592,16 @@ const GamePage: React.FC = () => {
                   <span className="text-gray-400">Borrowed:</span>
                   <span className="text-red-400 font-medium">{borrowedAmount} ETH</span>
                 </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Borrow Power:</span>
+                  <span className="text-green-400 font-medium">{borrowingPower} ETH</span>
+                </div>
               </div>
             </div>
 
-            {/* Pool Stats */}
+            {/* Pool Stats - Enhanced with Compound info */}
             <div className="bg-black/30 rounded-xl p-3 border border-gray-600">
-              <h3 className="text-lg font-bold text-blue-400 mb-2">📊 Pool Stats</h3>
+              <h3 className="text-lg font-bold text-blue-400 mb-2">📊 Pool & Compound</h3>
               <div className="space-y-1 text-xs mb-2">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Prize Pool:</span>
@@ -588,13 +615,21 @@ const GamePage: React.FC = () => {
                   <span className="text-gray-400">CHIPS/ETH:</span>
                   <span className="text-yellow-400 font-medium">{chipRate}</span>
                 </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Total Collateral:</span>
+                  <span className="text-purple-400 font-medium">{formatEther(compoundPosition.totalCollateralETH)} ETH</span>
+                </div>
               </div>
               
-              {/* Live stats */}
+              {/* Compound stats */}
               <div className="space-y-1 text-xs mb-2">
                 <div className="flex justify-between">
-                  <span className="text-gray-400">24h Volume:</span>
-                  <span className="text-orange-400 font-medium">~{formattedPoolETH} ETH</span>
+                  <span className="text-gray-400">cETH Balance:</span>
+                  <span className="text-cyan-400 font-medium">{formatEther(compoundPosition.contractCEthBalance)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Collateral Factor:</span>
+                  <span className="text-orange-400 font-medium">{compoundPosition.collateralFactor.toString()}%</span>
                 </div>
               </div>
               
@@ -714,9 +749,9 @@ const GamePage: React.FC = () => {
               {/* Current Status - Compact */}
               <div className="bg-gray-800/50 rounded-lg p-2 mb-2 border border-gray-600">
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="text-center">
-                    <div className="text-sm font-bold text-yellow-400">{playerBalance}</div>
-                    <div className="text-gray-400">CHIPS</div>
+                  <div className="text-center">
+                    <div className="text-sm font-bold text-purple-400">{parseFloat(userCollateral).toFixed(3)}</div>
+                    <div className="text-gray-400">Collateral ETH</div>
                   </div>
                   <div className="text-center">
                     <div className="text-sm font-bold text-red-400">{borrowedAmount}</div>
@@ -729,7 +764,7 @@ const GamePage: React.FC = () => {
               </div>
 
               {/* Transaction Status Display */}
-              {(depositCollateralState.status === 'pending' || borrowChipsState.status === 'pending' || repayLoanState.status === 'pending') && (
+              {(depositCollateralState.status === 'pending' || borrowChipsState.status === 'pending' || repayLoanState.status === 'pending' || withdrawCollateralState.status === 'pending') && (
                 <div className="mb-2 p-2 rounded-lg border bg-blue-500/20 border-blue-500/50">
                   <div className="flex items-center space-x-2">
                     <div className="animate-spin w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full"></div>
@@ -737,8 +772,9 @@ const GamePage: React.FC = () => {
                       {depositCollateralState.status === 'pending' && 'Depositing collateral...'}
                       {borrowChipsState.status === 'pending' && 'Borrowing CHIPS...'}
                       {repayLoanState.status === 'pending' && 'Repaying loan...'}
+                      {withdrawCollateralState.status === 'pending' && 'Withdrawing collateral...'}
                     </span>
-                </div>
+                  </div>
                 </div>
               )}
 
@@ -764,30 +800,47 @@ const GamePage: React.FC = () => {
                     >
                       💰 Deposit
                     </button>
-                </div>
+                  </div>
                   <div className="text-xs text-gray-500">Deposit ETH as collateral</div>
-              </div>
+                </div>
 
                 {/* Borrow CHIPS */}
-              <div className="space-y-1">
+                <div className="space-y-1">
                   <div className="flex items-center space-x-2">
-                    <input
-                      type="number"
-                      placeholder="0.1"
-                      value={borrowAmount}
-                      onChange={(e) => setBorrowAmount(e.target.value)}
-                      min="0"
-                      step="0.01"
-                      disabled={borrowChipsState.status === 'pending'}
-                      className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-xs disabled:opacity-50"
-                    />
-                <button 
+                    <div className="flex-1 relative">
+                      <input
+                        type="number"
+                        placeholder="0.1"
+                        value={borrowAmount}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          const maxBorrow = parseFloat(borrowingPower);
+                          // Cap input to max borrowable amount
+                          if (value === '' || (parseFloat(value) <= maxBorrow)) {
+                            setBorrowAmount(value);
+                          }
+                        }}
+                        min="0"
+                        step="0.01"
+                        disabled={borrowChipsState.status === 'pending'}
+                        className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 pr-8 text-white text-xs disabled:opacity-50"
+                      />
+                      <button
+                        onClick={() => setBorrowAmount(borrowingPower)}
+                        disabled={borrowChipsState.status === 'pending' || parseFloat(borrowingPower) === 0}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 bg-yellow-600/30 disabled:bg-gray-600/30 disabled:cursor-not-allowed text-yellow-400 disabled:text-gray-500 text-xs font-bold px-1 py-0.5 rounded select-none"
+                        style={{ transform: 'translateY(-50%)', position: 'absolute', right: '4px', top: '50%' }}
+                      >
+                        MAX
+                      </button>
+                    </div>
+                    <button 
                       onClick={handleBorrowChips}
                       disabled={!isConnected || !borrowAmount || parseFloat(borrowAmount) <= 0 || parseFloat(borrowingPower) === 0 || borrowChipsState.status === 'pending'}
                       className="bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium px-3 py-1 rounded text-xs transition-colors"
-                >
+                    >
                       🚀 Borrow
-                </button>
+                    </button>
                   </div>
                   <div className="text-xs text-gray-500">Borrow CHIPS (ETH equivalent)</div>
                 </div>
@@ -811,13 +864,13 @@ const GamePage: React.FC = () => {
                           disabled={repayLoanState.status === 'pending'}
                           className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-xs disabled:opacity-50"
                         />
-                <button 
+                        <button 
                           onClick={handleRepayWithChips}
                           disabled={!isConnected || !repayChipsAmount || parseFloat(repayChipsAmount) <= 0 || parseFloat(playerBalance) < parseFloat(repayChipsAmount) || repayLoanState.status === 'pending'}
                           className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium px-3 py-1 rounded text-xs transition-colors"
-                >
+                        >
                           🪙 Pay
-                </button>
+                        </button>
                       </div>
                       <div className="text-xs text-gray-500">Repay with CHIPS</div>
                     </div>
@@ -825,16 +878,33 @@ const GamePage: React.FC = () => {
                     {/* Repay with ETH */}
                     <div className="space-y-1">
                       <div className="flex items-center space-x-2">
-                        <input
-                          type="number"
-                          placeholder="ETH"
-                          value={repayETHAmount}
-                          onChange={(e) => setRepayETHAmount(e.target.value)}
-                          min="0"
-                          step="0.01"
-                          disabled={repayLoanState.status === 'pending'}
-                          className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-xs disabled:opacity-50"
-                        />
+                        <div className="flex-1 relative">
+                          <input
+                            type="number"
+                            placeholder="ETH"
+                            value={repayETHAmount}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              const maxRepay = parseFloat(borrowedAmount);
+                              // Cap input to max repayable amount
+                              if (value === '' || (parseFloat(value) <= maxRepay)) {
+                                setRepayETHAmount(value);
+                              }
+                            }}
+                            min="0"
+                            step="0.01"
+                            disabled={repayLoanState.status === 'pending'}
+                            className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 pr-8 text-white text-xs disabled:opacity-50"
+                          />
+                          <button
+                            onClick={() => setRepayETHAmount(borrowedAmount)}
+                            disabled={repayLoanState.status === 'pending' || parseFloat(borrowedAmount) === 0}
+                            className="absolute right-1 top-1/2 -translate-y-1/2 bg-green-600/30 disabled:bg-gray-600/30 disabled:cursor-not-allowed text-green-400 disabled:text-gray-500 text-xs font-bold px-1 py-0.5 rounded select-none"
+                            style={{ transform: 'translateY(-50%)', position: 'absolute', right: '4px', top: '50%' }}
+                          >
+                            MAX
+                          </button>
+                        </div>
                         <button
                           onClick={handleRepayWithETH}
                           disabled={!isConnected || !repayETHAmount || parseFloat(repayETHAmount) <= 0 || parseFloat(repayETHAmount) > parseFloat(borrowedAmount) || repayLoanState.status === 'pending'}
@@ -845,6 +915,61 @@ const GamePage: React.FC = () => {
                       </div>
                       <div className="text-xs text-gray-500">Repay with ETH directly</div>
                     </div>
+                  </>
+                )}
+
+                {/* Withdraw Collateral - Only show if user has collateral and no debt */}
+                {parseFloat(userCollateral) > 0 && (
+                  <>
+                    <hr className="border-gray-600" />
+                    <div className="text-xs text-purple-400 font-medium">💎 Withdraw Collateral</div>
+                    
+                    {canWithdrawCollateral() ? (
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <div className="flex-1 relative">
+                            <input
+                              type="number"
+                              placeholder="ETH"
+                              value={withdrawCollateralAmount}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                const maxWithdraw = parseFloat(userCollateral);
+                                // Cap input to max withdrawable amount
+                                if (value === '' || (parseFloat(value) <= maxWithdraw)) {
+                                  setWithdrawCollateralAmount(value);
+                                }
+                              }}
+                              min="0"
+                              step="0.01"
+                              max={userCollateral}
+                              disabled={withdrawCollateralState.status === 'pending'}
+                              className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 pr-8 text-white text-xs disabled:opacity-50"
+                            />
+                            <button
+                              onClick={() => setWithdrawCollateralAmount(userCollateral)}
+                              disabled={withdrawCollateralState.status === 'pending' || parseFloat(userCollateral) === 0}
+                              className="absolute right-1 top-1/2 -translate-y-1/2 bg-purple-600/30 disabled:bg-gray-600/30 disabled:cursor-not-allowed text-purple-400 disabled:text-gray-500 text-xs font-bold px-1 py-0.5 rounded select-none"
+                              style={{ transform: 'translateY(-50%)', position: 'absolute', right: '4px', top: '50%' }}
+                            >
+                              MAX
+                            </button>
+                          </div>
+                          <button
+                            onClick={handleWithdrawCollateral}
+                            disabled={!isConnected || !withdrawCollateralAmount || parseFloat(withdrawCollateralAmount) <= 0 || parseFloat(withdrawCollateralAmount) > parseFloat(userCollateral) || withdrawCollateralState.status === 'pending'}
+                            className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium px-3 py-1 rounded text-xs transition-colors"
+                          >
+                            🏦 Withdraw
+                          </button>
+                        </div>
+                        <div className="text-xs text-gray-500">Max: {userCollateral} ETH</div>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-500 text-center p-2 bg-gray-800/50 rounded border border-gray-600">
+                        {parseFloat(borrowedAmount) > 0 ? "🔒 Repay all loans first" : "🏦 No collateral to withdraw"}
+                      </div>
+                    )}
                   </>
                 )}
               </div>

@@ -2,34 +2,30 @@
 pragma solidity ^0.8.22;
 
 /**
- * @title Compound cToken Interface
+ * @title Compound cEther Interface (for cETH)
  */
 interface ICToken {
-    function mint() external payable returns (uint256);
-    function redeem(uint256 redeemTokens) external returns (uint256);
-    function redeemUnderlying(uint256 redeemAmount) external returns (uint256);
-    function borrow(uint256 borrowAmount) external returns (uint256);
-    function repayBorrow() external payable returns (uint256);
-    function balanceOf(address owner) external view returns (uint256);
-    function borrowBalanceCurrent(address account) external returns (uint256);
-    function borrowBalanceStored(address account) external view returns (uint256);
-    function exchangeRateCurrent() external returns (uint256);
-    function exchangeRateStored() external view returns (uint256);
+    function mint() external payable;
+    function redeem(uint redeemTokens) external returns (uint);
+    function redeemUnderlying(uint redeemAmount) external returns (uint);
+    function borrow(uint borrowAmount) external returns (uint);
+    function repayBorrow() external payable;
+    function balanceOf(address owner) external view returns (uint);
+    function balanceOfUnderlying(address owner) external returns (uint);
+    function getAccountSnapshot(address account) external view returns (uint, uint, uint, uint);
+    function borrowBalanceStored(address account) external view returns (uint);
+    function exchangeRateStored() external view returns (uint);
 }
 
 /**
  * @title Compound Comptroller Interface
  */
 interface IComptroller {
-    function markets(address cToken) external view returns (bool isListed, uint256 collateralFactorMantissa);
-    function enterMarkets(address[] calldata cTokens) external returns (uint256[] memory);
-    function exitMarket(address cToken) external returns (uint256);
-    function getAccountLiquidity(address account) external view returns (uint256, uint256, uint256);
-    function liquidateBorrowAllowed(
-        address cTokenBorrowed,
-        address cTokenCollateral,
-        address liquidator,
-        address borrower,
-        uint256 repayAmount
-    ) external returns (uint256);
+    function enterMarkets(address[] calldata cTokens) external returns (uint[] memory);
+    function exitMarket(address cToken) external returns (uint);
+    function getAccountLiquidity(address account) external view returns (uint, uint, uint);
+    function markets(address cToken) external view returns (bool, uint, bool);
+    function getAssetsIn(address account) external view returns (address[] memory);
+    function claimComp(address holder) external;
+    function compAccrued(address holder) external view returns (uint);
 } 

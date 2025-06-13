@@ -44,13 +44,11 @@ export const config = createConfig({
 // Contract addresses with proper typing using new structure
 export const CONTRACT_ADDRESSES: Record<number, ContractAddresses> = {
   [mainnet.id]: {
-    DEGEN_SLOTS: process.env.REACT_APP_DEGEN_SLOTS_MAINNET as Address || "0x" as Address,
-    CHIP_TOKEN: process.env.REACT_APP_CHIP_TOKEN_MAINNET as Address || "0x" as Address,
+    CASINO_SLOT: process.env.REACT_APP_CASINO_SLOT_MAINNET as Address || "0x" as Address,
   },
   [hardhatLocal.id]: getContractAddresses('hardhat', 'dev'),
   [sepolia.id]: {
-    DEGEN_SLOTS: process.env.REACT_APP_DEGEN_SLOTS_SEPOLIA as Address || "0x" as Address,
-    CHIP_TOKEN: process.env.REACT_APP_CHIP_TOKEN_SEPOLIA as Address || "0x" as Address,
+    CASINO_SLOT: process.env.REACT_APP_CASINO_SLOT_SEPOLIA as Address || "0x" as Address,
   },
 };
 
