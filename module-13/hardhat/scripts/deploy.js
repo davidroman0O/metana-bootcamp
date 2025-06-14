@@ -18,7 +18,7 @@ async function main() {
   const network = await hre.ethers.provider.getNetwork();
   
   // Configure Chainlink addresses based on network
-  let CHAINLINK_VRF_COORDINATOR, CHAINLINK_KEY_HASH, CHAINLINK_SUBSCRIPTION_ID, ETH_USD_PRICE_FEED, COMPOUND_CETH, COMPOUND_COMPTROLLER;
+  let CHAINLINK_VRF_COORDINATOR, CHAINLINK_KEY_HASH, CHAINLINK_SUBSCRIPTION_ID, ETH_USD_PRICE_FEED;
   
   if (network.chainId === 31337) {
     // Local development - use mocks
@@ -33,8 +33,6 @@ async function main() {
     CHAINLINK_KEY_HASH = "0x8af398995b04c28e9951adb9721ef74c74f93e6a478f39e7e0777be13527e7ef"; // Dummy hash
     CHAINLINK_SUBSCRIPTION_ID = 1; // Dummy ID
     ETH_USD_PRICE_FEED = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"; // Mainnet address (forked)
-    COMPOUND_CETH = "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5"; // Mainnet address (forked)
-    COMPOUND_COMPTROLLER = "0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B"; // Mainnet address (forked)
     
     console.log(`✅ MockVRFCoordinator deployed: ${CHAINLINK_VRF_COORDINATOR}`);
   } else {
@@ -43,8 +41,6 @@ async function main() {
     CHAINLINK_KEY_HASH = "0x8af398995b04c28e9951adb9721ef74c74f93e6a478f39e7e0777be13527e7ef";
     CHAINLINK_SUBSCRIPTION_ID = 1; // Update with your subscription ID
     ETH_USD_PRICE_FEED = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419";
-    COMPOUND_CETH = "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5";
-    COMPOUND_COMPTROLLER = "0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B";
   }
 
   // Step 1: Deploy PayoutTables System (Complete version)
@@ -119,8 +115,6 @@ async function main() {
       payoutTables.address,        // address payoutTablesAddress
       CHAINLINK_VRF_COORDINATOR,   // address vrfCoordinatorAddress
       CHAINLINK_KEY_HASH,          // bytes32 vrfKeyHash
-      COMPOUND_CETH,               // address cEthAddress
-      COMPOUND_COMPTROLLER,        // address comptrollerAddress
       deployer.address             // address initialOwner
     ],
     {
@@ -240,9 +234,7 @@ async function main() {
           vrfCoordinator: CHAINLINK_VRF_COORDINATOR,
           keyHash: CHAINLINK_KEY_HASH,
           subscriptionId: CHAINLINK_SUBSCRIPTION_ID,
-          ethUsdPriceFeed: ETH_USD_PRICE_FEED,
-          cETH: COMPOUND_CETH,
-          comptroller: COMPOUND_COMPTROLLER
+          ethUsdPriceFeed: ETH_USD_PRICE_FEED
         }
       },
       PayoutTables: {

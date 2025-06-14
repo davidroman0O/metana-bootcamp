@@ -13,51 +13,34 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
   before(async function () {
     [owner, player1, player2] = await ethers.getSigners();
 
-    // Deploy Mock VRF Coordinator
-    const MockVRFCoordinator = await ethers.getContractFactory("MockVRFCoordinator");
-    const mockVRFCoordinator = await MockVRFCoordinator.deploy();
-    await mockVRFCoordinator.deployed();
-
-    // Use dummy addresses for Compound since mocking is built into CasinoSlotTest
-    const dummyCEthAddress = ethers.Wallet.createRandom().address;
-    const dummyComptrollerAddress = ethers.Wallet.createRandom().address;
-
-    // Deploy PayoutTables contracts
-    const PayoutTables3 = await ethers.getContractFactory("PayoutTables3");
-    payoutTables3 = await PayoutTables3.deploy();
-    await payoutTables3.deployed();
-
-    const PayoutTables4 = await ethers.getContractFactory("PayoutTables4");
-    payoutTables4 = await PayoutTables4.deploy();
-    await payoutTables4.deployed();
-
-    const PayoutTables = await ethers.getContractFactory("PayoutTables");
-    payoutTables = await PayoutTables.deploy(
-      payoutTables3.address,
-      payoutTables4.address,
-      payoutTables3.address, // Placeholder for 5
-      payoutTables3.address, // Placeholder for 6  
-      payoutTables3.address  // Placeholder for 7
-    );
+    // Mock addresses
+    const mockVRFCoordinator = ethers.Wallet.createRandom().address;
+    const mockEthUsdPriceFeed = ethers.Wallet.createRandom().address;
+    const dummyKeyHash = ethers.utils.formatBytes32String("dummy");
+    const subscriptionId = 1;
+    
+    // Deploy PayoutTables
+    const PayoutTables = await ethers.getContractFactory("PayoutTablesBasic");
+    const payoutTables = await PayoutTables.deploy();
     await payoutTables.deployed();
-
-    // Deploy CasinoSlotTest with upgradeable proxy
-    const CasinoSlotTest = await ethers.getContractFactory("CasinoSlotTest");
+    
+    // Deploy CasinoSlot via proxy
+    const CasinoSlot = await ethers.getContractFactory("CasinoSlot");
     casinoSlot = await upgrades.deployProxy(
-      CasinoSlotTest,
+      CasinoSlot,
       [
-        1, // VRF subscription ID
-        ETH_USD_PRICE_FEED,
-        payoutTables.address,
-        mockVRFCoordinator.address,
-        CHAINLINK_KEY_HASH,
-        dummyCEthAddress, // Dummy address - mocking is built into CasinoSlotTest
-        dummyComptrollerAddress, // Dummy address - mocking is built into CasinoSlotTest
-        owner.address
+        subscriptionId,        // uint64 subscriptionId
+        mockEthUsdPriceFeed,   // address ethUsdPriceFeedAddress
+        payoutTables.address,  // address payoutTablesAddress
+        mockVRFCoordinator,    // address vrfCoordinatorAddress
+        dummyKeyHash,          // bytes32 vrfKeyHash
+        owner.address          // address initialOwner
       ],
-      { kind: "uups" }
+      {
+        kind: 'uups',
+        initializer: 'initialize'
+      }
     );
-    await casinoSlot.deployed();
 
     // Add ETH to contract for payouts (one time)
     await owner.sendTransaction({

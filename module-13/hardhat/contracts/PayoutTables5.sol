@@ -3,9 +3,9 @@ pragma solidity ^0.8.22;
 
 /**
  * @title PayoutTables5 - Ultra-optimized 5-reel payout lookup
- * @dev Uses mathematical patterns + assembly for 76.77% storage reduction
+ * @dev Uses mathematical patterns + assembly for 87.71% storage reduction
  * @notice Only stores 26 winning edge cases vs 7776 total combinations
- * @notice Removed 1780 LOSE cases (mappings default to 0)
+ * @notice Removed 930 LOSE cases (mappings default to 0)
  */
 contract PayoutTables5 {
     
@@ -33,7 +33,7 @@ contract PayoutTables5 {
      * @return payoutType The payout type for this combination
      */
     function getPayoutType(uint256 combinationKey) external view returns (PayoutType) {
-        // First check mathematical patterns for instant O(1) lookup (~76.77% of cases)
+        // First check mathematical patterns for instant O(1) lookup (~87.71% of cases)
         PayoutType mathPattern = _checkMathematicalPatterns(combinationKey);
         if (mathPattern != PayoutType.LOSE) {
             return mathPattern;
@@ -45,7 +45,7 @@ contract PayoutTables5 {
     
     /**
      * @dev Assembly-optimized mathematical pattern detection
-     * @dev Covers ~76.77% of cases without storage lookup
+     * @dev Covers ~87.71% of cases without storage lookup
      */
     function _checkMathematicalPatterns(uint256 combinationKey) internal pure returns (PayoutType) {
         // Extract individual reels using assembly for gas efficiency
@@ -113,12 +113,11 @@ contract PayoutTables5 {
         if (count3 >= 4) return PayoutType.BIG_WIN;
         if (count2 >= 4) return PayoutType.BIG_WIN;
         
-        // Pair patterns
-        if (count6 >= 2) return PayoutType.SMALL_WIN;
-        if (count5 >= 2) return PayoutType.SMALL_WIN;
-        if (count4 >= 2) return PayoutType.SMALL_WIN;
-        if (count3 >= 2) return PayoutType.SMALL_WIN;
-        
+        // Pair patterns: Only high-value symbols pay on pairs
+        if (count6 >= 2) return PayoutType.SMALL_WIN;  // Jackpot pairs
+        if (count5 >= 2) return PayoutType.SMALL_WIN;  // Rocket pairs
+        if (count4 >= 2) return PayoutType.SMALL_WIN;  // Diamond pairs
+        // Removed: PUMP (3) and COPE (2) pairs - too common and generous!
         
         return PayoutType.LOSE; // No pattern matched
     }

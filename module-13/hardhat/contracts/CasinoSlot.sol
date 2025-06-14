@@ -10,7 +10,6 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "./interfaces/IPayoutTables.sol";
-import "./interfaces/ICompound.sol";
 
 /**
  * @title CasinoSlot - Casino & ERC20 Token Combined
@@ -59,10 +58,6 @@ contract CasinoSlot is
     // External payout tables contract
     IPayoutTables public payoutTables;
     
-    // Compound integration for leveraged gambling
-    ICToken public cEth;
-    IComptroller public comptroller;
-    
     // Core game state
     AggregatorV3Interface internal ethUsdPriceFeed;
     uint256 public totalPrizePool;
@@ -81,15 +76,6 @@ contract CasinoSlot is
     mapping(address => uint256) public totalSpins;
     mapping(address => uint256) public totalWon;
     
-    // Compound borrowing tracking
-    mapping(address => uint256) public borrowedETH;
-    
-    // Internal Collateral Tracking
-    mapping(address => uint256) public userCollateralETH; // Track each user's ETH collateral
-    uint256 public totalCollateralETH; // Total ETH deposited by all users
-    uint256 public collateralFactor; // Collateral factor (adjustable)
-    bool private compoundMarketsEntered; // Track if we've entered Compound markets
-    
     // Events
     event SpinRequested(uint256 indexed requestId, address indexed player, uint8 reelCount, uint256 betAmount);
     event SpinResult(
@@ -103,15 +89,7 @@ contract CasinoSlot is
     event WinningsWithdrawn(address indexed player, uint256 amount);
     event PrizePoolUpdated(uint256 newTotal);
     event PayoutTablesUpdated(address indexed newPayoutTables);
-    
-    // Compound integration events
-    event CollateralDeposited(address indexed player, uint256 ethAmount, uint256 cTokensMinted);
-    event ChipsBorrowed(address indexed player, uint256 ethAmount, uint256 chipsAmount);
-    event LoanRepaid(address indexed player, uint256 chipsAmount, uint256 ethAmount);
-    event ETHRepayment(address indexed player, uint256 ethAmount);
     event ChipsPurchased(address indexed player, uint256 ethAmount, uint256 chipsAmount);
-    event CollateralWithdrawn(address indexed player, uint256 ethAmount, uint256 cEthRedeemed);
-    event CollateralFactorUpdated(uint256 newFactor);
     
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -127,8 +105,6 @@ contract CasinoSlot is
         address payoutTablesAddress,
         address vrfCoordinatorAddress,
         bytes32 vrfKeyHash,
-        address cEthAddress,
-        address comptrollerAddress,
         address initialOwner
     ) public initializer {
         __ERC20_init("CasinoSlot Casino Chips", "CHIPS");
@@ -143,19 +119,11 @@ contract CasinoSlot is
         payoutTables = IPayoutTables(payoutTablesAddress);
         keyHash = vrfKeyHash;
         
-        // Initialize Compound integration
-        cEth = ICToken(cEthAddress);
-        comptroller = IComptroller(comptrollerAddress);
-        
         // Initialize VRF parameters
         callbackGasLimit = 200000;
         requestConfirmations = 3;
         numWords = 1;
         houseEdge = 500; // 5%
-        
-        // Initialize
-        collateralFactor = 75; // 75% collateral factor
-        compoundMarketsEntered = false;
     }
     
     /**
@@ -405,33 +373,17 @@ contract CasinoSlot is
     /**
      * @dev Get player statistics
      */
-    function getPlayerStats(address player) external view virtual returns (
+    function getPlayerStats(address player) external view returns (
         uint256 balance,
         uint256 winnings,
         uint256 spinsCount,
-        uint256 totalWinnings,
-        uint256 borrowedAmount,
-        uint256 accountLiquidity
+        uint256 totalWinnings
     ) {
-        // Use internal tracking for liquidity
-        uint256 userCollateral = userCollateralETH[player];
-        uint256 userDebt = borrowedETH[player];
-        uint256 liquidity = 0;
-        
-        if (userCollateral > 0) {
-            uint256 maxBorrowable = userCollateral * collateralFactor / 100;
-            if (userDebt < maxBorrowable) {
-                liquidity = maxBorrowable - userDebt;
-            }
-        }
-        
         return (
             balanceOf(player),
             playerWinnings[player],
             totalSpins[player],
-            totalWon[player],
-            borrowedETH[player],
-            liquidity
+            totalWon[player]
         );
     }
     
@@ -477,111 +429,6 @@ contract CasinoSlot is
     }
     
     /**
-     * @dev Deposit ETH as collateral to enable borrowing
-     */
-    function depositCollateral() external payable virtual nonReentrant {
-        require(msg.value > 0, "Must deposit ETH");
-        
-        // Enter Compound markets once (first time only)
-        if (!compoundMarketsEntered) {
-            address[] memory markets = new address[](1);
-            markets[0] = address(cEth);
-            comptroller.enterMarkets(markets);
-            compoundMarketsEntered = true;
-        }
-        
-        // Mint cETH tokens to THIS CONTRACT 
-        cEth.mint{value: msg.value}();
-        
-        // Track user's collateral contribution internally
-        userCollateralETH[msg.sender] += msg.value;
-        totalCollateralETH += msg.value;
-        
-        // Get current cETH balance of the contract for event
-        uint256 contractCEthBalance = cEth.balanceOf(address(this));
-        
-        emit CollateralDeposited(msg.sender, msg.value, contractCEthBalance);
-    }
-    
-    /**
-     * @dev Borrow CHIPS against ETH collateral
-     */
-    function borrowChips(uint256 ethAmount) external virtual nonReentrant {
-        require(ethAmount > 0, "Must borrow positive amount");
-        
-        // Check user's available collateral liquidity (internal tracking)
-        uint256 userCollateral = userCollateralETH[msg.sender];
-        uint256 userDebt = borrowedETH[msg.sender];
-        uint256 availableLiquidity = (userCollateral * collateralFactor / 100) - userDebt;
-        
-        require(availableLiquidity >= ethAmount, "Insufficient collateral");
-        
-        // Calculate CHIPS amount based on ETH price
-        uint256 chipsAmount = calculateChipsFromETH(ethAmount);
-        
-        // Ensure contract has enough CHIPS to lend
-        require(balanceOf(address(this)) >= chipsAmount, "Insufficient CHIPS in contract");
-        
-        // Track the borrowed amount
-        borrowedETH[msg.sender] += ethAmount;
-        
-        // Transfer CHIPS from contract to borrower
-        _transfer(address(this), msg.sender, chipsAmount);
-        
-        emit ChipsBorrowed(msg.sender, ethAmount, chipsAmount);
-    }
-    
-    /**
-     * @dev Repay loan with CHIPS
-     */
-    function repayLoan(uint256 chipsAmount) external nonReentrant {
-        require(chipsAmount > 0, "Must repay positive amount");
-        require(borrowedETH[msg.sender] > 0, "No outstanding loan");
-        require(balanceOf(msg.sender) >= chipsAmount, "Insufficient CHIPS balance");
-        
-        // Calculate ETH equivalent of CHIPS
-        uint256 ethEquivalent = calculateETHFromChips(chipsAmount);
-        require(ethEquivalent <= borrowedETH[msg.sender], "Repayment exceeds loan");
-        
-        // Burn CHIPS from borrower
-        _burn(msg.sender, chipsAmount);
-        
-        // Reduce borrowed amount
-        borrowedETH[msg.sender] -= ethEquivalent;
-        
-        emit LoanRepaid(msg.sender, chipsAmount, ethEquivalent);
-    }
-    
-    /**
-     * @dev Repay loan with ETH directly 
-     */
-    function repayLoanWithETH() external payable virtual nonReentrant {
-        require(msg.value > 0, "Must send ETH");
-        require(borrowedETH[msg.sender] > 0, "No outstanding loan");
-        require(msg.value <= borrowedETH[msg.sender], "Repayment exceeds loan");
-        
-        // Reduce borrowed amount
-        borrowedETH[msg.sender] -= msg.value;
-        
-        emit ETHRepayment(msg.sender, msg.value);
-    }
-    
-    /**
-     * @dev Get account liquidity for borrowing 
-     */
-    function getAccountLiquidity(address account) external view virtual returns (uint256) {
-        uint256 userCollateral = userCollateralETH[account];
-        uint256 userDebt = borrowedETH[account];
-        
-        if (userCollateral == 0) return 0;
-        
-        uint256 maxBorrowable = userCollateral * collateralFactor / 100;
-        if (userDebt >= maxBorrowable) return 0;
-        
-        return maxBorrowable - userDebt;
-    }
-    
-    /**
      * @dev Calculate CHIPS amount from ETH amount
      */
     function calculateChipsFromETH(uint256 ethAmount) public view returns (uint256) {
@@ -607,27 +454,6 @@ contract CasinoSlot is
     }
     
     /**
-     * @dev Calculate ETH amount from CHIPS amount  
-     */
-    function calculateETHFromChips(uint256 chipsAmount) public view returns (uint256) {
-        // Get ETH price in USD
-        (, int256 ethPriceUSD, , uint256 updatedAt, ) = ethUsdPriceFeed.latestRoundData();
-        
-        
-        require(ethPriceUSD > 0, "Invalid ETH price");
-        require(block.timestamp - updatedAt <= 3600, "Price data stale"); // Fixed 1 hour
-        require(uint256(ethPriceUSD) >= 50 * 1e8, "ETH price too low"); // Fixed $50 minimum
-        require(uint256(ethPriceUSD) <= 100000 * 1e8, "ETH price too high"); // Fixed $100K maximum
-        
-        require(chipsAmount > 0, "CHIPS amount must be positive");
-        
-        // Convert CHIPS to USD (1 CHIP = $0.20, so divide by 5)
-        uint256 ethAmount = (chipsAmount * 1e8) / (uint256(ethPriceUSD) * 5);
-        
-        return ethAmount;
-    }
-    
-    /**
      * @dev Get pool statistics
      */
     function getPoolStats() external view returns (
@@ -642,56 +468,6 @@ contract CasinoSlot is
         ethPrice = uint256(ethPriceUSD) / 1e6; // Convert from 8 decimals to cents (2 decimals)
         
         return (totalETH, chipPrice, ethPrice);
-    }
-    
-    /**
-     * @dev Withdraw collateral 
-     */
-    function withdrawCollateral(uint256 ethAmount) external nonReentrant {
-        require(ethAmount > 0, "Must withdraw positive amount");
-        require(userCollateralETH[msg.sender] >= ethAmount, "Insufficient collateral balance");
-        require(borrowedETH[msg.sender] == 0, "Must repay all loans first");
-        
-        // Update internal tracking
-        userCollateralETH[msg.sender] -= ethAmount;
-        totalCollateralETH -= ethAmount;
-        
-        // Calculate cETH to redeem (use current exchange rate)
-        uint256 exchangeRate = cEth.exchangeRateStored();
-        uint256 cEthToRedeem = (ethAmount * 1e18) / exchangeRate;
-        
-        // Redeem ETH from Compound
-        require(cEth.redeemUnderlying(ethAmount) == 0, "Compound redeem failed");
-        
-        // Transfer ETH to user
-        payable(msg.sender).transfer(ethAmount);
-        
-        emit CollateralWithdrawn(msg.sender, ethAmount, cEthToRedeem);
-    }
-    
-    /**
-     * @dev Set collateral factor (Owner only)
-     */
-    function setCollateralFactor(uint256 newFactor) external onlyOwner {
-        require(newFactor <= 95, "Collateral factor too high"); // Max 95%
-        require(newFactor >= 50, "Collateral factor too low");   // Min 50%
-        collateralFactor = newFactor;
-        emit CollateralFactorUpdated(newFactor);
-    }
-    
-    /**
-     * @dev Get contract's total Compound position
-     */
-    function getCompoundPosition() external view returns (
-        uint256 contractCEthBalance,
-        uint256 exchangeRate,
-        uint256 underlyingETH
-    ) {
-        contractCEthBalance = cEth.balanceOf(address(this));
-        exchangeRate = cEth.exchangeRateStored();
-        underlyingETH = (contractCEthBalance * exchangeRate) / 1e18;
-        
-        return (contractCEthBalance, exchangeRate, underlyingETH);
     }
 } 
 

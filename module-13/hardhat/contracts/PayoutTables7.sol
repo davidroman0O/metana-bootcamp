@@ -147,10 +147,11 @@ contract PayoutTables7 {
         if (count3 >= 4) return PayoutType.BIG_WIN;
         if (count2 >= 4) return PayoutType.BIG_WIN;
         
-        // Pair patterns
-        if (count6 >= 2) return PayoutType.SMALL_WIN;
-        if (count5 >= 2) return PayoutType.SMALL_WIN;
-        if (count4 >= 2) return PayoutType.SMALL_WIN;
+        // Pair patterns: Only high-value symbols pay on pairs
+        if (count6 >= 2) return PayoutType.SMALL_WIN;  // Jackpot pairs
+        if (count5 >= 2) return PayoutType.SMALL_WIN;  // Rocket pairs
+        if (count4 >= 2) return PayoutType.SMALL_WIN;  // Diamond pairs
+        // Removed: PUMP (3) and COPE (2) pairs - too common and generous!
         
         return PayoutType.LOSE;
     }

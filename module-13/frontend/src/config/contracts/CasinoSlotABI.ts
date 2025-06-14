@@ -233,114 +233,7 @@ export const CasinoSlotABI = [
         "type": "uint256"
       }
     ],
-    "name": "ChipsBorrowed",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "ethAmount",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "chipsAmount",
-        "type": "uint256"
-      }
-    ],
     "name": "ChipsPurchased",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "ethAmount",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "cTokensMinted",
-        "type": "uint256"
-      }
-    ],
-    "name": "CollateralDeposited",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "newFactor",
-        "type": "uint256"
-      }
-    ],
-    "name": "CollateralFactorUpdated",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "ethAmount",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "cEthRedeemed",
-        "type": "uint256"
-      }
-    ],
-    "name": "CollateralWithdrawn",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "ethAmount",
-        "type": "uint256"
-      }
-    ],
-    "name": "ETHRepayment",
     "type": "event"
   },
   {
@@ -354,31 +247,6 @@ export const CasinoSlotABI = [
       }
     ],
     "name": "Initialized",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "player",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "chipsAmount",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "ethAmount",
-        "type": "uint256"
-      }
-    ],
-    "name": "LoanRepaid",
     "type": "event"
   },
   {
@@ -742,55 +610,10 @@ export const CasinoSlotABI = [
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "ethAmount",
-        "type": "uint256"
-      }
-    ],
-    "name": "borrowChips",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "name": "borrowedETH",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [],
     "name": "buyChips",
     "outputs": [],
     "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "cEth",
-    "outputs": [
-      {
-        "internalType": "contract ICToken",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -802,25 +625,6 @@ export const CasinoSlotABI = [
       }
     ],
     "name": "calculateChipsFromETH",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "chipsAmount",
-        "type": "uint256"
-      }
-    ],
-    "name": "calculateETHFromChips",
     "outputs": [
       {
         "internalType": "uint256",
@@ -846,87 +650,12 @@ export const CasinoSlotABI = [
   },
   {
     "inputs": [],
-    "name": "collateralFactor",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "comptroller",
-    "outputs": [
-      {
-        "internalType": "contract IComptroller",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "decimals",
     "outputs": [
       {
         "internalType": "uint8",
         "name": "",
         "type": "uint8"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "depositCollateral",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
-      }
-    ],
-    "name": "getAccountLiquidity",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getCompoundPosition",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "contractCEthBalance",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "exchangeRate",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "underlyingETH",
-        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -983,16 +712,6 @@ export const CasinoSlotABI = [
       {
         "internalType": "uint256",
         "name": "totalWinnings",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "borrowedAmount",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "accountLiquidity",
         "type": "uint256"
       }
     ],
@@ -1099,16 +818,6 @@ export const CasinoSlotABI = [
         "internalType": "bytes32",
         "name": "vrfKeyHash",
         "type": "bytes32"
-      },
-      {
-        "internalType": "address",
-        "name": "cEthAddress",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "comptrollerAddress",
-        "type": "address"
       },
       {
         "internalType": "address",
@@ -1264,26 +973,6 @@ export const CasinoSlotABI = [
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "chipsAmount",
-        "type": "uint256"
-      }
-    ],
-    "name": "repayLoan",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "repayLoanWithETH",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
     "inputs": [],
     "name": "requestConfirmations",
     "outputs": [
@@ -1307,19 +996,6 @@ export const CasinoSlotABI = [
       }
     ],
     "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "newFactor",
-        "type": "uint256"
-      }
-    ],
-    "name": "setCollateralFactor",
-    "outputs": [],
-    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -1444,19 +1120,6 @@ export const CasinoSlotABI = [
         "internalType": "string",
         "name": "",
         "type": "string"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "totalCollateralETH",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -1628,38 +1291,6 @@ export const CasinoSlotABI = [
     "name": "upgradeToAndCall",
     "outputs": [],
     "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "name": "userCollateralETH",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "ethAmount",
-        "type": "uint256"
-      }
-    ],
-    "name": "withdrawCollateral",
-    "outputs": [],
-    "stateMutability": "nonpayable",
     "type": "function"
   },
   {

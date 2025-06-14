@@ -93,7 +93,6 @@ function calculatePayoutType(reels) {
     // Check for pairs (2 matching of valuable symbols)
     if (maxCount >= 2) {
         if (symbolWithMaxCount >= Symbol.DIAMOND) return PayoutType.SMALL_WIN;
-        if (symbolWithMaxCount >= Symbol.PUMP && reelCount <= 4) return PayoutType.SMALL_WIN;
     }
     
     return PayoutType.LOSE;
@@ -181,12 +180,9 @@ function checkMathematicalPattern(reels) {
         if (counts[2] >= 4) return PayoutType.BIG_WIN;
     }
     
-    // Pair patterns
-    if (counts[6] >= 2) return PayoutType.SMALL_WIN;
-    if (counts[5] >= 2) return PayoutType.SMALL_WIN;
-    if (counts[4] >= 2) return PayoutType.SMALL_WIN;
-    if (counts[3] >= 2 && reelCount <= 5) return PayoutType.SMALL_WIN;
-    if (counts[2] >= 2 && reelCount <= 4) return PayoutType.SMALL_WIN;
+    if (counts[6] >= 2) return PayoutType.SMALL_WIN;  // Jackpot pairs
+    if (counts[5] >= 2) return PayoutType.SMALL_WIN;  // Rocket pairs
+    if (counts[4] >= 2) return PayoutType.SMALL_WIN;  // Diamond pairs
     
     return PayoutType.LOSE;
 }
@@ -378,12 +374,11 @@ contract PayoutTables${reelCount} {
         if (count3 >= 4) return PayoutType.BIG_WIN;
         if (count2 >= 4) return PayoutType.BIG_WIN;` : ''}
         
-        // Pair patterns
-        if (count6 >= 2) return PayoutType.SMALL_WIN;
-        if (count5 >= 2) return PayoutType.SMALL_WIN;
-        if (count4 >= 2) return PayoutType.SMALL_WIN;
-        ${reelCount <= 5 ? 'if (count3 >= 2) return PayoutType.SMALL_WIN;' : ''}
-        ${reelCount <= 4 ? 'if (count2 >= 2) return PayoutType.SMALL_WIN;' : ''}
+        // Pair patterns: Only high-value symbols pay on pairs
+        if (count6 >= 2) return PayoutType.SMALL_WIN;  // Jackpot pairs
+        if (count5 >= 2) return PayoutType.SMALL_WIN;  // Rocket pairs
+        if (count4 >= 2) return PayoutType.SMALL_WIN;  // Diamond pairs
+        // Removed: PUMP (3) and COPE (2) pairs - too common and generous!
         
         return PayoutType.LOSE; // No pattern matched
     }
@@ -565,10 +560,11 @@ contract PayoutTables${reelCount} {
         if (count3 >= 4) return PayoutType.BIG_WIN;
         if (count2 >= 4) return PayoutType.BIG_WIN;
         
-        // Pair patterns
-        if (count6 >= 2) return PayoutType.SMALL_WIN;
-        if (count5 >= 2) return PayoutType.SMALL_WIN;
-        if (count4 >= 2) return PayoutType.SMALL_WIN;
+        // Pair patterns: Only high-value symbols pay on pairs
+        if (count6 >= 2) return PayoutType.SMALL_WIN;  // Jackpot pairs
+        if (count5 >= 2) return PayoutType.SMALL_WIN;  // Rocket pairs
+        if (count4 >= 2) return PayoutType.SMALL_WIN;  // Diamond pairs
+        // Removed: PUMP (3) and COPE (2) pairs - too common and generous!
         
         return PayoutType.LOSE;
     }
@@ -1134,10 +1130,11 @@ contract PayoutTables7 {
         if (count3 >= 4) return PayoutType.BIG_WIN;
         if (count2 >= 4) return PayoutType.BIG_WIN;
         
-        // Pair patterns
-        if (count6 >= 2) return PayoutType.SMALL_WIN;
-        if (count5 >= 2) return PayoutType.SMALL_WIN;
-        if (count4 >= 2) return PayoutType.SMALL_WIN;
+        // Pair patterns: Only high-value symbols pay on pairs
+        if (count6 >= 2) return PayoutType.SMALL_WIN;  // Jackpot pairs
+        if (count5 >= 2) return PayoutType.SMALL_WIN;  // Rocket pairs
+        if (count4 >= 2) return PayoutType.SMALL_WIN;  // Diamond pairs
+        // Removed: PUMP (3) and COPE (2) pairs - too common and generous!
         
         return PayoutType.LOSE;
     }

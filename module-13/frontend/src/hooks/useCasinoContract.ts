@@ -20,9 +20,6 @@ interface PlayerStats {
   winnings: bigint;
   totalSpins: bigint;
   totalWon: bigint;
-  borrowedAmount: bigint;
-  accountLiquidity: bigint;
-  userCollateralETH: bigint;
 }
 
 interface GameStats {
@@ -48,14 +45,6 @@ interface SpinResult {
   payout: bigint;
 }
 
-interface CompoundPosition {
-  contractCEthBalance: bigint;
-  exchangeRate: bigint;
-  underlyingETH: bigint;
-  totalCollateralETH: bigint;
-  collateralFactor: bigint;
-}
-
 // Main hook
 export function useCasinoContract() {
   const { address, isConnected } = useAccount();
@@ -69,9 +58,6 @@ export function useCasinoContract() {
     winnings: 0n,
     totalSpins: 0n,
     totalWon: 0n,
-    borrowedAmount: 0n,
-    accountLiquidity: 0n,
-    userCollateralETH: 0n,
   });
   
   const [gameStats, setGameStats] = useState<GameStats>({
@@ -88,23 +74,11 @@ export function useCasinoContract() {
     reels6: 0n,
     reels7: 0n,
   });
-
-  const [compoundPosition, setCompoundPosition] = useState<CompoundPosition>({
-    contractCEthBalance: 0n,
-    exchangeRate: 0n,
-    underlyingETH: 0n,
-    totalCollateralETH: 0n,
-    collateralFactor: 0n,
-  });
   
   // Transaction states
   const [buyChipsState, setBuyChipsState] = useState<TransactionState>({ status: 'idle' });
   const [spinState, setSpinState] = useState<TransactionState>({ status: 'idle' });
   const [withdrawState, setWithdrawState] = useState<TransactionState>({ status: 'idle' });
-  const [depositCollateralState, setDepositCollateralState] = useState<TransactionState>({ status: 'idle' });
-  const [borrowChipsState, setBorrowChipsState] = useState<TransactionState>({ status: 'idle' });
-  const [repayLoanState, setRepayLoanState] = useState<TransactionState>({ status: 'idle' });
-  const [withdrawCollateralState, setWithdrawCollateralState] = useState<TransactionState>({ status: 'idle' });
   
   // Spin tracking
   const [pendingSpins, setPendingSpins] = useState<Map<bigint, { reelCount: number; betAmount: bigint }>>(new Map());
@@ -175,15 +149,7 @@ export function useCasinoContract() {
         abi: CasinoSlotABI,
         functionName: 'getPlayerStats',
         args: [address],
-      }) as readonly [bigint, bigint, bigint, bigint, bigint, bigint];
-      
-      // Get user's collateral balance
-      const userCollateral = await publicClient.readContract({
-        address: CASINO_SLOT_ADDRESS,
-        abi: CasinoSlotABI,
-        functionName: 'userCollateralETH',
-        args: [address],
-      }) as bigint;
+      }) as readonly [bigint, bigint, bigint, bigint];
       
       // Get game stats  
       const gameStatsResult = await publicClient.readContract({
@@ -198,26 +164,6 @@ export function useCasinoContract() {
         abi: CasinoSlotABI,
         functionName: 'getPoolStats',
       }) as readonly [bigint, bigint, bigint];
-
-      // Get compound position
-      const compoundPos = await publicClient.readContract({
-        address: CASINO_SLOT_ADDRESS,
-        abi: CasinoSlotABI,
-        functionName: 'getCompoundPosition',
-      }) as readonly [bigint, bigint, bigint];
-
-      // Get total collateral and collateral factor
-      const totalCollateral = await publicClient.readContract({
-        address: CASINO_SLOT_ADDRESS,
-        abi: CasinoSlotABI,
-        functionName: 'totalCollateralETH',
-      }) as bigint;
-
-      const collateralFactor = await publicClient.readContract({
-        address: CASINO_SLOT_ADDRESS,
-        abi: CasinoSlotABI,
-        functionName: 'collateralFactor',
-      }) as bigint;
       
       // Get ETH balance
       const ethBalance = await publicClient.getBalance({ address });
@@ -237,9 +183,6 @@ export function useCasinoContract() {
         winnings: stats[1],
         totalSpins: stats[2],
         totalWon: stats[3],
-        borrowedAmount: stats[4],
-        accountLiquidity: stats[5],
-        userCollateralETH: userCollateral,
       });
       
       setGameStats({
@@ -247,14 +190,6 @@ export function useCasinoContract() {
         houseEdge: gameStatsResult[1],
         ethPrice: `$${(Number(poolStats[2]) / 100).toFixed(0)}`,
         chipRate: (Number(poolStats[2]) * 5).toFixed(0), // 5 CHIPS per USD
-      });
-
-      setCompoundPosition({
-        contractCEthBalance: compoundPos[0],
-        exchangeRate: compoundPos[1],
-        underlyingETH: compoundPos[2],
-        totalCollateralETH: totalCollateral,
-        collateralFactor: collateralFactor,
       });
       
       setCurrentAllowance(allowance);
@@ -392,98 +327,6 @@ export function useCasinoContract() {
     );
   }, [executeTransaction, walletClient]);
   
-  // Compound integration functions
-  
-  // Deposit collateral
-  const depositCollateral = useCallback(async (ethAmount: string) => {
-    const ethValue = parseEther(ethAmount);
-    
-    return executeTransaction(
-      setDepositCollateralState,
-      async () => {
-        return await walletClient!.writeContract({
-          address: CASINO_SLOT_ADDRESS,
-          abi: CasinoSlotABI,
-          functionName: 'depositCollateral',
-          value: ethValue,
-        });
-      },
-      `Deposited ${ethAmount} ETH as collateral`
-    );
-  }, [executeTransaction, walletClient]);
-  
-  // Borrow CHIPS
-  const borrowChips = useCallback(async (ethAmount: string) => {
-    const ethValue = parseEther(ethAmount);
-    
-    return executeTransaction(
-      setBorrowChipsState,
-      async () => {
-        return await walletClient!.writeContract({
-          address: CASINO_SLOT_ADDRESS,
-          abi: CasinoSlotABI,
-          functionName: 'borrowChips',
-          args: [ethValue],
-        });
-      },
-      `Borrowed CHIPS equivalent to ${ethAmount} ETH`
-    );
-  }, [executeTransaction, walletClient]);
-  
-  // Repay loan with CHIPS
-  const repayLoan = useCallback(async (chipAmount: string) => {
-    const chipValue = parseEther(chipAmount);
-    
-    return executeTransaction(
-      setRepayLoanState,
-      async () => {
-        return await walletClient!.writeContract({
-          address: CASINO_SLOT_ADDRESS,
-          abi: CasinoSlotABI,
-          functionName: 'repayLoan',
-          args: [chipValue],
-        });
-      },
-      `Repaid ${chipAmount} CHIPS`
-    );
-  }, [executeTransaction, walletClient]);
-  
-  // Repay loan with ETH directly
-  const repayLoanWithETH = useCallback(async (ethAmount: string) => {
-    const ethValue = parseEther(ethAmount);
-    
-    return executeTransaction(
-      setRepayLoanState,
-      async () => {
-        return await walletClient!.writeContract({
-          address: CASINO_SLOT_ADDRESS,
-          abi: CasinoSlotABI,
-          functionName: 'repayLoanWithETH',
-          value: ethValue,
-        });
-      },
-      `Repaid ${ethAmount} ETH`
-    );
-  }, [executeTransaction, walletClient]);
-
-  // NEW: Withdraw collateral (must repay loans first)
-  const withdrawCollateral = useCallback(async (ethAmount: string) => {
-    const ethValue = parseEther(ethAmount);
-    
-    return executeTransaction(
-      setWithdrawCollateralState,
-      async () => {
-        return await walletClient!.writeContract({
-          address: CASINO_SLOT_ADDRESS,
-          abi: CasinoSlotABI,
-          functionName: 'withdrawCollateral',
-          args: [ethValue],
-        });
-      },
-      `Withdrew ${ethAmount} ETH collateral`
-    );
-  }, [executeTransaction, walletClient]);
-  
   // Helper functions
   
   // Check if user can spin with current reel count
@@ -514,31 +357,6 @@ export function useCasinoContract() {
     setChipsToApprove(cost);
   }, [getCurrentSpinCost]);
 
-  // NEW: Check if user can withdraw collateral (no outstanding loans)
-  const canWithdrawCollateral = useCallback(() => {
-    return playerStats.borrowedAmount === 0n && playerStats.userCollateralETH > 0n;
-  }, [playerStats.borrowedAmount, playerStats.userCollateralETH]);
-
-  // NEW: Calculate collateralization ratio
-  const getCollateralizationRatio = useCallback(() => {
-    if (playerStats.userCollateralETH === 0n || playerStats.borrowedAmount === 0n) {
-      return 0;
-    }
-    const collateralValue = Number(formatEther(playerStats.userCollateralETH));
-    const debtValue = Number(formatEther(playerStats.borrowedAmount));
-    return (collateralValue / debtValue) * 100;
-  }, [playerStats.userCollateralETH, playerStats.borrowedAmount]);
-
-  // NEW: Get liquidation risk level
-  const getLiquidationRisk = useCallback(() => {
-    const ratio = getCollateralizationRatio();
-    if (ratio === 0) return { level: 'NONE', color: 'text-gray-400', percentage: 0 };
-    if (ratio < 120) return { level: 'CRITICAL', color: 'text-red-400', percentage: 95 };
-    if (ratio < 150) return { level: 'HIGH', color: 'text-orange-400', percentage: 75 };
-    if (ratio < 200) return { level: 'MEDIUM', color: 'text-yellow-400', percentage: 50 };
-    return { level: 'LOW', color: 'text-green-400', percentage: 25 };
-  }, [getCollateralizationRatio]);
-  
   // Initial data loading
   useEffect(() => {
     if (isConnected && address) {
@@ -577,7 +395,6 @@ export function useCasinoContract() {
     playerStats,
     gameStats,
     spinCosts,
-    compoundPosition,
     isLoadingData,
     isRefreshing,
     
@@ -585,10 +402,6 @@ export function useCasinoContract() {
     buyChipsState,
     spinState,
     withdrawState,
-    depositCollateralState,
-    borrowChipsState,
-    repayLoanState,
-    withdrawCollateralState,
     
     // Spin management
     selectedReelCount,
@@ -604,21 +417,11 @@ export function useCasinoContract() {
     spinReels,
     withdrawWinnings,
     
-    // Compound functions
-    depositCollateral,
-    borrowChips,
-    repayLoan,
-    repayLoanWithETH,
-    withdrawCollateral,
-    
     // Helper functions
     canSpin,
     getCurrentSpinCost,
     calculateExpectedChips,
     setChipsForCurrentSpin,
-    canWithdrawCollateral,
-    getCollateralizationRatio,
-    getLiquidationRisk,
     refreshAllData,
     
     // Connection state

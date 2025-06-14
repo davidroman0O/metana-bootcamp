@@ -13,9 +13,11 @@ describe("🎰 Payout Combinations", function () {
     mockVRFCoordinator = await MockVRFCoordinator.deploy();
     await mockVRFCoordinator.deployed();
 
-    // Use dummy addresses for Compound since mocking is built into CasinoSlotTest
-    const dummyCEthAddress = ethers.Wallet.createRandom().address;
-    const dummyComptrollerAddress = ethers.Wallet.createRandom().address;
+    // Mock addresses
+    const mockVRFCoordinatorAddress = ethers.Wallet.createRandom().address;
+    const ETH_USD_PRICE_FEED = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"; 
+    const dummyKeyHash = ethers.utils.formatBytes32String("dummy");
+    const subscriptionId = 1;
 
     // Deploy PayoutTables contracts
     const PayoutTables3 = await ethers.getContractFactory("PayoutTables3");
@@ -42,13 +44,11 @@ describe("🎰 Payout Combinations", function () {
     casinoSlot = await upgrades.deployProxy(
       CasinoSlotTest,
       [
-        1, // VRF subscription ID
-        "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419", // Real ETH/USD price feed for forked network
+        subscriptionId,
+        ETH_USD_PRICE_FEED,
         payoutTables.address,
-        mockVRFCoordinator.address,
-        "0x8af398995b04c28e9951adb9721ef74c74f93e6a478f39e7e0777be13527e7ef", // keyHash
-        dummyCEthAddress, // Dummy address - mocking is built into CasinoSlotTest
-        dummyComptrollerAddress, // Dummy address - mocking is built into CasinoSlotTest
+        mockVRFCoordinatorAddress,
+        dummyKeyHash,
         owner.address // Initial owner
       ],
       { kind: "uups" }

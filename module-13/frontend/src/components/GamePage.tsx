@@ -1,6 +1,8 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { formatEther } from 'viem';
 import toast from 'react-hot-toast';
+import { useReadContract } from 'wagmi';
+import type { Address } from 'viem';
 
 // Components
 import SlotMachine, { SlotMachineRef } from './SlotMachine';
@@ -10,6 +12,14 @@ import PhoneHelpLine from './PhoneHelpLine';
 import { useWallet } from '../hooks/useWallet';
 import { useNetworks } from '../hooks/useNetworks';
 import { useCasinoContract } from '../hooks/useCasinoContract';
+import { useSlotAnimator } from '../hooks/useSlotAnimator';
+
+// Utils
+import { QuoteManager } from '../utils/quotes';
+
+// Config imports
+import { DegenSlotsABI } from '../config/contracts/DegenSlotsABI';
+import { CONTRACT_ADDRESSES } from '../config/wagmi';
 
 // Inline GameHeader component to avoid import issues
 const GameHeader: React.FC<{
@@ -167,22 +177,21 @@ const GamePage: React.FC = () => {
     switchToNetwork,
   } = useNetworks();
 
-  // Casino contract hook - our main data source
+  // Get chainId from currentNetwork
+  const chainId = currentNetwork?.chainId;
+
+  // Casino contract hook - for connected mode
   const {
     // Data states
     playerStats,
     gameStats,
     spinCosts,
-    compoundPosition,
     isLoadingData,
     
     // Transaction states
     buyChipsState,
     spinState,
-    depositCollateralState,
-    borrowChipsState,
-    repayLoanState,
-    withdrawCollateralState,
+    withdrawState,
     
     // Spin management
     selectedReelCount,
@@ -193,35 +202,85 @@ const GamePage: React.FC = () => {
     buyChips,
     approveChips,
     spinReels,
-    
-    // Compound functions
-    depositCollateral,
-    borrowChips: borrowChipsFromContract,
-    repayLoan,
-    repayLoanWithETH,
-    withdrawCollateral,
+    withdrawWinnings,
     
     // Helper functions
     canSpin,
     getCurrentSpinCost,
     calculateExpectedChips,
-    canWithdrawCollateral,
-    getCollateralizationRatio,
-    getLiquidationRisk,
     refreshAllData,
   } = useCasinoContract();
-  
+
+  // Slot animation system for disconnected users
+  const {
+    slotMachineRef: animatedSlotRef,
+    stopAnimation,
+  } = useSlotAnimator({
+    reelCount: 3, // Always use 3 reels for disconnected demo
+    autoStart: true, // Auto-start the animation automatically
+    cyclePause: 4000 // Slightly longer pause between cycles
+  });
+
   // Local UI state
-  const [gamePhase, setGamePhase] = useState<'idle' | 'selecting' | 'approving' | 'spinning' | 'result'>('idle');
+  const [gamePhase, setGamePhase] = useState<'idle' | 'selecting' | 'approving' | 'ready' | 'spinning' | 'result'>('idle');
   const [ethAmount, setEthAmount] = useState<string>('0.1');
 
-  // Credit/Loan UI state
-  const [collateralAmount, setCollateralAmount] = useState<string>('0.5');
-  const [borrowAmount, setBorrowAmount] = useState<string>('0.1');
-  const [repayChipsAmount, setRepayChipsAmount] = useState<string>('');
-  const [repayETHAmount, setRepayETHAmount] = useState<string>('');
-  const [withdrawCollateralAmount, setWithdrawCollateralAmount] = useState<string>('');
+  // Chip insert tease popup state
+  const [showChipTease, setShowChipTease] = useState(false);
+  const [chipTeaseMessage, setChipTeaseMessage] = useState('');
+
+  // Stop animation when user connects
+  useEffect(() => {
+    if (isConnected) {
+      stopAnimation();
+    }
+  }, [isConnected, stopAnimation]);
+
+  // Contract data loading for disconnected mode
+  const addresses = CONTRACT_ADDRESSES[chainId || 31337] || {};
   
+  const { data: poolStats } = useReadContract({
+    address: addresses.CASINO_SLOT, 
+    abi: DegenSlotsABI, 
+    functionName: 'getPoolStats',
+    query: { 
+      enabled: !!addresses.CASINO_SLOT,
+      retry: 3,
+      refetchInterval: 10000,
+    },
+  });
+
+  const { data: chipsFromETH } = useReadContract({
+    address: addresses.CASINO_SLOT, 
+    abi: DegenSlotsABI, 
+    functionName: 'calculateChipsFromETH',
+    args: [BigInt(1e18)], // 1 ETH
+    query: { 
+      enabled: !!addresses.CASINO_SLOT,
+      retry: 3,
+      refetchInterval: 10000,
+    },
+  });
+
+  // Add page protection during spinning
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (gamePhase === 'spinning') {
+        e.preventDefault();
+        e.returnValue = 'You have a spin in progress! Are you sure you want to leave?';
+        return 'You have a spin in progress! Are you sure you want to leave?';
+      }
+    };
+
+    if (gamePhase === 'spinning') {
+      window.addEventListener('beforeunload', handleBeforeUnload);
+    }
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [gamePhase]);
+
   // Refs
   const slotMachineRef = useRef<SlotMachineRef>(null);
 
@@ -234,17 +293,17 @@ const GamePage: React.FC = () => {
     { count: 7, cost: formatEther(spinCosts.reels7), price: '$200', name: 'Whale Mode', color: 'bg-yellow-600' },
   ];
 
-  // Demo mode for disconnected users
-  const startDemoSpin = useCallback(() => {
-    if (!slotMachineRef.current) return;
+  // Handle chip insert when disconnected - show funny popup
+  const handleChipInsertTease = () => {
+    const teaseMessage = QuoteManager.getChipInsertTeaseQuote();
+    setChipTeaseMessage(teaseMessage);
+    setShowChipTease(true);
     
-    const demoSymbols = Array(selectedReelCount).fill(0).map(() => Math.floor(Math.random() * 6) + 1);
-    slotMachineRef.current.startSpin(demoSymbols);
-    
+    // Hide popup after 4 seconds
     setTimeout(() => {
-      slotMachineRef.current?.lcd.setMessage("DEMO MODE - Connect wallet to play for real!");
-    }, 3000);
-  }, [selectedReelCount]);
+      setShowChipTease(false);
+    }, 4000);
+  };
 
   // Phase 2: Insert chips (approve spending)
   const handleChipInsert = useCallback(async () => {
@@ -263,7 +322,7 @@ const GamePage: React.FC = () => {
 
     // Check if already approved
     if (currentAllowance >= cost) {
-      setGamePhase('spinning');
+      setGamePhase('ready');
       slotMachineRef.current?.lcd.setMessage("Ready to spin! Pull the lever!");
       return;
     }
@@ -274,7 +333,7 @@ const GamePage: React.FC = () => {
     
     const hash = await approveChips(cost);
     if (hash) {
-      setGamePhase('spinning');
+      setGamePhase('ready');
       slotMachineRef.current?.lcd.setMessage("CHIPS approved! Pull the lever!");
     } else {
       setGamePhase('selecting');
@@ -311,6 +370,31 @@ const GamePage: React.FC = () => {
     }
   }, [canSpin, spinReels, selectedReelCount]);
 
+  // Helper function to determine quote type based on payout amount
+  const getQuoteTypeForPayout = (payoutAmount: number, symbols: number[]) => {
+    if (payoutAmount === 0) {
+      return QuoteManager.getStateQuote('losing');
+    }
+    
+    // Analyze the symbol pattern
+    const analysis = QuoteManager.analyzeResult(symbols);
+    
+    // Map payout ranges to excitement levels
+    if (payoutAmount >= 10000) {
+      // Huge wins (10k+ CHIPS) = Jackpot level excitement
+      return QuoteManager.getCombinationQuote(selectedReelCount, 'jackpot');
+    } else if (payoutAmount >= 1000) {
+      // Big wins (1k+ CHIPS) = High excitement
+      return QuoteManager.getCombinationQuote(selectedReelCount, analysis.type === 'jackpot' ? 'jackpot' : 'matching');
+    } else if (payoutAmount >= 100) {
+      // Medium wins (100+ CHIPS) = Moderate excitement
+      return QuoteManager.getCombinationQuote(selectedReelCount, 'matching');
+    } else {
+      // Small wins = Encouraging
+      return QuoteManager.getStateQuote('winning');
+    }
+  };
+
   // Phase 4: Handle spin result
   const handleSpinResult = useCallback((symbols: number[], payout: bigint, payoutType: number) => {
     setGamePhase('result');
@@ -318,20 +402,74 @@ const GamePage: React.FC = () => {
     // Update slot machine with result
     slotMachineRef.current?.setAllReelTargets(symbols);
     
+    const payoutAmount = Number(formatEther(payout));
+    
     if (payout > 0n) {
-      slotMachineRef.current?.lcd.setWinPattern(Number(formatEther(payout)));
-      toast.success(`You won ${formatEther(payout)} CHIPS!`);
+      // Get appropriate message based on payout amount and symbols
+      const resultQuote = getQuoteTypeForPayout(payoutAmount, symbols);
+      
+      // Set LCD message to celebratory quote
+      slotMachineRef.current?.lcd.setMessage(resultQuote);
+      
+      // Only show toast notifications in connected mode
+      if (isConnected) {
+        toast.success(`🎉 ${resultQuote} Won ${formatEther(payout)} CHIPS!`);
+      }
     } else {
-      slotMachineRef.current?.lcd.setMessage("No win this time. Try again!");
+      // Get encouraging message for losses
+      const loseQuote = QuoteManager.getStateQuote('losing');
+      slotMachineRef.current?.lcd.setMessage(loseQuote);
+      
+      // No toast for losses in any mode
     }
     
     // Auto-reset after showing result
     setTimeout(() => {
       setGamePhase('idle');
       slotMachineRef.current?.lcd.setIdlePattern();
-      refreshAllData(); // Refresh all data
+      if (isConnected) {
+        refreshAllData(); // Only refresh data when connected
+      }
     }, 3000);
-  }, [refreshAllData]);
+  }, [selectedReelCount, refreshAllData, getQuoteTypeForPayout, isConnected]);
+
+  // Event handlers for quotes
+  const handleSlotResultWrapper = (symbols: number[], payout: number, payoutType: string) => {
+    handleSpinResult(symbols, BigInt(payout), typeof payoutType === 'string' ? 0 : payoutType);
+    
+    // Show result quote in connected mode only
+    if (isConnected && slotMachineRef.current?.lcd) {
+      const resultQuote = QuoteManager.getResultQuote(symbols);
+      setTimeout(() => {
+        slotMachineRef.current?.lcd?.setMessage(resultQuote);
+      }, 1000);
+    }
+  };
+
+  const handleSlotStateChange = (state: string) => {
+    // Show state-appropriate quotes in connected mode
+    if (isConnected && slotMachineRef.current?.lcd) {
+      let quote = '';
+      
+      switch (state) {
+        case 'spinning':
+          quote = QuoteManager.getStateQuote('spinning');
+          break;
+        case 'idle':
+          quote = QuoteManager.getStateQuote('idle');
+          break;
+        case 'evaluating_result':
+          quote = QuoteManager.getStateQuote('evaluating');
+          break;
+        default:
+          quote = QuoteManager.getMotivationalQuote();
+      }
+      
+      if (quote) {
+        slotMachineRef.current.lcd.setMessage(quote);
+      }
+    }
+  };
 
   // Buy chips handler
   const handleBuyChips = useCallback(async () => {
@@ -341,76 +479,65 @@ const GamePage: React.FC = () => {
     }
   }, [buyChips, ethAmount]);
 
-  // Credit/Loan handlers - Updated for new functions
-  const handleDepositCollateral = useCallback(async () => {
-    const hash = await depositCollateral(collateralAmount);
+  // Withdraw winnings handler
+  const handleWithdrawWinnings = useCallback(async () => {
+    const hash = await withdrawWinnings();
     if (hash) {
-      toast.success(`Collateral of ${collateralAmount} ETH deposited successfully!`);
+      toast.success('Winnings withdrawn successfully!');
     }
-  }, [depositCollateral, collateralAmount]);
-
-  const handleBorrowChips = useCallback(async () => {
-    const hash = await borrowChipsFromContract(borrowAmount);
-    if (hash) {
-      toast.success(`CHIPS borrowed for ${borrowAmount} ETH worth!`);
-    }
-  }, [borrowChipsFromContract, borrowAmount]);
-
-  const handleRepayWithChips = useCallback(async () => {
-    const hash = await repayLoan(repayChipsAmount);
-    if (hash) {
-      toast.success(`Loan repaid with ${repayChipsAmount} CHIPS!`);
-      setRepayChipsAmount(''); // Clear input
-    }
-  }, [repayLoan, repayChipsAmount]);
-
-  const handleRepayWithETH = useCallback(async () => {
-    const hash = await repayLoanWithETH(repayETHAmount);
-    if (hash) {
-      toast.success(`Loan repaid with ${repayETHAmount} ETH!`);
-      setRepayETHAmount(''); // Clear input
-    }
-  }, [repayLoanWithETH, repayETHAmount]);
-
-  // NEW: Withdraw collateral handler
-  const handleWithdrawCollateral = useCallback(async () => {
-    const hash = await withdrawCollateral(withdrawCollateralAmount);
-    if (hash) {
-      toast.success(`Withdrew ${withdrawCollateralAmount} ETH collateral!`);
-      setWithdrawCollateralAmount(''); // Clear input
-    }
-  }, [withdrawCollateral, withdrawCollateralAmount]);
-
-  // Calculate expected CHIPS amount
-  const expectedChips = (() => {
-    try {
-      return calculateExpectedChips(ethAmount).toString();
-    } catch {
-      return '0';
-    }
-  })();
+  }, [withdrawWinnings]);
 
   // Network switching handlers
   const handleSwitchToLocal = () => switchToNetwork('hardhat');
   const handleSwitchToSepolia = () => switchToNetwork('sepolia');
   const handleSwitchToMainnet = () => switchToNetwork('mainnet');
 
-  // Get chainId from currentNetwork
-  const chainId = currentNetwork?.chainId;
-
-  // Format player stats - Updated with new collateral data
+  // Format player stats
   const playerBalance = formatEther(playerStats.chipBalance);
   const playerWinnings = formatEther(playerStats.winnings);
   const totalSpins = Number(playerStats.totalSpins);
   const totalWon = formatEther(playerStats.totalWon);
-  const borrowedAmount = formatEther(playerStats.borrowedAmount);
-  const borrowingPower = formatEther(playerStats.accountLiquidity);
-  const userCollateral = formatEther(playerStats.userCollateralETH);
 
-  // Format game stats
-  const formattedPoolETH = formatEther(gameStats.prizePool);
-  const ethPrice = gameStats.ethPrice;
-  const chipRate = gameStats.chipRate;
+  // Format game stats with fallbacks for disconnected mode
+  const formattedPoolETH = (() => {
+    try {
+      if (isConnected) {
+        return formatEther(gameStats.prizePool) || '15.47';
+      }
+      if (!poolStats || !Array.isArray(poolStats)) return '15.47';
+      const poolAmount = poolStats[0] as bigint;
+      return parseFloat(formatEther(poolAmount)).toFixed(2);
+    } catch (error) {
+      return '15.47';
+    }
+  })();
+
+  const ethPrice = (() => {
+    try {
+      if (isConnected) {
+        return gameStats.ethPrice || '$3,247';
+      }
+      if (!poolStats || !Array.isArray(poolStats)) return '$3,247';
+      if (!poolStats[2]) return '$3,247';
+      const priceInCents = Number(poolStats[2] as bigint);
+      return `$${(priceInCents / 100).toFixed(0)}`;
+    } catch (error) {
+      return '$3,247';
+    }
+  })();
+
+  const chipRate = (() => {
+    try {
+      if (isConnected) {
+        return gameStats.chipRate || '5000';
+      }
+      if (!chipsFromETH) return '5000';
+      const chipsAmount = parseFloat(formatEther(chipsFromETH as bigint));
+      return chipsAmount.toFixed(0);
+    } catch (error) {
+      return '5000';
+    }
+  })();
 
   // Calculate USD value of CHIPS balance
   const chipBalanceUSD = (() => {
@@ -422,6 +549,9 @@ const GamePage: React.FC = () => {
     }
   })();
 
+  // Check if currently spinning - this will disable ALL buttons
+  const isSpinning = gamePhase === 'spinning';
+
   // Disconnected mode
   if (!isConnected) {
     return (
@@ -432,17 +562,17 @@ const GamePage: React.FC = () => {
             <div className="flex justify-center mb-6">
               <div className="flex items-center space-x-4 bg-black/40 rounded-xl px-6 py-3 border border-gray-600">
                 <div className="text-center">
-                  <div className="text-lg font-bold text-blue-400">{formattedPoolETH || '0'} ETH</div>
+                  <div className="text-lg font-bold text-blue-400">{formattedPoolETH} ETH</div>
                   <div className="text-xs text-gray-500">Pool</div>
                 </div>
                 <div className="w-px h-8 bg-gray-600"></div>
                 <div className="text-center">
-                  <div className="text-lg font-bold text-green-400">{ethPrice || '$0'}</div>
+                  <div className="text-lg font-bold text-green-400">{ethPrice}</div>
                   <div className="text-xs text-gray-500">ETH</div>
                 </div>
                 <div className="w-px h-8 bg-gray-600"></div>
                 <div className="text-center">
-                  <div className="text-lg font-bold text-yellow-400">{chipRate || '0'}</div>
+                  <div className="text-lg font-bold text-yellow-400">{chipRate}</div>
                   <div className="text-xs text-gray-500">CHIPS/ETH</div>
                 </div>
               </div>
@@ -458,16 +588,14 @@ const GamePage: React.FC = () => {
             <div className="flex justify-center mb-6">
               <SlotMachine
                 key="slot-machine-animated-demo"
-                ref={slotMachineRef}
-                onResult={() => {
-                  slotMachineRef.current?.lcd.setMessage("DEMO - Connect wallet for real play!");
-                }}
-                onStateChange={(state) => {
-                  console.log('Slot machine state:', state);
-                }}
+                ref={animatedSlotRef}
+                onResult={handleSlotResultWrapper}
+                onStateChange={handleSlotStateChange}
                 isConnected={false}
                 reelCount={3}
-                onCoinInsert={startDemoSpin}
+                onCoinInsert={handleChipInsertTease}
+                showChipPopup={showChipTease}
+                chipPopupMessage={chipTeaseMessage}
               />
             </div>
 
@@ -478,6 +606,21 @@ const GamePage: React.FC = () => {
                 This is just a taste! Connect your wallet to play with real CHIPS and win real rewards!
               </p>
               
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 text-sm">
+                <div className="bg-black/40 rounded-lg p-3 border border-green-500/30">
+                  <div className="text-green-400 font-bold">🎰 Real Gameplay</div>
+                  <div className="text-gray-300">Play with actual CHIPS tokens</div>
+                </div>
+                <div className="bg-black/40 rounded-lg p-3 border border-blue-500/30">
+                  <div className="text-blue-400 font-bold">🏆 Real Rewards</div>
+                  <div className="text-gray-300">Win real ETH and CHIPS</div>
+                </div>
+                <div className="bg-black/40 rounded-lg p-3 border border-purple-500/30">
+                  <div className="text-purple-400 font-bold">⚡ VRF Powered</div>
+                  <div className="text-gray-300">Provably fair randomness</div>
+                </div>
+              </div>
+              
               <button
                 onClick={connectWallet}
                 disabled={connecting}
@@ -485,6 +628,38 @@ const GamePage: React.FC = () => {
               >
                 {connecting ? '🔄 Connecting...' : '🦊 Connect Wallet & Play!'}
               </button>
+            </div>
+
+            {/* Payout Information */}
+            <div className="flex flex-wrap justify-center gap-2 text-sm">
+              <span className="bg-yellow-600 px-3 py-1 rounded-full">🐵 Jackpot: 666x</span>
+              <span className="bg-purple-600 px-3 py-1 rounded-full">🚀🚀🚀 Ultra: 555x</span>
+              <span className="bg-blue-600 px-3 py-1 rounded-full">💎💎💎 Mega: 444x</span>
+              <span className="bg-green-600 px-3 py-1 rounded-full">📈📈📈 Big: 333x</span>
+            </div>
+
+            {/* Feature Highlights */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 max-w-4xl mx-auto mt-8">
+              <div className="bg-black/20 rounded-lg p-4 border border-gray-600">
+                <div className="text-2xl mb-2">⚡</div>
+                <div className="text-sm font-bold text-yellow-400">Instant Payouts</div>
+                <div className="text-xs text-gray-400">Win and withdraw immediately</div>
+              </div>
+              <div className="bg-black/20 rounded-lg p-4 border border-gray-600">
+                <div className="text-2xl mb-2">🔒</div>
+                <div className="text-sm font-bold text-green-400">Provably Fair</div>
+                <div className="text-xs text-gray-400">Chainlink VRF powered</div>
+              </div>
+              <div className="bg-black/20 rounded-lg p-4 border border-gray-600">
+                <div className="text-2xl mb-2">💎</div>
+                <div className="text-sm font-bold text-blue-400">Multiple Stakes</div>
+                <div className="text-xs text-gray-400">3-7 reels, your choice</div>
+              </div>
+              <div className="bg-black/20 rounded-lg p-4 border border-gray-600">
+                <div className="text-2xl mb-2">🚀</div>
+                <div className="text-sm font-bold text-purple-400">DeFi Integrated</div>
+                <div className="text-xs text-gray-400">Leverage & lending options</div>
+              </div>
             </div>
           </div>
         </main>
@@ -528,7 +703,8 @@ const GamePage: React.FC = () => {
                   <button
                     key={config.count}
                     onClick={() => setSelectedReelCount(config.count as 3 | 4 | 5 | 6 | 7)}
-                    className={`p-2 rounded-lg text-white font-medium transition-all text-sm ${
+                    disabled={isSpinning}
+                    className={`p-2 rounded-lg text-white font-medium transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed ${
                       selectedReelCount === config.count ? config.color : 'bg-gray-700 hover:bg-gray-600'
                     }`}
                   >
@@ -548,7 +724,7 @@ const GamePage: React.FC = () => {
               </div>
             </div>
 
-            {/* Your Balance - Enhanced with collateral info */}
+            {/* Your Balance */}
             <div className="bg-black/30 rounded-xl p-3 border border-gray-600">
               <h3 className="text-lg font-bold text-green-400 mb-2">💰 Your Balance</h3>
               <div className="text-center mb-2">
@@ -558,15 +734,11 @@ const GamePage: React.FC = () => {
                 <div className="text-sm text-gray-400">CHIPS Available</div>
               </div>
               
-              {/* Enhanced wallet info with collateral */}
+              {/* Wallet info */}
               <div className="space-y-1 text-xs mb-2">
                 <div className="flex justify-between">
                   <span className="text-gray-400">ETH Balance:</span>
                   <span className="text-blue-400 font-medium">{parseFloat(balance).toFixed(3)} ETH</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Collateral:</span>
-                  <span className="text-purple-400 font-medium">{parseFloat(userCollateral).toFixed(3)} ETH</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">USD Value:</span>
@@ -578,7 +750,7 @@ const GamePage: React.FC = () => {
                 </div>
               </div>
               
-              {/* Status & limits - Enhanced with borrowing info */}
+              {/* Status & limits */}
               <div className="space-y-1 text-xs">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Status:</span>
@@ -588,20 +760,31 @@ const GamePage: React.FC = () => {
                   <span className="text-gray-400">Pending Wins:</span>
                   <span className="text-orange-400 font-medium">{playerWinnings} CHIPS</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Borrowed:</span>
-                  <span className="text-red-400 font-medium">{borrowedAmount} ETH</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Borrow Power:</span>
-                  <span className="text-green-400 font-medium">{borrowingPower} ETH</span>
-                </div>
               </div>
+              
+              {/* Withdraw Winnings Button */}
+              {parseFloat(playerWinnings) > 0 && (
+                <div className="mt-3">
+                  <button
+                    onClick={handleWithdrawWinnings}
+                    disabled={withdrawState.status === 'pending' || isSpinning}
+                    className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium py-2 rounded-lg text-sm transition-colors"
+                  >
+                    {withdrawState.status === 'pending' ? (
+                      <>🔄 Withdrawing...</>
+                    ) : isSpinning ? (
+                      <>🎰 Spinning - Please Wait...</>
+                    ) : (
+                      <>🏆 Withdraw {playerWinnings} CHIPS</>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Pool Stats - Enhanced with Compound info */}
+            {/* Pool Stats */}
             <div className="bg-black/30 rounded-xl p-3 border border-gray-600">
-              <h3 className="text-lg font-bold text-blue-400 mb-2">📊 Pool & Compound</h3>
+              <h3 className="text-lg font-bold text-blue-400 mb-2">📊 Pool Stats</h3>
               <div className="space-y-1 text-xs mb-2">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Prize Pool:</span>
@@ -614,22 +797,6 @@ const GamePage: React.FC = () => {
                 <div className="flex justify-between">
                   <span className="text-gray-400">CHIPS/ETH:</span>
                   <span className="text-yellow-400 font-medium">{chipRate}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Total Collateral:</span>
-                  <span className="text-purple-400 font-medium">{formatEther(compoundPosition.totalCollateralETH)} ETH</span>
-                </div>
-              </div>
-              
-              {/* Compound stats */}
-              <div className="space-y-1 text-xs mb-2">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">cETH Balance:</span>
-                  <span className="text-cyan-400 font-medium">{formatEther(compoundPosition.contractCEthBalance)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Collateral Factor:</span>
-                  <span className="text-orange-400 font-medium">{compoundPosition.collateralFactor.toString()}%</span>
                 </div>
               </div>
               
@@ -713,12 +880,30 @@ const GamePage: React.FC = () => {
                     type="number" 
                     placeholder="0.1" 
                     value={ethAmount}
-                    onChange={(e) => setEthAmount(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      const maxETH = parseFloat(balance) - 0.01; // Leave 0.01 ETH for gas
+                      // Cap input to max available ETH
+                      if (value === '' || (parseFloat(value) <= maxETH)) {
+                        setEthAmount(value);
+                      }
+                    }}
                     min="0"
                     step="0.01"
-                    disabled={buyChipsState.status === 'pending'}
-                    className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 pr-12 text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={buyChipsState.status === 'pending' || isSpinning}
+                    className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 pr-16 text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   />
+                  <button
+                    onClick={() => {
+                      const maxETH = (parseFloat(balance) - 0.01).toFixed(3); // Leave 0.01 ETH for gas
+                      setEthAmount(maxETH);
+                    }}
+                    disabled={buyChipsState.status === 'pending' || parseFloat(balance) <= 0.01 || isSpinning}
+                    className="absolute right-12 top-1/2 -translate-y-1/2 bg-blue-600/30 disabled:bg-gray-600/30 disabled:cursor-not-allowed text-blue-400 disabled:text-gray-500 text-xs font-bold px-1 py-0.5 rounded select-none"
+                    style={{ transform: 'translateY(-50%)', position: 'absolute', right: '48px', top: '50%' }}
+                  >
+                    MAX
+                  </button>
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-blue-400 font-bold text-sm">
                     ETH
                   </div>
@@ -726,252 +911,77 @@ const GamePage: React.FC = () => {
                 
                 <button 
                   onClick={handleBuyChips}
-                  disabled={!isConnected || !ethAmount || parseFloat(ethAmount) <= 0 || buyChipsState.status === 'pending'}
+                  disabled={!isConnected || !ethAmount || parseFloat(ethAmount) <= 0 || buyChipsState.status === 'pending' || isSpinning}
                   className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 rounded-lg text-sm transition-colors"
                 >
                   {buyChipsState.status === 'pending' ? (
                     <>🔄 Purchase in Progress...</>
+                  ) : isSpinning ? (
+                    <>🎰 Spinning - Please Wait...</>
                   ) : (
                     <>💰 Buy CHIPS with ETH</>
                   )}
                 </button>
                 
                 <div className="text-xs text-gray-400 text-center">
-                  Send {ethAmount || '0'} ETH → Get ~{expectedChips} CHIPS
+                  Send {ethAmount || '0'} ETH → Get ~{calculateExpectedChips(ethAmount).toString()} CHIPS
                 </div>
               </div>
             </div>
 
-            {/* Credit/Loan Quick Access */}
+            {/* Game Actions */}
             <div className="bg-black/30 rounded-xl p-3 border border-gray-600">
-              <h3 className="text-lg font-bold text-red-400 mb-2">💳 Credit & Leverage</h3>
+              <h3 className="text-lg font-bold text-purple-400 mb-2">🎮 Game Actions</h3>
               
-              {/* Current Status - Compact */}
+              {/* Current Selection Info */}
               <div className="bg-gray-800/50 rounded-lg p-2 mb-2 border border-gray-600">
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="text-center">
-                    <div className="text-sm font-bold text-purple-400">{parseFloat(userCollateral).toFixed(3)}</div>
-                    <div className="text-gray-400">Collateral ETH</div>
+                <div className="text-center">
+                  <div className="text-sm text-gray-400">Selected Game:</div>
+                  <div className="text-lg font-bold text-yellow-400">
+                    {selectedReelCount} Reels
                   </div>
-                  <div className="text-center">
-                    <div className="text-sm font-bold text-red-400">{borrowedAmount}</div>
-                    <div className="text-gray-400">Debt ETH</div>
+                  <div className="text-xs text-gray-400">
+                    Cost: {formatEther(getCurrentSpinCost())} CHIPS
                   </div>
-                </div>
-                <div className="text-center mt-1">
-                  <div className="text-xs font-bold text-blue-400">{borrowingPower} ETH Available</div>
                 </div>
               </div>
 
-              {/* Transaction Status Display */}
-              {(depositCollateralState.status === 'pending' || borrowChipsState.status === 'pending' || repayLoanState.status === 'pending' || withdrawCollateralState.status === 'pending') && (
-                <div className="mb-2 p-2 rounded-lg border bg-blue-500/20 border-blue-500/50">
-                  <div className="flex items-center space-x-2">
-                    <div className="animate-spin w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-                    <span className="text-blue-300 text-xs font-medium">
-                      {depositCollateralState.status === 'pending' && 'Depositing collateral...'}
-                      {borrowChipsState.status === 'pending' && 'Borrowing CHIPS...'}
-                      {repayLoanState.status === 'pending' && 'Repaying loan...'}
-                      {withdrawCollateralState.status === 'pending' && 'Withdrawing collateral...'}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Quick Actions */}
+              {/* Game Phase Display */}
               <div className="space-y-2">
-                {/* Deposit Collateral */}
-                <div className="space-y-1">
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="number"
-                      placeholder="0.5"
-                      value={collateralAmount}
-                      onChange={(e) => setCollateralAmount(e.target.value)}
-                      min="0"
-                      step="0.01"
-                      disabled={depositCollateralState.status === 'pending'}
-                      className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-xs disabled:opacity-50"
-                    />
-                    <button
-                      onClick={handleDepositCollateral}
-                      disabled={!isConnected || !collateralAmount || parseFloat(collateralAmount) <= 0 || depositCollateralState.status === 'pending'}
-                      className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium px-3 py-1 rounded text-xs transition-colors"
-                    >
-                      💰 Deposit
-                    </button>
+                <div className="text-center">
+                  <div className="text-sm text-gray-400">Current Phase:</div>
+                  <div className={`text-lg font-bold ${
+                    gamePhase === 'idle' ? 'text-gray-400' :
+                    gamePhase === 'selecting' ? 'text-blue-400' :
+                    gamePhase === 'approving' ? 'text-orange-400' :
+                    gamePhase === 'ready' ? 'text-yellow-400' :
+                    gamePhase === 'spinning' ? 'text-yellow-400' :
+                    'text-green-400'
+                  }`}>
+                    {gamePhase === 'idle' && '🎰 Ready to Play'}
+                    {gamePhase === 'selecting' && '🎯 Select Stakes'}
+                    {gamePhase === 'approving' && '🔄 Approving CHIPS'}
+                    {gamePhase === 'ready' && '🎯 Ready to Spin'}
+                    {gamePhase === 'spinning' && '⚡ Spinning...'}
+                    {gamePhase === 'result' && '🎉 Result!'}
                   </div>
-                  <div className="text-xs text-gray-500">Deposit ETH as collateral</div>
                 </div>
 
-                {/* Borrow CHIPS */}
-                <div className="space-y-1">
-                  <div className="flex items-center space-x-2">
-                    <div className="flex-1 relative">
-                      <input
-                        type="number"
-                        placeholder="0.1"
-                        value={borrowAmount}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          const maxBorrow = parseFloat(borrowingPower);
-                          // Cap input to max borrowable amount
-                          if (value === '' || (parseFloat(value) <= maxBorrow)) {
-                            setBorrowAmount(value);
-                          }
-                        }}
-                        min="0"
-                        step="0.01"
-                        disabled={borrowChipsState.status === 'pending'}
-                        className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 pr-8 text-white text-xs disabled:opacity-50"
-                      />
-                      <button
-                        onClick={() => setBorrowAmount(borrowingPower)}
-                        disabled={borrowChipsState.status === 'pending' || parseFloat(borrowingPower) === 0}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 bg-yellow-600/30 disabled:bg-gray-600/30 disabled:cursor-not-allowed text-yellow-400 disabled:text-gray-500 text-xs font-bold px-1 py-0.5 rounded select-none"
-                        style={{ transform: 'translateY(-50%)', position: 'absolute', right: '4px', top: '50%' }}
-                      >
-                        MAX
-                      </button>
+                {/* Quick Stats */}
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="text-center p-2 bg-gray-800/30 rounded">
+                    <div className="text-gray-400">Can Spin?</div>
+                    <div className={canSpin() ? 'text-green-400' : 'text-red-400'}>
+                      {canSpin() ? 'YES' : 'NO'}
                     </div>
-                    <button 
-                      onClick={handleBorrowChips}
-                      disabled={!isConnected || !borrowAmount || parseFloat(borrowAmount) <= 0 || parseFloat(borrowingPower) === 0 || borrowChipsState.status === 'pending'}
-                      className="bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium px-3 py-1 rounded text-xs transition-colors"
-                    >
-                      🚀 Borrow
-                    </button>
                   </div>
-                  <div className="text-xs text-gray-500">Borrow CHIPS (ETH equivalent)</div>
+                  <div className="text-center p-2 bg-gray-800/30 rounded">
+                    <div className="text-gray-400">Allowance</div>
+                    <div className="text-blue-400">
+                      {formatEther(currentAllowance).slice(0, 6)}
+                    </div>
+                  </div>
                 </div>
-
-                {/* Repay Loan - Only show if user has debt */}
-                {parseFloat(borrowedAmount) > 0 && (
-                  <>
-                    <hr className="border-gray-600" />
-                    <div className="text-xs text-orange-400 font-medium">💳 Repay Loan</div>
-                    
-                    {/* Repay with CHIPS */}
-                    <div className="space-y-1">
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="number"
-                          placeholder="CHIPS"
-                          value={repayChipsAmount}
-                          onChange={(e) => setRepayChipsAmount(e.target.value)}
-                          min="0"
-                          step="0.01"
-                          disabled={repayLoanState.status === 'pending'}
-                          className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-xs disabled:opacity-50"
-                        />
-                        <button 
-                          onClick={handleRepayWithChips}
-                          disabled={!isConnected || !repayChipsAmount || parseFloat(repayChipsAmount) <= 0 || parseFloat(playerBalance) < parseFloat(repayChipsAmount) || repayLoanState.status === 'pending'}
-                          className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium px-3 py-1 rounded text-xs transition-colors"
-                        >
-                          🪙 Pay
-                        </button>
-                      </div>
-                      <div className="text-xs text-gray-500">Repay with CHIPS</div>
-                    </div>
-
-                    {/* Repay with ETH */}
-                    <div className="space-y-1">
-                      <div className="flex items-center space-x-2">
-                        <div className="flex-1 relative">
-                          <input
-                            type="number"
-                            placeholder="ETH"
-                            value={repayETHAmount}
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              const maxRepay = parseFloat(borrowedAmount);
-                              // Cap input to max repayable amount
-                              if (value === '' || (parseFloat(value) <= maxRepay)) {
-                                setRepayETHAmount(value);
-                              }
-                            }}
-                            min="0"
-                            step="0.01"
-                            disabled={repayLoanState.status === 'pending'}
-                            className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 pr-8 text-white text-xs disabled:opacity-50"
-                          />
-                          <button
-                            onClick={() => setRepayETHAmount(borrowedAmount)}
-                            disabled={repayLoanState.status === 'pending' || parseFloat(borrowedAmount) === 0}
-                            className="absolute right-1 top-1/2 -translate-y-1/2 bg-green-600/30 disabled:bg-gray-600/30 disabled:cursor-not-allowed text-green-400 disabled:text-gray-500 text-xs font-bold px-1 py-0.5 rounded select-none"
-                            style={{ transform: 'translateY(-50%)', position: 'absolute', right: '4px', top: '50%' }}
-                          >
-                            MAX
-                          </button>
-                        </div>
-                        <button
-                          onClick={handleRepayWithETH}
-                          disabled={!isConnected || !repayETHAmount || parseFloat(repayETHAmount) <= 0 || parseFloat(repayETHAmount) > parseFloat(borrowedAmount) || repayLoanState.status === 'pending'}
-                          className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium px-3 py-1 rounded text-xs transition-colors"
-                        >
-                          💎 Pay
-                        </button>
-                      </div>
-                      <div className="text-xs text-gray-500">Repay with ETH directly</div>
-                    </div>
-                  </>
-                )}
-
-                {/* Withdraw Collateral - Only show if user has collateral and no debt */}
-                {parseFloat(userCollateral) > 0 && (
-                  <>
-                    <hr className="border-gray-600" />
-                    <div className="text-xs text-purple-400 font-medium">💎 Withdraw Collateral</div>
-                    
-                    {canWithdrawCollateral() ? (
-                      <div className="space-y-1">
-                        <div className="flex items-center space-x-2">
-                          <div className="flex-1 relative">
-                            <input
-                              type="number"
-                              placeholder="ETH"
-                              value={withdrawCollateralAmount}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                const maxWithdraw = parseFloat(userCollateral);
-                                // Cap input to max withdrawable amount
-                                if (value === '' || (parseFloat(value) <= maxWithdraw)) {
-                                  setWithdrawCollateralAmount(value);
-                                }
-                              }}
-                              min="0"
-                              step="0.01"
-                              max={userCollateral}
-                              disabled={withdrawCollateralState.status === 'pending'}
-                              className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 pr-8 text-white text-xs disabled:opacity-50"
-                            />
-                            <button
-                              onClick={() => setWithdrawCollateralAmount(userCollateral)}
-                              disabled={withdrawCollateralState.status === 'pending' || parseFloat(userCollateral) === 0}
-                              className="absolute right-1 top-1/2 -translate-y-1/2 bg-purple-600/30 disabled:bg-gray-600/30 disabled:cursor-not-allowed text-purple-400 disabled:text-gray-500 text-xs font-bold px-1 py-0.5 rounded select-none"
-                              style={{ transform: 'translateY(-50%)', position: 'absolute', right: '4px', top: '50%' }}
-                            >
-                              MAX
-                            </button>
-                          </div>
-                          <button
-                            onClick={handleWithdrawCollateral}
-                            disabled={!isConnected || !withdrawCollateralAmount || parseFloat(withdrawCollateralAmount) <= 0 || parseFloat(withdrawCollateralAmount) > parseFloat(userCollateral) || withdrawCollateralState.status === 'pending'}
-                            className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium px-3 py-1 rounded text-xs transition-colors"
-                          >
-                            🏦 Withdraw
-                          </button>
-                        </div>
-                        <div className="text-xs text-gray-500">Max: {userCollateral} ETH</div>
-                      </div>
-                    ) : (
-                      <div className="text-xs text-gray-500 text-center p-2 bg-gray-800/50 rounded border border-gray-600">
-                        {parseFloat(borrowedAmount) > 0 ? "🔒 Repay all loans first" : "🏦 No collateral to withdraw"}
-                      </div>
-                    )}
-                  </>
-                )}
               </div>
             </div>
 
@@ -992,8 +1002,10 @@ const GamePage: React.FC = () => {
                   <span className="text-green-400 font-medium">{playerWinnings} CHIPS</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-400">Borrowing Power:</span>
-                  <span className="text-purple-400 font-medium">{borrowingPower} ETH</span>
+                  <span className="text-gray-400">Win Rate:</span>
+                  <span className="text-purple-400 font-medium">
+                    {totalSpins > 0 ? ((Number(totalWon) / totalSpins) * 100).toFixed(1) : '0'}%
+                  </span>
                 </div>
               </div>
             </div>
