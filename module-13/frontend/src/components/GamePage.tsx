@@ -2,26 +2,22 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { formatEther } from 'viem';
 import toast from 'react-hot-toast';
 import { useReadContract } from 'wagmi';
-import type { Address } from 'viem';
 
-// Components
 import SlotMachine, { SlotMachineRef } from './SlotMachine';
 import PhoneHelpLine from './PhoneHelpLine';
+import PoolStats from './PoolStats';
 
-// Hooks
 import { useWallet } from '../hooks/useWallet';
 import { useNetworks } from '../hooks/useNetworks';
 import { useCasinoContract } from '../hooks/useCasinoContract';
 import { useSlotAnimator } from '../hooks/useSlotAnimator';
+import { usePoolData } from '../hooks/usePoolData';
 
-// Utils
 import { QuoteManager } from '../utils/quotes';
 
-// Config imports
 import { DegenSlotsABI } from '../config/contracts/DegenSlotsABI';
 import { CONTRACT_ADDRESSES } from '../config/wagmi';
 
-// Inline GameHeader component to avoid import issues
 const GameHeader: React.FC<{
   isConnected: boolean;
   account: any;
@@ -36,9 +32,13 @@ const GameHeader: React.FC<{
   onSwitchToMainnet: () => void;
   onSwitchToSepolia: () => void;
   isSwitchPending: boolean;
-  poolETH?: string;
-  ethPrice?: string;
-  chipRate?: string;
+  poolData: {
+    poolETH: string | null;
+    ethPrice: string | null;
+    chipRate: string | null;
+    isLoading: boolean;
+    error: string | null;
+  };
 }> = ({
   isConnected,
   account,
@@ -50,9 +50,7 @@ const GameHeader: React.FC<{
   isSupported,
   onSwitchToLocal,
   isSwitchPending,
-  poolETH,
-  ethPrice,
-  chipRate,
+  poolData,
 }) => {
   const formatAddress = (address?: string): string => {
     if (!address) return '';
@@ -75,22 +73,16 @@ const GameHeader: React.FC<{
           {/* Center - Pool Info (Disconnected) or Game Stats (Connected) */}
           <div className="hidden md:flex items-center space-x-4">
             {!isConnected ? (
-              <div className="flex items-center space-x-4 bg-black/40 rounded-xl px-4 py-2 border border-gray-600">
-                <div className="text-center">
-                  <div className="text-sm font-bold text-blue-400">{poolETH || '0'} ETH</div>
-                  <div className="text-xs text-gray-500">Pool</div>
-                </div>
-                <div className="w-px h-6 bg-gray-600"></div>
-                <div className="text-center">
-                  <div className="text-sm font-bold text-green-400">{ethPrice || '$0'}</div>
-                  <div className="text-xs text-gray-500">ETH</div>
-                </div>
-                <div className="w-px h-6 bg-gray-600"></div>
-                <div className="text-center">
-                  <div className="text-sm font-bold text-yellow-400">{chipRate || '0'}</div>
-                  <div className="text-xs text-gray-500">Rate</div>
-                </div>
-              </div>
+              <PoolStats
+                poolETH={poolData.poolETH}
+                ethPrice={poolData.ethPrice}
+                chipRate={poolData.chipRate}
+                isLoading={poolData.isLoading}
+                error={poolData.error}
+                layout="horizontal"
+                showLabels={false}
+                className="bg-black/40 rounded-xl px-4 py-2 border border-gray-600"
+              />
             ) : (
               <div className="flex items-center space-x-3 text-xs">
                 <span className="text-green-400">🎰 Provably Fair</span>
@@ -167,7 +159,6 @@ const GamePage: React.FC = () => {
     balance,
     connectWallet,
     disconnectWallet,
-    formatBalance,
   } = useWallet();
 
   const {
@@ -179,6 +170,9 @@ const GamePage: React.FC = () => {
 
   // Get chainId from currentNetwork
   const chainId = currentNetwork?.chainId;
+
+  // Pool data hook for proper loading states
+  const poolData = usePoolData(chainId);
 
   // Casino contract hook - for connected mode
   const {
@@ -235,32 +229,6 @@ const GamePage: React.FC = () => {
       stopAnimation();
     }
   }, [isConnected, stopAnimation]);
-
-  // Contract data loading for disconnected mode
-  const addresses = CONTRACT_ADDRESSES[chainId || 31337] || {};
-  
-  const { data: poolStats } = useReadContract({
-    address: addresses.CASINO_SLOT, 
-    abi: DegenSlotsABI, 
-    functionName: 'getPoolStats',
-    query: { 
-      enabled: !!addresses.CASINO_SLOT,
-      retry: 3,
-      refetchInterval: 10000,
-    },
-  });
-
-  const { data: chipsFromETH } = useReadContract({
-    address: addresses.CASINO_SLOT, 
-    abi: DegenSlotsABI, 
-    functionName: 'calculateChipsFromETH',
-    args: [BigInt(1e18)], // 1 ETH
-    query: { 
-      enabled: !!addresses.CASINO_SLOT,
-      retry: 3,
-      refetchInterval: 10000,
-    },
-  });
 
   // Add page protection during spinning
   useEffect(() => {
@@ -498,46 +466,10 @@ const GamePage: React.FC = () => {
   const totalSpins = Number(playerStats.totalSpins);
   const totalWon = formatEther(playerStats.totalWon);
 
-  // Format game stats with fallbacks for disconnected mode
-  const formattedPoolETH = (() => {
-    try {
-      if (isConnected) {
-        return formatEther(gameStats.prizePool) || '15.47';
-      }
-      if (!poolStats || !Array.isArray(poolStats)) return '15.47';
-      const poolAmount = poolStats[0] as bigint;
-      return parseFloat(formatEther(poolAmount)).toFixed(2);
-    } catch (error) {
-      return '15.47';
-    }
-  })();
-
-  const ethPrice = (() => {
-    try {
-      if (isConnected) {
-        return gameStats.ethPrice || '$3,247';
-      }
-      if (!poolStats || !Array.isArray(poolStats)) return '$3,247';
-      if (!poolStats[2]) return '$3,247';
-      const priceInCents = Number(poolStats[2] as bigint);
-      return `$${(priceInCents / 100).toFixed(0)}`;
-    } catch (error) {
-      return '$3,247';
-    }
-  })();
-
-  const chipRate = (() => {
-    try {
-      if (isConnected) {
-        return gameStats.chipRate || '5000';
-      }
-      if (!chipsFromETH) return '5000';
-      const chipsAmount = parseFloat(formatEther(chipsFromETH as bigint));
-      return chipsAmount.toFixed(0);
-    } catch (error) {
-      return '5000';
-    }
-  })();
+  // Format game stats - use the connected mode data
+  const formattedPoolETH = isConnected ? formatEther(gameStats.prizePool) : poolData.poolETH;
+  const ethPrice = isConnected ? gameStats.ethPrice : poolData.ethPrice;
+  const chipRate = isConnected ? gameStats.chipRate : poolData.chipRate;
 
   // Calculate USD value of CHIPS balance
   const chipBalanceUSD = (() => {
@@ -560,22 +492,16 @@ const GamePage: React.FC = () => {
           <div className="text-center space-y-6">
             {/* Pool info display integrated into main content */}
             <div className="flex justify-center mb-6">
-              <div className="flex items-center space-x-4 bg-black/40 rounded-xl px-6 py-3 border border-gray-600">
-                <div className="text-center">
-                  <div className="text-lg font-bold text-blue-400">{formattedPoolETH} ETH</div>
-                  <div className="text-xs text-gray-500">Pool</div>
-                </div>
-                <div className="w-px h-8 bg-gray-600"></div>
-                <div className="text-center">
-                  <div className="text-lg font-bold text-green-400">{ethPrice}</div>
-                  <div className="text-xs text-gray-500">ETH</div>
-                </div>
-                <div className="w-px h-8 bg-gray-600"></div>
-                <div className="text-center">
-                  <div className="text-lg font-bold text-yellow-400">{chipRate}</div>
-                  <div className="text-xs text-gray-500">CHIPS/ETH</div>
-                </div>
-              </div>
+              <PoolStats
+                poolETH={poolData.poolETH}
+                ethPrice={poolData.ethPrice}
+                chipRate={poolData.chipRate}
+                isLoading={poolData.isLoading}
+                error={poolData.error}
+                layout="horizontal"
+                showLabels={true}
+                className="bg-black/40 rounded-xl px-6 py-3 border border-gray-600"
+              />
             </div>
 
             <h1 className="text-5xl font-bold text-white mb-4 bg-gradient-to-r from-yellow-400 via-red-500 to-pink-600 bg-clip-text text-transparent">
@@ -678,6 +604,7 @@ const GamePage: React.FC = () => {
         onSwitchToMainnet={handleSwitchToMainnet} 
         onSwitchToSepolia={handleSwitchToSepolia}
         isSwitchPending={switchingNetwork}
+        poolData={poolData}
       />
 
       {/* Loading Overlay */}
@@ -788,15 +715,15 @@ const GamePage: React.FC = () => {
               <div className="space-y-1 text-xs mb-2">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Prize Pool:</span>
-                  <span className="text-blue-400 font-medium">{formattedPoolETH} ETH</span>
+                  <span className="text-blue-400 font-medium">{formattedPoolETH || '-.--'} ETH</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">ETH Price:</span>
-                  <span className="text-green-400 font-medium">{ethPrice}</span>
+                  <span className="text-green-400 font-medium">{ethPrice || '--'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">CHIPS/ETH:</span>
-                  <span className="text-yellow-400 font-medium">{chipRate}</span>
+                  <span className="text-yellow-400 font-medium">{chipRate || '---'}</span>
                 </div>
               </div>
               

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Wallet, Network, LogOut, Zap } from 'lucide-react';
 import type { Address } from 'viem';
+import PoolStats from './PoolStats';
 
 interface GameHeaderProps {
   // Connection state
@@ -20,10 +21,14 @@ interface GameHeaderProps {
   onSwitchToSepolia: () => void;
   isSwitchPending: boolean;
   
-  // Pool info for disconnected mode
-  poolETH?: string;
-  ethPrice?: string;
-  chipRate?: string;
+  // Pool info s
+  poolData: {
+    poolETH: string | null;
+    ethPrice: string | null;
+    chipRate: string | null;
+    isLoading: boolean;
+    error: string | null;
+  };
 }
 
 const GameHeader: React.FC<GameHeaderProps> = ({
@@ -40,9 +45,7 @@ const GameHeader: React.FC<GameHeaderProps> = ({
   onSwitchToMainnet,
   onSwitchToSepolia,
   isSwitchPending,
-  poolETH,
-  ethPrice,
-  chipRate,
+  poolData,
 }) => {
   const formatAddress = (address?: string): string => {
     if (!address) return '';
@@ -65,22 +68,16 @@ const GameHeader: React.FC<GameHeaderProps> = ({
 
           {/* Center Section - Pool Info for Disconnected */}
           {!isConnected && (
-            <div className="hidden md:flex items-center space-x-6 bg-black/30 rounded-2xl px-6 py-3 border border-gray-600">
-              <div className="text-center">
-                <div className="text-xl font-bold text-blue-400">{poolETH || '0.00'} ETH</div>
-                <div className="text-xs text-gray-400">Prize Pool</div>
-              </div>
-              <div className="w-px h-8 bg-gray-600"></div>
-              <div className="text-center">
-                <div className="text-xl font-bold text-green-400">{ethPrice || '$0'}</div>
-                <div className="text-xs text-gray-400">ETH Price</div>
-              </div>
-              <div className="w-px h-8 bg-gray-600"></div>
-              <div className="text-center">
-                <div className="text-xl font-bold text-yellow-400">{chipRate || '0'}</div>
-                <div className="text-xs text-gray-400">CHIPS/ETH</div>
-              </div>
-            </div>
+            <PoolStats
+              poolETH={poolData.poolETH}
+              ethPrice={poolData.ethPrice}
+              chipRate={poolData.chipRate}
+              isLoading={poolData.isLoading}
+              error={poolData.error}
+              layout="horizontal"
+              showLabels={true}
+              className="hidden md:flex bg-black/30 rounded-2xl px-6 py-3 border border-gray-600"
+            />
           )}
 
           {/* Right Section - Wallet & Network */}
@@ -188,7 +185,7 @@ const GameHeader: React.FC<GameHeaderProps> = ({
         </div>
       </div>
 
-      {/* Network Warning Banner - Only when connected but unsupported */}
+      {/* Network Warning Banner - Only when connected */}
       {isConnected && !isSupported && (
         <div className="bg-yellow-500/90 text-black p-3 text-center font-medium border-b border-yellow-400">
           <div className="max-w-7xl mx-auto flex items-center justify-center gap-4">
@@ -207,22 +204,16 @@ const GameHeader: React.FC<GameHeaderProps> = ({
 
       {/* Mobile Pool Info for Disconnected */}
       {!isConnected && (
-        <div className="md:hidden bg-black/30 mx-4 mb-4 rounded-xl p-4 border border-gray-600">
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div>
-              <div className="text-lg font-bold text-blue-400">{poolETH || '0.00'}</div>
-              <div className="text-xs text-gray-400">Prize Pool ETH</div>
-            </div>
-            <div>
-              <div className="text-lg font-bold text-green-400">{ethPrice || '$0'}</div>
-              <div className="text-xs text-gray-400">ETH Price</div>
-            </div>
-            <div>
-              <div className="text-lg font-bold text-yellow-400">{chipRate || '0'}</div>
-              <div className="text-xs text-gray-400">CHIPS/ETH</div>
-            </div>
-          </div>
-        </div>
+        <PoolStats
+          poolETH={poolData.poolETH}
+          ethPrice={poolData.ethPrice}
+          chipRate={poolData.chipRate}
+          isLoading={poolData.isLoading}
+          error={poolData.error}
+          layout="horizontal"
+          showLabels={true}
+          className="md:hidden bg-black/30 mx-4 mb-4 rounded-xl p-4 border border-gray-600"
+        />
       )}
     </header>
   );
