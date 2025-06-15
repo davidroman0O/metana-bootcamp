@@ -1,9 +1,22 @@
 const { expect } = require("chai");
 const { ethers, upgrades } = require("hardhat");
 
-describe("🎰 Payout Combinations", function () {
-  let casinoSlot, payoutTables, payoutTables3;
-  let mockVRFCoordinator, owner, player1;
+describe("🎯 Payout Combinations Testing", function () {
+  let casinoSlot, mockVRFCoordinator;
+  let payoutTables, payoutTables3, payoutTables4;
+  let owner, player1;
+
+  // PayoutType enum mapping for JavaScript tests (matches IPayoutTables.sol)
+  const PayoutType = {
+    LOSE: 0,
+    SMALL_WIN: 1,      // 2x
+    MEDIUM_WIN: 2,     // 5x
+    BIG_WIN: 3,        // 10x
+    MEGA_WIN: 4,       // 50x
+    ULTRA_WIN: 5,      // 100x
+    SPECIAL_COMBO: 6,  // 20x
+    JACKPOT: 7         // 25% of pool
+  };
 
   before(async function () {
     [owner, player1] = await ethers.getSigners();
@@ -54,18 +67,6 @@ describe("🎰 Payout Combinations", function () {
     );
     await casinoSlot.deployed();
   });
-
-  // PayoutType enum mapping from IPayoutTables
-  const PayoutType = {
-    LOSE: 0,
-    SMALL_WIN: 1,      // 2x
-    MEDIUM_WIN: 2,     // 5x
-    BIG_WIN: 3,        // 10x
-    MEGA_WIN: 4,       // 50x
-    ULTRA_WIN: 5,      // 100x
-    SPECIAL_COMBO: 6,  // 20x (2 rockets)
-    JACKPOT: 7         // 25% of pool
-  };
 
   describe("Jackpot Combinations", function () {
     it("Should correctly identify jackpot combination 666", async function () {

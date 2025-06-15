@@ -1,13 +1,16 @@
 const { expect } = require("chai");
 const { ethers, upgrades } = require("hardhat");
 
-describe("⚙️ Admin Functions - Mainnet Fork Testing", function () {
-  let casinoSlot, payoutTables, payoutTables3, payoutTables4;
-  let owner, player1;
+describe("🔧 Admin Functions", function () {
+  let casinoSlot;
+  let payoutTables, payoutTables3, payoutTables4;
+  let owner, player1, player2;
 
-  // Real mainnet addresses for mainnet fork testing
-  const ETH_USD_PRICE_FEED = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"; // Real Chainlink ETH/USD feed
-  const CHAINLINK_KEY_HASH = "0x8af398995b04c28e9951adb9721ef74c74f93e6a478f39e7e0777be13527e7ef"; // 500 gwei
+  // Mainnet addresses
+  const ETH_USD_PRICE_FEED = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419";
+  const CHAINLINK_KEY_HASH = "0x8af398995b04c28e9951adb9721ef74c74f93e6a478f39e7e0777be13527e7ef";
+
+  // Remove duplicate enum - will be imported from contract
 
   beforeEach(async function () {
     [owner, player1] = await ethers.getSigners();

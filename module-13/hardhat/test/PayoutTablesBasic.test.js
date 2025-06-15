@@ -103,11 +103,11 @@ describe("PayoutTables Basic API", function () {
     describe("API Management", function () {
         it("should return all table addresses correctly", async function () {
             const tables = await payoutTables.getAllPayoutTables();
-            expect(tables.table3).to.equal(payoutTables3.address);
-            expect(tables.table4).to.equal(payoutTables4.address);
-            expect(tables.table5).to.equal(payoutTables3.address); // Placeholder
-            expect(tables.table6).to.equal(payoutTables3.address); // Placeholder  
-            expect(tables.table7).to.equal(payoutTables3.address); // Placeholder
+            expect(tables.payoutTable3).to.equal(payoutTables3.address);
+            expect(tables.payoutTable4).to.equal(payoutTables4.address);
+            expect(tables.payoutTable5).to.equal(payoutTables3.address); // Placeholder
+            expect(tables.payoutTable6).to.equal(payoutTables3.address); // Placeholder  
+            expect(tables.payoutTable7).to.equal(payoutTables3.address); // Placeholder
         });
 
         it("should allow owner to update payout tables", async function () {
@@ -118,7 +118,7 @@ describe("PayoutTables Basic API", function () {
                 .withArgs(3, newTable);
                 
             const tables = await payoutTables.getAllPayoutTables();
-            expect(tables.table3).to.equal(newTable);
+            expect(tables.payoutTable3).to.equal(newTable);
         });
 
         it("should validate reel count bounds", async function () {

@@ -367,7 +367,7 @@ export const CasinoSlotABI = [
       },
       {
         "indexed": false,
-        "internalType": "enum CasinoSlot.PayoutType",
+        "internalType": "enum IPayoutTables.PayoutType",
         "name": "payoutType",
         "type": "uint8"
       },
@@ -456,7 +456,7 @@ export const CasinoSlotABI = [
     "name": "COORDINATOR",
     "outputs": [
       {
-        "internalType": "contract VRFCoordinatorV2Interface",
+        "internalType": "contract IVRFCoordinator",
         "name": "",
         "type": "address"
       }
@@ -1089,7 +1089,7 @@ export const CasinoSlotABI = [
         "type": "uint8"
       },
       {
-        "internalType": "enum CasinoSlot.PayoutType",
+        "internalType": "enum IPayoutTables.PayoutType",
         "name": "payoutType",
         "type": "uint8"
       },

@@ -38,7 +38,7 @@ contract CasinoSlotTest is CasinoSlot {
         uint256[] memory reels = _generateReels(randomWords[0], spin.reelCount);
         
         // Calculate payout using external tables
-        (PayoutType payoutType, uint256 payout) = _calculateModeBasedPayout(spin.reelCount, reels, spin.betAmount);
+        (IPayoutTables.PayoutType payoutType, uint256 payout) = _calculateModeBasedPayout(spin.reelCount, reels, spin.betAmount);
         
         // Update spin data
         spin.reels = reels;
@@ -52,7 +52,7 @@ contract CasinoSlotTest is CasinoSlot {
             totalWon[spin.player] += payout;
             
             // For jackpot, reduce the prize pool
-            if (payoutType == PayoutType.JACKPOT) {
+            if (payoutType == IPayoutTables.PayoutType.JACKPOT) {
                 totalPrizePool -= payout;
             }
         }

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
+import "./interfaces/IPayoutTables.sol";
+
 /**
  * @title PayoutTables6 - Bit-packed 6-reel payout lookup
  * @dev Uses math patterns + bit-packing for 80.68% reduction
@@ -8,17 +10,6 @@ pragma solidity ^0.8.22;
  * @notice Removed 8510 LOSE cases (default to 0)
  */
 contract PayoutTables6 {
-    
-    enum PayoutType {
-        LOSE,           // 0 - No payout
-        SMALL_WIN,      // 1 - 2x multiplier
-        MEDIUM_WIN,     // 2 - 5x multiplier  
-        BIG_WIN,        // 3 - 10x multiplier
-        MEGA_WIN,       // 4 - 50x multiplier
-        ULTRA_WIN,      // 5 - 100x multiplier
-        SPECIAL_COMBO,  // 6 - 20x multiplier
-        JACKPOT         // 7 - 50% of pool
-    }
     
     // Bit-packed storage: 10 payout types per uint256 (3 bits each)
     mapping(uint256 => uint256) private packedPayouts;
@@ -30,10 +21,10 @@ contract PayoutTables6 {
     /**
      * @dev Ultra-optimized payout lookup with bit-packing
      */
-    function getPayoutType(uint256 combinationKey) external view returns (PayoutType) {
+    function getPayoutType(uint256 combinationKey) external view returns (IPayoutTables.PayoutType) {
         // First check mathematical patterns
-        PayoutType mathPattern = _checkMathematicalPatterns(combinationKey);
-        if (mathPattern != PayoutType.LOSE) {
+        IPayoutTables.PayoutType mathPattern = _checkMathematicalPatterns(combinationKey);
+        if (mathPattern != IPayoutTables.PayoutType.LOSE) {
             return mathPattern;
         }
         
@@ -44,7 +35,7 @@ contract PayoutTables6 {
     /**
      * @dev Get payout from bit-packed storage
      */
-    function _getPackedPayoutType(uint256 combinationKey) internal view returns (PayoutType) {
+    function _getPackedPayoutType(uint256 combinationKey) internal view returns (IPayoutTables.PayoutType) {
         uint256 slotIndex = combinationKey / 10;
         uint256 positionInSlot = combinationKey % 10;
         
@@ -56,13 +47,13 @@ contract PayoutTables6 {
             packedData := and(shr(shift, packedData), 0x7) // 0x7 = 111 in binary
         }
         
-        return PayoutType(packedData);
+        return IPayoutTables.PayoutType(packedData);
     }
     
     /**
      * @dev Mathematical pattern detection (same as standard version)
      */
-    function _checkMathematicalPatterns(uint256 combinationKey) internal pure returns (PayoutType) {
+    function _checkMathematicalPatterns(uint256 combinationKey) internal pure returns (IPayoutTables.PayoutType) {
         // Extract individual reels using assembly for gas efficiency
         uint256[6] memory reels;
         uint256 temp = combinationKey;
@@ -95,44 +86,45 @@ contract PayoutTables6 {
         uint256 count6 = (counts >> 20) & 0xF;  // JACKPOT count
         
         // All same symbol patterns
-        if (count6 == 6) return PayoutType.JACKPOT;
-        if (count5 == 6) return PayoutType.ULTRA_WIN;
-        if (count4 == 6) return PayoutType.MEGA_WIN;
-        if (count3 == 6) return PayoutType.BIG_WIN;
-        if (count2 == 6) return PayoutType.MEDIUM_WIN;
+        if (count6 == 6) return IPayoutTables.PayoutType.JACKPOT;
+        if (count5 == 6) return IPayoutTables.PayoutType.ULTRA_WIN;
+        if (count4 == 6) return IPayoutTables.PayoutType.MEGA_WIN;
+        if (count3 == 6) return IPayoutTables.PayoutType.BIG_WIN;
+        if (count2 == 6) return IPayoutTables.PayoutType.MEDIUM_WIN;
         
         // Almost all patterns
-        if (count6 == 5) return PayoutType.SPECIAL_COMBO;
-        if (count5 == 5) return PayoutType.SPECIAL_COMBO;
+        if (count6 == 5) return IPayoutTables.PayoutType.SPECIAL_COMBO;
+        if (count5 == 5) return IPayoutTables.PayoutType.SPECIAL_COMBO;
         
         // Specific rocket patterns
-        if (count5 == 3) return PayoutType.SPECIAL_COMBO;
+        if (count5 == 3) return IPayoutTables.PayoutType.SPECIAL_COMBO;
         
         // Mixed high-value combinations
-        if (count4 >= 2 && count5 >= 1) return PayoutType.SPECIAL_COMBO;
-        if (count5 >= 2 && count4 >= 1) return PayoutType.SPECIAL_COMBO;
+        if (count4 >= 2 && count5 >= 1) return IPayoutTables.PayoutType.SPECIAL_COMBO;
+        if (count5 >= 2 && count4 >= 1) return IPayoutTables.PayoutType.SPECIAL_COMBO;
         
         // Triple+ patterns
-        if (count6 >= 3) return PayoutType.MEGA_WIN;
-        if (count5 >= 3) return PayoutType.BIG_WIN;
-        if (count4 >= 3) return PayoutType.BIG_WIN;
-        if (count3 >= 3) return PayoutType.MEDIUM_WIN;
-        if (count2 >= 3) return PayoutType.MEDIUM_WIN;
+        if (count6 >= 3) return IPayoutTables.PayoutType.MEGA_WIN;
+        if (count5 >= 3) return IPayoutTables.PayoutType.BIG_WIN;
+        if (count4 >= 3) return IPayoutTables.PayoutType.BIG_WIN;
+        if (count3 >= 3) return IPayoutTables.PayoutType.MEDIUM_WIN;
+        if (count2 >= 3) return IPayoutTables.PayoutType.MEDIUM_WIN;
         
         // 4+ patterns
-        if (count6 >= 4) return PayoutType.MEGA_WIN;
-        if (count5 >= 4) return PayoutType.MEGA_WIN;
-        if (count4 >= 4) return PayoutType.MEGA_WIN;
-        if (count3 >= 4) return PayoutType.BIG_WIN;
-        if (count2 >= 4) return PayoutType.BIG_WIN;
+        if (count6 >= 4) return IPayoutTables.PayoutType.MEGA_WIN;
+        if (count5 >= 4) return IPayoutTables.PayoutType.MEGA_WIN;
+        if (count4 >= 4) return IPayoutTables.PayoutType.MEGA_WIN;
+        if (count3 >= 4) return IPayoutTables.PayoutType.BIG_WIN;
+        if (count2 >= 4) return IPayoutTables.PayoutType.BIG_WIN;
         
         // Pair patterns: Only high-value symbols pay on pairs
-        if (count6 >= 2) return PayoutType.SMALL_WIN;  // Jackpot pairs
-        if (count5 >= 2) return PayoutType.SMALL_WIN;  // Rocket pairs
-        if (count4 >= 2) return PayoutType.SMALL_WIN;  // Diamond pairs
-        // Removed: PUMP (3) and COPE (2) pairs - too common and generous!
+        if (count6 >= 2) return IPayoutTables.PayoutType.SMALL_WIN;  // Jackpot pairs
+        if (count5 >= 2) return IPayoutTables.PayoutType.SMALL_WIN;  // Rocket pairs
+        if (count4 >= 2) return IPayoutTables.PayoutType.SMALL_WIN;  // Diamond pairs
+        if (count3 >= 2) return IPayoutTables.PayoutType.SMALL_WIN;  // PUMP pairs
+        if (count2 >= 2) return IPayoutTables.PayoutType.SMALL_WIN;  // COPE pairs
         
-        return PayoutType.LOSE;
+        return IPayoutTables.PayoutType.LOSE;
     }
     
     /**

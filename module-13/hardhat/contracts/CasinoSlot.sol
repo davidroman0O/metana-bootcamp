@@ -1,20 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
-import "./interfaces/IVRFCoordinator.sol";
-import "./interfaces/IPriceFeed.sol";
-import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "./interfaces/IPayoutTables.sol";
+import "./interfaces/IPriceFeed.sol";
+import "./interfaces/IVRFCoordinator.sol";
 
 /**
- * @title CasinoSlot - Casino & ERC20 Token Combined
- * @dev Upgradeable slot machine that IS the CHIPS token itself
- * @notice Users buy CHIPS with ETH, spend CHIPS on spins, win more CHIPS
+ * @title CasinoSlot - Professional-grade on-chain slot machine with upgradeable architecture
+ * @author David Roman
+ * @notice Advanced casino system with Chainlink VRF, compound integration, and modular payout tables
+ * @dev UUPS upgradeable contract with comprehensive admin controls and risk management
  */
 contract CasinoSlot is 
     Initializable,
@@ -22,30 +23,8 @@ contract CasinoSlot is
     ReentrancyGuardUpgradeable, 
     PausableUpgradeable, 
     UUPSUpgradeable,
-    OwnableUpgradeable 
+    OwnableUpgradeable
 {
-    
-    enum PayoutType {
-        LOSE,           // 0 - No payout
-        SMALL_WIN,      // 1 - 2x multiplier
-        MEDIUM_WIN,     // 2 - 5x multiplier  
-        BIG_WIN,        // 3 - 10x multiplier
-        MEGA_WIN,       // 4 - 50x multiplier
-        ULTRA_WIN,      // 5 - 100x multiplier
-        SPECIAL_COMBO,  // 6 - 20x multiplier
-        JACKPOT         // 7 - 25% of pool
-    }
-    
-    struct Spin {
-        address player;
-        uint256 betAmount;
-        uint8 reelCount;      // Number of reels for this spin
-        uint256[] reels;      // Dynamic array for reel results
-        PayoutType payoutType;
-        uint256 payout;
-        bool settled;
-        uint256 timestamp;
-    }
     
     // Chainlink VRF - stored as state variables instead of immutable
     IVRFCoordinator public COORDINATOR;
@@ -83,13 +62,24 @@ contract CasinoSlot is
         address indexed player, 
         uint8 reelCount,
         uint256[] reels, 
-        PayoutType payoutType, 
+        IPayoutTables.PayoutType payoutType, 
         uint256 payout
     );
     event WinningsWithdrawn(address indexed player, uint256 amount);
     event PrizePoolUpdated(uint256 newTotal);
     event PayoutTablesUpdated(address indexed newPayoutTables);
     event ChipsPurchased(address indexed player, uint256 ethAmount, uint256 chipsAmount);
+    
+    struct Spin {
+        address player;
+        uint256 betAmount;
+        uint8 reelCount;      // Number of reels for this spin
+        uint256[] reels;      // Dynamic array for reel results
+        IPayoutTables.PayoutType payoutType;
+        uint256 payout;
+        bool settled;
+        uint256 timestamp;
+    }
     
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -219,7 +209,7 @@ contract CasinoSlot is
             betAmount: cost,
             reelCount: reelCount,
             reels: new uint256[](reelCount), // Initialize empty array
-            payoutType: PayoutType.LOSE,
+            payoutType: IPayoutTables.PayoutType.LOSE,
             payout: 0,
             settled: false,
             timestamp: block.timestamp
@@ -250,7 +240,7 @@ contract CasinoSlot is
     /**
      * @dev Calculate payout based on reel results using external payout tables
      */
-    function _calculateModeBasedPayout(uint8 reelCount, uint256[] memory reels, uint256 betAmount) internal view returns (PayoutType, uint256) {
+    function _calculateModeBasedPayout(uint8 reelCount, uint256[] memory reels, uint256 betAmount) internal view returns (IPayoutTables.PayoutType, uint256) {
         // Convert reels array to combination key (e.g., [3,3,3] -> 333)
         uint256 combinationKey = 0;
         for (uint8 i = 0; i < reels.length; i++) {
@@ -258,25 +248,24 @@ contract CasinoSlot is
         }
         
         // Get payout type from external contract
-        IPayoutTables.PayoutType externalPayoutType = payoutTables.getPayoutType(reelCount, combinationKey);
-        PayoutType payoutType = PayoutType(uint8(externalPayoutType));
+        IPayoutTables.PayoutType payoutType = payoutTables.getPayoutType(reelCount, combinationKey);
         
         // Calculate payout amount
         uint256 payout = 0;
         
-        if (payoutType == PayoutType.SMALL_WIN) {
+        if (payoutType == IPayoutTables.PayoutType.SMALL_WIN) {
             payout = betAmount * 2;
-        } else if (payoutType == PayoutType.MEDIUM_WIN) {
+        } else if (payoutType == IPayoutTables.PayoutType.MEDIUM_WIN) {
             payout = betAmount * 5;
-        } else if (payoutType == PayoutType.BIG_WIN) {
+        } else if (payoutType == IPayoutTables.PayoutType.BIG_WIN) {
             payout = betAmount * 10;
-        } else if (payoutType == PayoutType.SPECIAL_COMBO) {
+        } else if (payoutType == IPayoutTables.PayoutType.SPECIAL_COMBO) {
             payout = betAmount * 20;
-        } else if (payoutType == PayoutType.MEGA_WIN) {
+        } else if (payoutType == IPayoutTables.PayoutType.MEGA_WIN) {
             payout = betAmount * 50;
-        } else if (payoutType == PayoutType.ULTRA_WIN) {
+        } else if (payoutType == IPayoutTables.PayoutType.ULTRA_WIN) {
             payout = betAmount * 100;
-        } else if (payoutType == PayoutType.JACKPOT) {
+        } else if (payoutType == IPayoutTables.PayoutType.JACKPOT) {
             payout = totalPrizePool / 4; // 25% of prize pool for jackpot
         }
         
@@ -303,7 +292,7 @@ contract CasinoSlot is
         uint256[] memory reels = _generateReels(randomWords[0], spin.reelCount);
         
         // Calculate payout using external tables
-        (PayoutType payoutType, uint256 payout) = _calculateModeBasedPayout(spin.reelCount, reels, spin.betAmount);
+        (IPayoutTables.PayoutType payoutType, uint256 payout) = _calculateModeBasedPayout(spin.reelCount, reels, spin.betAmount);
         
         // Update spin data
         spin.reels = reels;
@@ -317,7 +306,7 @@ contract CasinoSlot is
             totalWon[spin.player] += payout;
             
             // For jackpot, reduce the prize pool
-            if (payoutType == PayoutType.JACKPOT) {
+            if (payoutType == IPayoutTables.PayoutType.JACKPOT) {
                 totalPrizePool -= payout;
             }
         }
