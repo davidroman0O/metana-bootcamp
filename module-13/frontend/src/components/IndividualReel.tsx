@@ -30,9 +30,9 @@ const ROW_COUNT = 3;
 const PAYLINE_CENTER_Y = (ROW_COUNT * SYMBOL_SIZE) / 2; // Center of middle row
 const SYMBOL_CENTER_OFFSET = SYMBOL_SIZE / 2; // Distance from symbol top to center
 
-// Animation timing constants (now for Anime.js)
+// Animation timing constants
 const SPINUP_DURATION = 800; // ms to reach max speed
-const MAX_SPINNING_SPEED = 28*2; // pixels per frame (60fps) - FASTER, more exciting slot machine speed
+const MAX_SPINNING_SPEED = 28*2; // pixels per frame (60fps) 
 const SPINDOWN_BASE_DURATION = 2000; // ms base deceleration time
 const STOPPING_DURATION = 300; // ms for snap-back
 const SETTLING_DURATION = 500*2; // ms for bounce effect
@@ -78,10 +78,9 @@ const IndividualReel = forwardRef<IndividualReelRef, IndividualReelProps>(({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   
-  // Anime.js scope for proper React integration
   const animeScope = useRef<any>(null);
   
-  // Animation state - now driven by Anime.js
+  // Animation state 
   const reelAnimation = useRef({ 
     position: 0, 
     speed: 0,
@@ -100,7 +99,7 @@ const IndividualReel = forwardRef<IndividualReelRef, IndividualReelProps>(({
   const masterLockEngagedRef = useRef<boolean>(false);
   const lockedTargetSymbolRef = useRef<number | null>(null);
 
-  // Animation references - simplified
+  // Animation references 
   const currentAnimationRef = useRef<any>(null);
   const animationFrameRef = useRef<number>(0);
   const isSpinningContinuouslyRef = useRef<boolean>(false);
@@ -357,7 +356,7 @@ const IndividualReel = forwardRef<IndividualReelRef, IndividualReelProps>(({
     ctx.fillText(symbol.emoji, centerX, centerY);
   };
 
-  // Render the reel (with proper canvas filter motion blur)
+  // Render the reel 
   const render = () => {
     if (!ctxRef.current || !canvasRef.current) return;
     
@@ -436,7 +435,7 @@ const IndividualReel = forwardRef<IndividualReelRef, IndividualReelProps>(({
       reelAnimation.current.position += REEL_PIXEL_LENGTH;
     }
     
-    // NO oscillation during spinning - keep it perfectly smooth
+    // NO oscillation during spinning
     reelAnimation.current.oscillation = 0;
     
     // Render

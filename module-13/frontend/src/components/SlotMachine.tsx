@@ -18,6 +18,8 @@ const SYMBOLS = [
 /**
  * FLEXIBLE SLOT MACHINE SYSTEM
  * 
+ * TODO: Make it a more polished component and a github repo :p 
+ * 
  * This slot machine now supports 1 to 10 reels dynamically!
  * 
  * Usage Examples:
@@ -478,7 +480,7 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
       return false;
     }
     
-    // CRITICAL: Check if ALL individual reels are actually ready
+    // Check if ALL individual reels are actually ready
     if (!areAllReelsReady()) {
       console.error('SlotMachine: Cannot start spin, not all reels are ready');
       setDisplayMessage('Some reels are busy. Please wait...');

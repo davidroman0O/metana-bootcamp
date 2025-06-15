@@ -303,8 +303,7 @@ export function useCasinoContract() {
         // Track pending spin
         const cost = spinCosts[`reels${reelCount}` as keyof SpinCosts];
         
-        // Note: We'll get the actual requestId from the event logs
-        // For now, just track by hash
+        // TODO: get the actual requestId from the event logs - For no w, just track by hash - im a bit close to finished it asap and it's all details anyway
         
         return hash;
       },
@@ -385,8 +384,7 @@ export function useCasinoContract() {
   useEffect(() => {
     if (!publicClient || !isConnected) return;
     
-    // TODO: Set up event listeners for SpinResult events
-    // This would update latestSpinResult when VRF completes
+    // TODO: Set up event listeners for SpinResult events - This would update latestSpinResult when VRF completes - again i need to move on to the next module (Metana)
     
   }, [publicClient, isConnected]);
   
