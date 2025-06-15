@@ -111,7 +111,8 @@ contract PayoutTables3 {
         if (count6 >= 2) return PayoutType.SMALL_WIN;  // Jackpot pairs
         if (count5 >= 2) return PayoutType.SMALL_WIN;  // Rocket pairs
         if (count4 >= 2) return PayoutType.SMALL_WIN;  // Diamond pairs
-        // Removed: PUMP (3) and COPE (2) pairs - too common and generous!
+        if (count3 >= 2) return PayoutType.SMALL_WIN;  // PUMP pairs
+        if (count2 >= 2) return PayoutType.SMALL_WIN;  // COPE pairs
         
         return PayoutType.LOSE; // No pattern matched
     }

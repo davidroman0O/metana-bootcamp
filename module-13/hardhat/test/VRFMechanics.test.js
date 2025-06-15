@@ -13,28 +13,42 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
   before(async function () {
     [owner, player1, player2] = await ethers.getSigners();
 
-    // Mock addresses
-    const mockVRFCoordinator = ethers.Wallet.createRandom().address;
-    const mockEthUsdPriceFeed = ethers.Wallet.createRandom().address;
-    const dummyKeyHash = ethers.utils.formatBytes32String("dummy");
-    const subscriptionId = 1;
-    
-    // Deploy PayoutTables
-    const PayoutTables = await ethers.getContractFactory("PayoutTablesBasic");
-    const payoutTables = await PayoutTables.deploy();
+    // Deploy Mock VRF Coordinator
+    const MockVRFCoordinator = await ethers.getContractFactory("MockVRFCoordinator");
+    const mockVRFCoordinator = await MockVRFCoordinator.deploy();
+    await mockVRFCoordinator.deployed();
+
+    // Deploy PayoutTables contracts
+    const PayoutTables3 = await ethers.getContractFactory("PayoutTables3");
+    const payoutTables3 = await PayoutTables3.deploy();
+    await payoutTables3.deployed();
+
+    const PayoutTables4 = await ethers.getContractFactory("PayoutTables4");
+    const payoutTables4 = await PayoutTables4.deploy();
+    await payoutTables4.deployed();
+
+    // Deploy main PayoutTables API
+    const PayoutTables = await ethers.getContractFactory("PayoutTables");
+    payoutTables = await PayoutTables.deploy(
+      payoutTables3.address,
+      payoutTables4.address,
+      payoutTables3.address, // Placeholder for 5
+      payoutTables3.address, // Placeholder for 6  
+      payoutTables3.address  // Placeholder for 7
+    );
     await payoutTables.deployed();
     
-    // Deploy CasinoSlot via proxy
-    const CasinoSlot = await ethers.getContractFactory("CasinoSlot");
+    // Deploy CasinoSlotTest via proxy
+    const CasinoSlotTest = await ethers.getContractFactory("CasinoSlotTest");
     casinoSlot = await upgrades.deployProxy(
-      CasinoSlot,
+      CasinoSlotTest,
       [
-        subscriptionId,        // uint64 subscriptionId
-        mockEthUsdPriceFeed,   // address ethUsdPriceFeedAddress
-        payoutTables.address,  // address payoutTablesAddress
-        mockVRFCoordinator,    // address vrfCoordinatorAddress
-        dummyKeyHash,          // bytes32 vrfKeyHash
-        owner.address          // address initialOwner
+        1,                        // uint64 subscriptionId
+        ETH_USD_PRICE_FEED,       // address ethUsdPriceFeedAddress
+        payoutTables.address,     // address payoutTablesAddress
+        mockVRFCoordinator.address, // address vrfCoordinatorAddress
+        CHAINLINK_KEY_HASH,       // bytes32 vrfKeyHash
+        owner.address             // address initialOwner
       ],
       {
         kind: 'uups',

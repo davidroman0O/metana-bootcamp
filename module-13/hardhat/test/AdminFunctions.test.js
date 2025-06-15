@@ -17,10 +17,6 @@ describe("⚙️ Admin Functions - Mainnet Fork Testing", function () {
     const mockVRFCoordinator = await MockVRFCoordinator.deploy();
     await mockVRFCoordinator.deployed();
 
-    // Use dummy addresses for Compound since mocking is built into CasinoSlotTest
-    const dummyCEthAddress = ethers.Wallet.createRandom().address;
-    const dummyComptrollerAddress = ethers.Wallet.createRandom().address;
-
     // Deploy PayoutTables contracts first
     const PayoutTables3 = await ethers.getContractFactory("PayoutTables3");
     payoutTables3 = await PayoutTables3.deploy();
@@ -47,12 +43,10 @@ describe("⚙️ Admin Functions - Mainnet Fork Testing", function () {
       CasinoSlotTest,
       [
         1, // VRF subscription ID
-        ETH_USD_PRICE_FEED,
+        ETH_USD_PRICE_FEED, // Real mainnet Chainlink ETH/USD feed
         payoutTables.address,
         mockVRFCoordinator.address,
         CHAINLINK_KEY_HASH,
-        dummyCEthAddress, // Dummy address - mocking is built into CasinoSlotTest
-        dummyComptrollerAddress, // Dummy address - mocking is built into CasinoSlotTest
         owner.address
       ],
       { kind: "uups" }

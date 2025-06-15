@@ -10,7 +10,7 @@ interface IPayoutTables {
         MEGA_WIN,       // 4 - 50x multiplier
         ULTRA_WIN,      // 5 - 100x multiplier
         SPECIAL_COMBO,  // 6 - 20x multiplier
-        JACKPOT         // 7 - 50% of pool
+        JACKPOT         // 7 - 25% of pool
     }
     
     function getPayoutType(uint8 reelCount, uint256 combinationKey) external view returns (PayoutType);

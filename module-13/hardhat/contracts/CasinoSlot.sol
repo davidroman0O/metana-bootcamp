@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
-import "@chainlink/contracts/src/v0.8/vrf/interfaces/VRFCoordinatorV2Interface.sol";
-import "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+import "./interfaces/IVRFCoordinator.sol";
+import "./interfaces/IPriceFeed.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
@@ -48,7 +48,7 @@ contract CasinoSlot is
     }
     
     // Chainlink VRF - stored as state variables instead of immutable
-    VRFCoordinatorV2Interface public COORDINATOR;
+    IVRFCoordinator public COORDINATOR;
     uint64 public s_subscriptionId;
     bytes32 public keyHash; // VRF key hash - identifies gas price tier and oracle selection
     uint32 public callbackGasLimit;
@@ -59,7 +59,7 @@ contract CasinoSlot is
     IPayoutTables public payoutTables;
     
     // Core game state
-    AggregatorV3Interface internal ethUsdPriceFeed;
+    IPriceFeed internal ethUsdPriceFeed;
     uint256 public totalPrizePool;
     uint256 public houseEdge; // 5% (500 basis points)
     
@@ -113,9 +113,9 @@ contract CasinoSlot is
         __Pausable_init();
         __Ownable_init(initialOwner);
         
-        COORDINATOR = VRFCoordinatorV2Interface(vrfCoordinatorAddress);
+        COORDINATOR = IVRFCoordinator(vrfCoordinatorAddress);
         s_subscriptionId = subscriptionId;
-        ethUsdPriceFeed = AggregatorV3Interface(ethUsdPriceFeedAddress);
+        ethUsdPriceFeed = IPriceFeed(ethUsdPriceFeedAddress);
         payoutTables = IPayoutTables(payoutTablesAddress);
         keyHash = vrfKeyHash;
         
@@ -277,7 +277,6 @@ contract CasinoSlot is
         } else if (payoutType == PayoutType.ULTRA_WIN) {
             payout = betAmount * 100;
         } else if (payoutType == PayoutType.JACKPOT) {
-            // SECURITY: Reduced from 50% to 25% to prevent excessive prize pool draining
             payout = totalPrizePool / 4; // 25% of prize pool for jackpot
         }
         

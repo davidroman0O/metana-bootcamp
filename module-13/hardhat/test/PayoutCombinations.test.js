@@ -14,7 +14,6 @@ describe("🎰 Payout Combinations", function () {
     await mockVRFCoordinator.deployed();
 
     // Mock addresses
-    const mockVRFCoordinatorAddress = ethers.Wallet.createRandom().address;
     const ETH_USD_PRICE_FEED = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"; 
     const dummyKeyHash = ethers.utils.formatBytes32String("dummy");
     const subscriptionId = 1;
@@ -47,7 +46,7 @@ describe("🎰 Payout Combinations", function () {
         subscriptionId,
         ETH_USD_PRICE_FEED,
         payoutTables.address,
-        mockVRFCoordinatorAddress,
+        mockVRFCoordinator.address,
         dummyKeyHash,
         owner.address // Initial owner
       ],
@@ -65,7 +64,7 @@ describe("🎰 Payout Combinations", function () {
     MEGA_WIN: 4,       // 50x
     ULTRA_WIN: 5,      // 100x
     SPECIAL_COMBO: 6,  // 20x (2 rockets)
-    JACKPOT: 7         // 50% of pool
+    JACKPOT: 7         // 25% of pool
   };
 
   describe("Jackpot Combinations", function () {

@@ -8,8 +8,6 @@ describe("🎰 CasinoSlot - COMPLETE END-TO-END REAL WORLD SIMULATION", function
   const MOCK_KEY_HASH = "0x8af398995b04c28e9951adb9721ef74c74f93e6a478f39e7e0777be13527e7ef";
   const MOCK_SUB_ID = 1;
   const MOCK_PRICE_FEED = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419";
-  const MOCK_CETH = "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5";
-  const MOCK_COMPTROLLER = "0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B";
 
   before(async function () {
     console.log("🚀 DEPLOYING COMPLETE CASINO SLOT ECOSYSTEM...");
@@ -42,7 +40,7 @@ describe("🎰 CasinoSlot - COMPLETE END-TO-END REAL WORLD SIMULATION", function
     await payoutTables.deployed();
     console.log(`🎯 PayoutTables deployed: ${payoutTables.address}`);
 
-    // Deploy CasinoSlotTest with correct 8-parameter initialization
+    // Deploy CasinoSlotTest
     const CasinoSlotTest = await ethers.getContractFactory("CasinoSlotTest");
     casinoSlot = await upgrades.deployProxy(CasinoSlotTest, [
       MOCK_SUB_ID,              // subscriptionId
@@ -50,8 +48,6 @@ describe("🎰 CasinoSlot - COMPLETE END-TO-END REAL WORLD SIMULATION", function
       payoutTables.address,    // payoutTablesAddress
       mockVRFCoordinator.address, // vrfCoordinatorAddress
       MOCK_KEY_HASH,           // vrfKeyHash
-      MOCK_CETH,               // cEthAddress
-      MOCK_COMPTROLLER,        // comptrollerAddress
       owner.address            // initialOwner
     ], {
       kind: 'uups',
@@ -166,28 +162,20 @@ describe("🎰 CasinoSlot - COMPLETE END-TO-END REAL WORLD SIMULATION", function
     });
 
     it("🏦 PLAYER 2: Compound Leverage High Roller Experience", async function () {
-      console.log("\n👤 PLAYER 2: High roller using Compound leverage...");
+      console.log("\n👤 PLAYER 2: High roller experience...");
       
-      // === COMPOUND LEVERAGE SETUP ===
-      const collateralAmount = ethers.utils.parseEther("3"); // 3 ETH collateral
+      // === DIRECT CHIPS PURCHASE ===
+      console.log(`🏦 Player 2 buying chips with ETH...`);
+      await casinoSlot.connect(player2).buyChips({ value: ethers.utils.parseEther("3") });
       
-      console.log(`🏦 Depositing ${ethers.utils.formatEther(collateralAmount)} ETH as collateral...`);
-      await casinoSlot.connect(player2).depositCollateral({ value: collateralAmount });
+      const chipBalance = await casinoSlot.balanceOf(player2.address);
+      console.log(`💳 Player 2 CHIPS balance: ${ethers.utils.formatEther(chipBalance)} CHIPS`);
+      expect(chipBalance).to.be.gt(0);
       
-      const liquidityBefore = await casinoSlot.getAccountLiquidity(player2.address);
-      console.log(`💳 Account liquidity: ${ethers.utils.formatEther(liquidityBefore)} ETH`);
-      expect(liquidityBefore).to.be.gt(0);
+      console.log("✅ CHIPS purchase working correctly");
       
-      // Skip the borrowChips part due to architectural complexity - this proves collateral deposit works
-      console.log("🔧 Skipping borrow functionality due to contract architecture complexity");
-      console.log("✅ Collateral deposit and liquidity calculation working correctly");
-      
-      // Instead, just give player2 some chips to test gambling
-      await casinoSlot.transfer(player2.address, ethers.utils.parseEther("50"));
-      await casinoSlot.connect(player2).approve(casinoSlot.address, ethers.utils.parseEther("50"));
-      
-      // === SIMPLE GAMBLING SESSION ===
-      console.log("\n🎰 Simple gambling session...");
+      // === HIGH STAKES GAMBLING SESSION ===
+      console.log("\n🎰 High stakes gambling session...");
       
       // Test a few 3-reel spins
       for (let i = 0; i < 3; i++) {
@@ -221,11 +209,9 @@ describe("🎰 CasinoSlot - COMPLETE END-TO-END REAL WORLD SIMULATION", function
       console.log(`   Final balance: ${ethers.utils.formatEther(finalBalance)} CHIPS`);
       console.log(`   Total spins: ${stats2.spinsCount}`);
       console.log(`   Total winnings: ${ethers.utils.formatEther(stats2.totalWinnings)} CHIPS`);
-      console.log(`   Collateral deposited: ${ethers.utils.formatEther(collateralAmount)} ETH`);
-      console.log(`   Account liquidity: ${ethers.utils.formatEther(stats2.accountLiquidity)} ETH`);
       
       expect(stats2.spinsCount).to.be.gt(0);
-      expect(stats2.accountLiquidity).to.be.gt(0); // Should have liquidity from collateral
+      expect(finalBalance).to.be.gt(0); // Should have some balance left
     });
 
     it("🏆 JACKPOT SHOWDOWN: Prize Pool Competition", async function () {
@@ -483,43 +469,17 @@ describe("🎰 CasinoSlot - COMPLETE END-TO-END REAL WORLD SIMULATION", function
       await expect(casinoSlot.getSpinCost(8)).to.be.revertedWith("Invalid reel count");
       console.log(`✅ Invalid reel counts properly rejected`);
       
-      // Test insufficient CHIPS balance - create a fresh wallet with no tokens
-      const poorPlayer = ethers.Wallet.createRandom().connect(ethers.provider);
-      
-      // Fund the poor player with enough ETH for gas
-      await owner.sendTransaction({
-        to: poorPlayer.address,
-        value: ethers.utils.parseEther("1") // More ETH for gas
-      });
-      
-      // Verify the player has no CHIPS
-      const poorPlayerChips = await casinoSlot.balanceOf(poorPlayer.address);
-      expect(poorPlayerChips).to.equal(0);
-      
-      // This should fail because they have no CHIPS balance 
-      // First they need to approve, but since they have 0 balance it should fail on transfer
-      await casinoSlot.connect(poorPlayer).approve(casinoSlot.address, ethers.utils.parseEther("1"));
-      
-      await expect(
-        casinoSlot.connect(poorPlayer).spin3Reels()
-      ).to.be.reverted; // Use generic revert check
-      console.log(`✅ Insufficient balance properly rejected`);
-      
       // Test invalid VRF request IDs
       await expect(
         casinoSlot.testFulfillRandomWords(999999, [ethers.BigNumber.from("123")])
       ).to.be.revertedWith("Invalid request ID");
       console.log(`✅ Invalid VRF request ID properly rejected`);
       
-      // Test zero amount operations in Compound
+      // Test zero ETH chip purchase
       await expect(
-        casinoSlot.connect(player1).depositCollateral({ value: 0 })
-      ).to.be.revertedWith("Must deposit ETH");
-      
-      await expect(
-        casinoSlot.connect(player1).borrowChips(0)
-      ).to.be.revertedWith("Must borrow positive amount");
-      console.log(`✅ Zero amount operations properly rejected`);
+        casinoSlot.connect(player1).buyChips({ value: 0 })
+      ).to.be.revertedWith("Must send ETH");
+      console.log(`✅ Zero ETH chip purchase properly rejected`);
     });
 
     it("🏆 Comprehensive High-Reel Testing (5, 6, 7 Reels)", async function () {

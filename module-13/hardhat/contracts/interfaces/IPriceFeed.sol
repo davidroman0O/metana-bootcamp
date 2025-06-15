@@ -2,22 +2,9 @@
 pragma solidity ^0.8.22;
 
 /**
- * @title Chainlink VRF Interface
- */
-interface VRFCoordinatorV2Interface {
-    function requestRandomWords(
-        bytes32 keyHash,
-        uint64 subId,
-        uint16 minimumRequestConfirmations,
-        uint32 callbackGasLimit,
-        uint32 numWords
-    ) external returns (uint256 requestId);
-}
-
-/**
  * @title Chainlink Price Feed Interface
  */
-interface AggregatorV3Interface {
+interface IPriceFeed {
     function decimals() external view returns (uint8);
     function description() external view returns (string memory);
     function version() external view returns (uint256);
