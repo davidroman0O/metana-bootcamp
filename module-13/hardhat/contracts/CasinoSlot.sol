@@ -54,6 +54,7 @@ contract CasinoSlot is
     mapping(address => uint256) public playerWinnings;
     mapping(address => uint256) public totalSpins;
     mapping(address => uint256) public totalWon;
+    mapping(address => uint256) public totalBet;
     
     // Events
     event SpinRequested(uint256 indexed requestId, address indexed player, uint8 reelCount, uint256 betAmount);
@@ -66,9 +67,15 @@ contract CasinoSlot is
         uint256 payout
     );
     event WinningsWithdrawn(address indexed player, uint256 amount);
-    event PrizePoolUpdated(uint256 newTotal);
+    // 0: SPIN_CONTRIBUTION, 1: JACKPOT_PAYOUT, 2: ETH_DEPOSIT
+    event PrizePoolStateChanged(uint256 newTotalPrizePool, int256 amount, uint8 indexed reason);
     event PayoutTablesUpdated(address indexed newPayoutTables);
     event ChipsPurchased(address indexed player, uint256 ethAmount, uint256 chipsAmount);
+    event EthWithdrawn(address indexed owner, uint256 amount);
+    event HouseFeeCollected(uint256 indexed requestId, address indexed player, uint256 amount);
+    event PlayerStatsUpdated(address indexed player, uint256 totalSpins, uint256 totalWinnings, uint256 totalBet);
+    event ContractInitialized(uint8 version);
+    event WinningsCredited(address indexed player, uint256 amount);
     
     struct Spin {
         address player;
@@ -114,6 +121,7 @@ contract CasinoSlot is
         requestConfirmations = 3;
         numWords = 1;
         houseEdge = 500; // 5%
+        emit ContractInitialized(1);
     }
     
     /**
@@ -193,6 +201,7 @@ contract CasinoSlot is
         uint256 houseAmount = (cost * houseEdge) / 10000;
         uint256 prizeAmount = cost - houseAmount;
         totalPrizePool += prizeAmount;
+        emit PrizePoolStateChanged(totalPrizePool, int256(prizeAmount), 0);
         
         // Request randomness
         requestId = COORDINATOR.requestRandomWords(
@@ -202,6 +211,8 @@ contract CasinoSlot is
             callbackGasLimit,
             numWords
         );
+        
+        emit HouseFeeCollected(requestId, msg.sender, houseAmount);
         
         // Store spin data
         spins[requestId] = Spin({
@@ -216,6 +227,8 @@ contract CasinoSlot is
         });
         
         totalSpins[msg.sender]++;
+        totalBet[msg.sender] += cost;
+        emit PlayerStatsUpdated(msg.sender, totalSpins[msg.sender], totalWon[msg.sender], totalBet[msg.sender]);
         
         emit SpinRequested(requestId, msg.sender, reelCount, cost);
         return requestId;
@@ -302,12 +315,15 @@ contract CasinoSlot is
         
         // Award winnings if any
         if (payout > 0) {
+            emit WinningsCredited(spin.player, payout);
             playerWinnings[spin.player] += payout;
             totalWon[spin.player] += payout;
+            emit PlayerStatsUpdated(spin.player, totalSpins[spin.player], totalWon[spin.player], totalBet[spin.player]);
             
             // For jackpot, reduce the prize pool
             if (payoutType == IPayoutTables.PayoutType.JACKPOT) {
                 totalPrizePool -= payout;
+                emit PrizePoolStateChanged(totalPrizePool, -int256(payout), 1);
             }
         }
         
@@ -355,6 +371,7 @@ contract CasinoSlot is
      */
     function withdrawETH(uint256 amount) external onlyOwner {
         require(address(this).balance >= amount, "Insufficient balance");
+        emit EthWithdrawn(owner(), amount);
         payable(owner()).transfer(amount);
     }
     
@@ -365,13 +382,15 @@ contract CasinoSlot is
         uint256 balance,
         uint256 winnings,
         uint256 spinsCount,
-        uint256 totalWinnings
+        uint256 totalWinnings,
+        uint256 totalBetAmount
     ) {
         return (
             balanceOf(player),
             playerWinnings[player],
             totalSpins[player],
-            totalWon[player]
+            totalWon[player],
+            totalBet[player]
         );
     }
     
@@ -393,7 +412,7 @@ contract CasinoSlot is
     // Allow contract to receive ETH
     receive() external payable {
         totalPrizePool += msg.value;
-        emit PrizePoolUpdated(totalPrizePool);
+        emit PrizePoolStateChanged(totalPrizePool, int256(msg.value), 2);
     }
     
     // ============ COMPOUND INTEGRATION ============
@@ -412,6 +431,7 @@ contract CasinoSlot is
         
         // Add ETH to the prize pool
         totalPrizePool += msg.value;
+        emit PrizePoolStateChanged(totalPrizePool, int256(msg.value), 2);
         
         emit ChipsPurchased(msg.sender, msg.value, chipsAmount);
     }
