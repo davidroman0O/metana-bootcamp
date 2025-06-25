@@ -117,3 +117,81 @@ type WinningsWithdrawn @entity(immutable: true) {
   blockTimestamp: BigInt!
   transactionHash: Bytes!
 }
+
+type PrizePoolStateChanged @entity(immutable: true) {
+  id: Bytes!
+  newTotalPrizePool: BigInt! # uint256
+  amount: BigInt! # int256
+  reason: Int! # uint8 (0: SPIN_CONTRIBUTION, 1: JACKPOT_PAYOUT, 2: ETH_DEPOSIT)
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type EthWithdrawn @entity(immutable: true) {
+  id: Bytes!
+  owner: Bytes! # address
+  amount: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type HouseFeeCollected @entity(immutable: true) {
+  id: Bytes!
+  requestId: BigInt! # uint256
+  player: Bytes! # address
+  amount: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type PlayerStatsUpdated @entity(immutable: true) {
+  id: Bytes!
+  player: Bytes! # address
+  totalSpins: BigInt! # uint256
+  totalWinnings: BigInt! # uint256
+  totalBet: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type ContractInitialized @entity(immutable: true) {
+  id: Bytes!
+  version: Int! # uint8
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type WinningsCredited @entity(immutable: true) {
+  id: Bytes!
+  player: Bytes! # address
+  amount: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+# Additional entities for better analytics
+type Player @entity(immutable: false) {
+  id: Bytes! # player address
+  totalSpins: BigInt!
+  totalBet: BigInt!
+  totalWinnings: BigInt!
+  currentBalance: BigInt! # winnings available for withdrawal
+  firstSpin: BigInt! # timestamp
+  lastSpin: BigInt! # timestamp
+}
+
+type DailyStat @entity(immutable: false) {
+  id: Bytes! # date in YYYY-MM-DD format
+  date: BigInt! # timestamp
+  totalSpins: BigInt!
+  totalBets: BigInt!
+  totalPayouts: BigInt!
+  uniquePlayers: BigInt!
+  houseFeesCollected: BigInt!
+}
