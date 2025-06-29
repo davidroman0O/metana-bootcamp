@@ -18,6 +18,14 @@ describe("🎯 Payout Combinations Testing", function () {
     JACKPOT: 7         // 25% of pool
   };
 
+  const ETH_USD_PRICE_FEED = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419";
+  const LINK_USD_PRICE_FEED = "0x2c1d072e956AFFC0D435Cb7AC38EF18d24d9127c";
+  const LINK_TOKEN = "0x514910771AF9Ca656af840dff83E8264EcF986CA";
+  const UNISWAP_V3_ROUTER = "0xE592427A0AEce92De3Edee1F18E0157C05861564";
+  const WETH_TOKEN = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+  const dummyKeyHash = ethers.utils.formatBytes32String("dummy");
+  const subscriptionId = 1;
+
   before(async function () {
     [owner, player1] = await ethers.getSigners();
 
@@ -25,11 +33,6 @@ describe("🎯 Payout Combinations Testing", function () {
     const MockVRFCoordinator = await ethers.getContractFactory("MockVRFCoordinator");
     mockVRFCoordinator = await MockVRFCoordinator.deploy();
     await mockVRFCoordinator.deployed();
-
-    // Mock addresses
-    const ETH_USD_PRICE_FEED = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"; 
-    const dummyKeyHash = ethers.utils.formatBytes32String("dummy");
-    const subscriptionId = 1;
 
     // Deploy PayoutTables contracts
     const PayoutTables3 = await ethers.getContractFactory("PayoutTables3");
@@ -58,8 +61,12 @@ describe("🎯 Payout Combinations Testing", function () {
       [
         subscriptionId,
         ETH_USD_PRICE_FEED,
+        LINK_USD_PRICE_FEED,
+        LINK_TOKEN,
         payoutTables.address,
         mockVRFCoordinator.address,
+        UNISWAP_V3_ROUTER,
+        WETH_TOKEN,
         dummyKeyHash,
         owner.address // Initial owner
       ],
@@ -156,6 +163,7 @@ describe("🎯 Payout Combinations Testing", function () {
       await casinoSlot.connect(player1).buyChips({ value: ethers.utils.parseEther("1") });
       
       // Request a spin
+      await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
       const tx = await casinoSlot.connect(player1).spin3Reels();
       const receipt = await tx.wait();
       const requestId = receipt.events.find(e => e.event === "SpinRequested").args.requestId;

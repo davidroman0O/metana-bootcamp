@@ -3,6 +3,7 @@ pragma solidity ^0.8.22;
 
 /**
  * @title Chainlink Price Feed Interface
+ * @dev Used for both ETH/USD and LINK/USD price feeds
  */
 interface IPriceFeed {
     function decimals() external view returns (uint8);

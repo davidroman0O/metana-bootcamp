@@ -7,15 +7,18 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interfaces/IPayoutTables.sol";
 import "./interfaces/IPriceFeed.sol";
 import "./interfaces/IVRFCoordinator.sol";
+import "./interfaces/IUniswapV3Router.sol";
+import "./interfaces/IWETH9.sol";
 
 /**
- * @title CasinoSlot - Professional-grade on-chain slot machine with upgradeable architecture
+ * @title CasinoSlot - Professional-grade on-chain slot machine with real-time ETH→LINK swapping
  * @author David Roman
- * @notice Advanced casino system with Chainlink VRF, compound integration, and modular payout tables
- * @dev UUPS upgradeable contract with comprehensive admin controls and risk management
+ * @notice Advanced casino system with Uniswap V3 integration for VRF cost management
+ * @dev UUPS upgradeable contract with real-time LINK purchasing per spin
  */
 contract CasinoSlot is 
     Initializable,
@@ -34,20 +37,30 @@ contract CasinoSlot is
     uint16 public requestConfirmations;
     uint32 public numWords;
     
-    // External payout tables contract
+    // External contracts
     IPayoutTables public payoutTables;
+    IPriceFeed internal ethUsdPriceFeed;
+    IPriceFeed internal linkUsdPriceFeed; // LINK/USD price feed
+    IERC20 public linkToken; // LINK token contract (ERC20)
+    IUniswapV3Router public uniswapRouter; // Uniswap V3 router
+    IWETH9 public wethToken; // WETH contract
     
     // Core game state
-    IPriceFeed internal ethUsdPriceFeed;
     uint256 public totalPrizePool;
     uint256 public houseEdge; // 5% (500 basis points)
     
-    // Fixed costs for each reel mode (in CHIPS)
-    uint256 public constant COST_3_REELS = 1 * 10**18;      // 1 CHIPS ($0.20)
-    uint256 public constant COST_4_REELS = 10 * 10**18;     // 10 CHIPS ($2.00)
-    uint256 public constant COST_5_REELS = 100 * 10**18;    // 100 CHIPS ($20.00)
-    uint256 public constant COST_6_REELS = 500 * 10**18;    // 500 CHIPS ($100.00)
-    uint256 public constant COST_7_REELS = 1000 * 10**18;   // 1000 CHIPS ($200.00)
+    // Economic parameters
+    uint256 public baseChipPriceUSD; // Base CHIP price in cents (e.g., 20 = $0.20)
+    uint256 public vrfCostLINK; // VRF cost in LINK tokens (18 decimals)
+    uint256 public maxSlippageBPS; // Maximum slippage for LINK swaps (basis points)
+    uint24 public uniswapFee; // Uniswap pool fee tier (3000 = 0.3%)
+    
+    // Reel scaling multipliers (basis points - 10000 = 100%)
+    uint256 public constant REEL_3_MULTIPLIER = 10000;  // 100% (base)
+    uint256 public constant REEL_4_MULTIPLIER = 25000;  // 250% (2.5x more expensive)
+    uint256 public constant REEL_5_MULTIPLIER = 75000;  // 750% (7.5x more expensive)
+    uint256 public constant REEL_6_MULTIPLIER = 200000; // 2000% (20x more expensive)
+    uint256 public constant REEL_7_MULTIPLIER = 500000; // 5000% (50x more expensive)
     
     // Game mappings and state
     mapping(uint256 => Spin) public spins;
@@ -67,7 +80,7 @@ contract CasinoSlot is
         uint256 payout
     );
     event WinningsWithdrawn(address indexed player, uint256 amount);
-    // 0: SPIN_CONTRIBUTION, 1: JACKPOT_PAYOUT, 2: ETH_DEPOSIT
+    // 0: SPIN_CONTRIBUTION, 1: JACKPOT_PAYOUT, 2: ETH_DEPOSIT, 3: LINK_SWAP
     event PrizePoolStateChanged(uint256 newTotalPrizePool, int256 amount, uint8 indexed reason);
     event PayoutTablesUpdated(address indexed newPayoutTables);
     event ChipsPurchased(address indexed player, uint256 ethAmount, uint256 chipsAmount);
@@ -76,6 +89,11 @@ contract CasinoSlot is
     event PlayerStatsUpdated(address indexed player, uint256 totalSpins, uint256 totalWinnings, uint256 totalBet);
     event ContractInitialized(uint8 version);
     event WinningsCredited(address indexed player, uint256 amount);
+    event VRFCostUpdated(uint256 newVrfCostLINK);
+    event LINKWithdrawn(address indexed owner, uint256 amount);
+    event DynamicPricingUpdated(uint256 baseChipPriceUSD, uint256 vrfCostLINK, uint256 linkBuffer);
+    event LINKSwapped(uint256 indexed requestId, uint256 ethIn, uint256 linkOut, uint256 remainingETH);
+    event UniswapParamsUpdated(uint256 maxSlippageBPS, uint24 uniswapFee);
     
     struct Spin {
         address player;
@@ -99,8 +117,12 @@ contract CasinoSlot is
     function initialize(
         uint64 subscriptionId,
         address ethUsdPriceFeedAddress,
+        address linkUsdPriceFeedAddress,
+        address linkTokenAddress,
         address payoutTablesAddress,
         address vrfCoordinatorAddress,
+        address uniswapRouterAddress,
+        address wethTokenAddress,
         bytes32 vrfKeyHash,
         address initialOwner
     ) public initializer {
@@ -113,7 +135,11 @@ contract CasinoSlot is
         COORDINATOR = IVRFCoordinator(vrfCoordinatorAddress);
         s_subscriptionId = subscriptionId;
         ethUsdPriceFeed = IPriceFeed(ethUsdPriceFeedAddress);
+        linkUsdPriceFeed = IPriceFeed(linkUsdPriceFeedAddress);
+        linkToken = IERC20(linkTokenAddress);
         payoutTables = IPayoutTables(payoutTablesAddress);
+        uniswapRouter = IUniswapV3Router(uniswapRouterAddress);
+        wethToken = IWETH9(wethTokenAddress);
         keyHash = vrfKeyHash;
         
         // Initialize VRF parameters
@@ -121,6 +147,13 @@ contract CasinoSlot is
         requestConfirmations = 3;
         numWords = 1;
         houseEdge = 500; // 5%
+        
+        // Initialize economic parameters
+        baseChipPriceUSD = 20; // $0.20 in cents
+        vrfCostLINK = 0.01 ether; // 0.01 LINK per VRF request (~$0.14) - higher for testable amounts
+        maxSlippageBPS = 300; // 3% max slippage
+        uniswapFee = 500; // 0.05% fee tier (better liquidity for WETH/LINK)
+        
         emit ContractInitialized(1);
     }
     
@@ -139,50 +172,120 @@ contract CasinoSlot is
     }
     
     /**
-     * @dev Get the cost for a specific reel mode
+     * @dev Update dynamic pricing parameters (owner only)
      */
-    function getSpinCost(uint8 reelCount) public pure returns (uint256) {
-        if (reelCount == 3) return COST_3_REELS;
-        if (reelCount == 4) return COST_4_REELS;
-        if (reelCount == 5) return COST_5_REELS;
-        if (reelCount == 6) return COST_6_REELS;
-        if (reelCount == 7) return COST_7_REELS;
+    function updateDynamicPricing(
+        uint256 newBaseChipPriceUSD,
+        uint256 newVrfCostLINK
+    ) external onlyOwner {
+        require(newBaseChipPriceUSD > 0 && newBaseChipPriceUSD <= 10000, "Invalid base price"); // Max $100
+        require(newVrfCostLINK > 0 && newVrfCostLINK <= 10 ether, "Invalid VRF cost"); // Max 10 LINK
+        
+        baseChipPriceUSD = newBaseChipPriceUSD;
+        vrfCostLINK = newVrfCostLINK;
+        
+        emit DynamicPricingUpdated(newBaseChipPriceUSD, newVrfCostLINK, 0);
+    }
+    
+    /**
+     * @dev Get the dynamic cost for a specific reel mode in CHIPS
+     * Formula: (Base Cost + VRF Cost) × Reel Multiplier
+     */
+    function getSpinCost(uint8 reelCount) public view returns (uint256) {
+        require(reelCount >= 3 && reelCount <= 7, "Invalid reel count");
+        
+        // Base cost in USD cents
+        uint256 baseCostUSD = baseChipPriceUSD;
+        
+        // Add VRF cost (convert LINK to USD)
+        uint256 vrfCostUSD = _getLINKCostInUSD();
+        
+        // Total base cost
+        uint256 totalBaseCostUSD = baseCostUSD + vrfCostUSD;
+        
+        // Apply reel scaling multiplier
+        uint256 reelMultiplier = _getReelMultiplier(reelCount);
+        uint256 scaledCostUSD = (totalBaseCostUSD * reelMultiplier) / 10000;
+        
+        // scaledCostUSD is in cents, 1 CHIP = $0.20, so 5 CHIPS per dollar
+        // Formula: (scaledCostUSD * 5 * 1e18) / 100 = CHIPS with 18 decimals
+        uint256 costInCHIPS = (scaledCostUSD * 5 * 1e18) / 100;
+        
+        return costInCHIPS;
+    }
+    
+    /**
+     * @dev Get reel scaling multiplier in basis points
+     */
+    function _getReelMultiplier(uint8 reelCount) internal pure returns (uint256) {
+        if (reelCount == 3) return REEL_3_MULTIPLIER;   // 100% (base)
+        if (reelCount == 4) return REEL_4_MULTIPLIER;   // 250%
+        if (reelCount == 5) return REEL_5_MULTIPLIER;   // 750%
+        if (reelCount == 6) return REEL_6_MULTIPLIER;   // 2000%
+        if (reelCount == 7) return REEL_7_MULTIPLIER;   // 5000%
         revert("Invalid reel count");
     }
     
     /**
-     * @dev Spin 3 reels (classic mode) - 1 CHIPS
+     * @dev Get VRF cost in USD cents (with buffer)
+     */
+    function _getLINKCostInUSD() internal view virtual returns (uint256) {
+        (, int256 linkPriceUSD, , uint256 updatedAt, ) = linkUsdPriceFeed.latestRoundData();
+        
+        // Validate LINK price
+        require(linkPriceUSD > 0, "Invalid LINK price");
+        if (block.chainid != 31337) { // Mainnet only check for stale prices
+            require(block.timestamp - updatedAt <= 3600*24, "LINK price data stale");
+        }
+        require(uint256(linkPriceUSD) >= 1 * 1e8, "LINK price too low"); // Min $1
+        require(uint256(linkPriceUSD) <= 1000 * 1e8, "LINK price too high"); // Max $1000
+        
+        // Calculate VRF cost in USD cents with 10% buffer
+        // vrfCostLINK (18 decimals) * linkPriceUSD (8 decimals) * 110 (buffer) / (1e18 * 1e8)
+        // = USD cents with proper precision
+        uint256 vrfCostUSDCents = (vrfCostLINK * uint256(linkPriceUSD) * 110) / (1e18 * 1e8);
+        
+        return vrfCostUSDCents;
+    }
+    
+    /**
+     * @dev Spin 3 reels (classic mode) - Dynamic pricing
      */
     function spin3Reels() external nonReentrant whenNotPaused returns (uint256 requestId) {
-        return _executeSpin(3, COST_3_REELS);
+        uint256 cost = getSpinCost(3);
+        return _executeSpin(3, cost);
     }
     
     /**
-     * @dev Spin 4 reels (expanded mode) - 10 CHIPS  
+     * @dev Spin 4 reels (expanded mode) - Dynamic pricing  
      */
     function spin4Reels() external nonReentrant whenNotPaused returns (uint256 requestId) {
-        return _executeSpin(4, COST_4_REELS);
+        uint256 cost = getSpinCost(4);
+        return _executeSpin(4, cost);
     }
     
     /**
-     * @dev Spin 5 reels (premium mode) - 100 CHIPS
+     * @dev Spin 5 reels (premium mode) - Dynamic pricing
      */
     function spin5Reels() external nonReentrant whenNotPaused returns (uint256 requestId) {
-        return _executeSpin(5, COST_5_REELS);
+        uint256 cost = getSpinCost(5);
+        return _executeSpin(5, cost);
     }
     
     /**
-     * @dev Spin 6 reels (high roller mode) - 500 CHIPS
+     * @dev Spin 6 reels (high roller mode) - Dynamic pricing
      */
     function spin6Reels() external nonReentrant whenNotPaused returns (uint256 requestId) {
-        return _executeSpin(6, COST_6_REELS);
+        uint256 cost = getSpinCost(6);
+        return _executeSpin(6, cost);
     }
     
     /**
-     * @dev Spin 7 reels (whale mode) - 1000 CHIPS
+     * @dev Spin 7 reels (whale mode) - Dynamic pricing
      */
     function spin7Reels() external nonReentrant whenNotPaused returns (uint256 requestId) {
-        return _executeSpin(7, COST_7_REELS);
+        uint256 cost = getSpinCost(7);
+        return _executeSpin(7, cost);
     }
     
     /**
@@ -194,16 +297,48 @@ contract CasinoSlot is
         // Check player has enough CHIPS
         require(balanceOf(msg.sender) >= cost, "Insufficient CHIPS balance");
         
-        // Burn CHIPS from player (casino keeps ETH equivalent in prize pool)
+        // Check for sufficient allowance before proceeding
+        require(allowance(msg.sender, address(this)) >= cost, "CasinoSlot: insufficient allowance, approve CHIPS first");
+
+        // Burn CHIPS from player 
         _burn(msg.sender, cost);
         
-        // Add to prize pool (minus house edge)
-        uint256 houseAmount = (cost * houseEdge) / 10000;
-        uint256 prizeAmount = cost - houseAmount;
-        totalPrizePool += prizeAmount;
-        emit PrizePoolStateChanged(totalPrizePool, int256(prizeAmount), 0);
+        // Calculate ETH value of burned CHIPS
+        uint256 ethValue = calculateETHFromCHIPS(cost);
+        require(address(this).balance >= ethValue, "Insufficient contract ETH balance");
         
-        // Request randomness
+        // Calculate VRF cost in ETH (convert LINK cost to ETH)
+        uint256 vrfCostUSD = _getLINKCostInUSD();
+        uint256 vrfCostETH = _convertUSDCentsToETH(vrfCostUSD);
+        
+        // Use portion of ETH value for LINK purchase (ensure we have enough)
+        uint256 ethForLINK;
+        if (vrfCostETH <= ethValue) {
+            ethForLINK = vrfCostETH;
+        } else {
+            // If VRF cost is too high, use 10% of ETH value (multiply first!)
+            ethForLINK = (ethValue * 10) / 100; // 10% of ethValue
+            // Ensure minimum amount
+            if (ethForLINK < 1000) { // Minimum 1000 wei
+                ethForLINK = 1000;
+            }
+        }
+        
+        // Swap ETH for LINK
+        uint256 linkReceived = _swapETHForLINK(ethForLINK);
+        
+        // Calculate remaining ETH after LINK purchase
+        uint256 remainingETH = ethValue - ethForLINK;
+        
+        // Apply house edge to remaining ETH
+        uint256 houseAmount = (remainingETH * houseEdge) / 10000;
+        uint256 prizePoolAmount = remainingETH - houseAmount;
+        
+        // Add to prize pool
+        totalPrizePool += prizePoolAmount;
+        emit PrizePoolStateChanged(totalPrizePool, int256(prizePoolAmount), 0);
+        
+        // Request randomness using purchased LINK
         requestId = COORDINATOR.requestRandomWords(
             keyHash,
             s_subscriptionId,
@@ -212,7 +347,11 @@ contract CasinoSlot is
             numWords
         );
         
+        // NEW: Reset allowance to 0 after spin to force re-approval
+        _approve(msg.sender, address(this), 0);
+
         emit HouseFeeCollected(requestId, msg.sender, houseAmount);
+        emit LINKSwapped(requestId, ethForLINK, linkReceived, remainingETH);
         
         // Store spin data
         spins[requestId] = Spin({
@@ -232,6 +371,108 @@ contract CasinoSlot is
         
         emit SpinRequested(requestId, msg.sender, reelCount, cost);
         return requestId;
+    }
+    
+    /**
+     * @dev Convert USD cents to ETH value
+     */
+    function _convertUSDCentsToETH(uint256 usdCents) internal view returns (uint256 ethValue) {
+        (, int256 ethPriceUSD, , uint256 updatedAt, ) = ethUsdPriceFeed.latestRoundData();
+        require(ethPriceUSD > 0, "Invalid ETH price");
+        if (block.chainid == 1) {
+            require(block.timestamp - updatedAt <= 3600*24, "ETH price data stale");
+        }
+        
+        // Convert: USD cents ÷ (USD/ETH) ÷ 100 (cents to dollars) 
+        ethValue = (usdCents * 1e18 * 1e8) / (uint256(ethPriceUSD) * 100);
+        
+        return ethValue;
+    }
+    
+    /**
+     * @dev Calculate ETH value from CHIPS amount
+     * @param chipsAmount Amount of CHIPS
+     * @return ethValue Equivalent ETH value
+     */
+    function calculateETHFromCHIPS(uint256 chipsAmount) public view returns (uint256 ethValue) {
+        // CHIPS are valued at $0.20 each (baseChipPriceUSD in cents)
+        // MULTIPLY FIRST to maintain precision, then divide
+        
+        // Get ETH price in USD
+        (, int256 ethPriceUSD, , uint256 updatedAt, ) = ethUsdPriceFeed.latestRoundData();
+        require(ethPriceUSD > 0, "Invalid ETH price");
+        if (block.chainid == 1) {
+            require(block.timestamp - updatedAt <= 3600*24, "ETH price data stale");
+        }
+        
+        // Calculate: (chipsAmount * baseChipPriceUSD * 1e18 * 1e8) / (1e18 * ethPriceUSD * 100)
+        // Simplifies to: (chipsAmount * baseChipPriceUSD * 1e8) / (ethPriceUSD * 100)
+        ethValue = (chipsAmount * baseChipPriceUSD * 1e8) / (uint256(ethPriceUSD) * 100);
+        
+        return ethValue;
+    }
+    
+    /**
+     * @dev Swap ETH for LINK using Uniswap V3 - spend exact ETH amount
+     * @param ethAmountToSpend Exact amount of ETH to spend
+     * @return linkReceived Amount of LINK tokens received
+     */
+    function _swapETHForLINK(uint256 ethAmountToSpend) internal virtual returns (uint256 linkReceived) {
+        require(address(this).balance >= ethAmountToSpend, "Insufficient ETH for LINK swap");
+        require(ethAmountToSpend > 0, "ETH amount must be positive");
+        
+        // Wrap ETH to WETH for Uniswap
+        wethToken.deposit{value: ethAmountToSpend}();
+        
+        // Approve router to spend WETH
+        require(wethToken.approve(address(uniswapRouter), ethAmountToSpend), "WETH approval failed");
+        
+        // Perform exact input swap (we spend exact ETH amount)
+        IUniswapV3Router.ExactInputSingleParams memory params = IUniswapV3Router.ExactInputSingleParams({
+            tokenIn: address(wethToken),      // WETH
+            tokenOut: address(linkToken),     // LINK
+            fee: uniswapFee,                  // Pool fee tier
+            recipient: address(this),         // Receive LINK to this contract
+            deadline: block.timestamp + 300, // 5 minute deadline
+            amountIn: ethAmountToSpend,       // Exact ETH amount to spend
+            amountOutMinimum: 0,              // Accept any amount of LINK
+            sqrtPriceLimitX96: 0              // No price limit
+        });
+        
+        // Execute swap
+        linkReceived = uniswapRouter.exactInputSingle(params);
+        
+        // Unwrap any remaining WETH back to ETH (there shouldn't be any)
+        uint256 wethBalance = wethToken.balanceOf(address(this));
+        if (wethBalance > 0) {
+            wethToken.withdraw(wethBalance);
+        }
+        
+        // Verify we received some LINK
+        require(linkReceived > 0, "LINK swap failed - no LINK received");
+        
+        return linkReceived;
+    }
+    
+    /**
+     * @dev Get LINK price in ETH (not USD)
+     * @return linkPriceETH LINK price in ETH with 18 decimals
+     */
+    function _getLINKPriceInETH() internal view returns (uint256 linkPriceETH) {
+        // Get LINK/USD price
+        (, int256 linkPriceUSD, , uint256 linkUpdatedAt, ) = linkUsdPriceFeed.latestRoundData();
+        require(linkPriceUSD > 0, "Invalid LINK price");
+        require(block.timestamp - linkUpdatedAt <= 3600*24, "LINK price data stale");
+        
+        // Get ETH/USD price  
+        (, int256 ethPriceUSD, , uint256 ethUpdatedAt, ) = ethUsdPriceFeed.latestRoundData();
+        require(ethPriceUSD > 0, "Invalid ETH price");
+        require(block.timestamp - ethUpdatedAt <= 3600*24, "ETH price data stale");
+        
+        // Calculate LINK price in ETH: (LINK/USD) / (ETH/USD) = LINK/ETH
+        linkPriceETH = (uint256(linkPriceUSD) * 1e18) / uint256(ethPriceUSD);
+        
+        return linkPriceETH;
     }
     
     /**
@@ -415,8 +656,6 @@ contract CasinoSlot is
         emit PrizePoolStateChanged(totalPrizePool, int256(msg.value), 2);
     }
     
-    // ============ COMPOUND INTEGRATION ============
-    
     /**
      * @dev Buy CHIPS with ETH directly
      */
@@ -445,7 +684,9 @@ contract CasinoSlot is
         
         // Standard Chainlink validation - simple and fixed
         require(ethPriceUSD > 0, "Invalid ETH price");
-        require(block.timestamp - updatedAt <= 3600*24, "Price data stale"); // Fixed 24 hour for now because i need to code and test things
+        if (block.chainid == 1) {
+            require(block.timestamp - updatedAt <= 3600*24, "Price data stale"); // Fixed 24 hour for now because i need to code and test things
+        }
         require(uint256(ethPriceUSD) >= 50 * 1e8, "ETH price too low"); // Fixed $50 minimum
         require(uint256(ethPriceUSD) <= 100000 * 1e8, "ETH price too high"); // Fixed $100K maximum
         
@@ -476,6 +717,78 @@ contract CasinoSlot is
         ethPrice = uint256(ethPriceUSD) / 1e6; // Convert from 8 decimals to cents (2 decimals)
         
         return (totalETH, chipPrice, ethPrice);
+    }
+    
+    /**
+     * @dev Withdraw contract LINK balance (owner only)
+     */
+    function withdrawLINK(uint256 amount) external onlyOwner {
+        uint256 contractBalance = linkToken.balanceOf(address(this));
+        require(contractBalance >= amount, "Insufficient LINK balance");
+        
+        // Ensure we keep enough LINK for pending VRF requests
+        // This is a simple check - in production you might want more sophisticated tracking
+        require(contractBalance - amount >= vrfCostLINK * 10, "Must keep LINK buffer for VRF");
+        
+        require(linkToken.transfer(owner(), amount), "LINK transfer failed");
+        emit LINKWithdrawn(owner(), amount);
+    }
+    
+    /**
+     * @dev Get contract LINK balance and VRF capacity
+     */
+    function getLINKStats() external view returns (
+        uint256 contractLINKBalance,
+        uint256 vrfRequestsAffordable,
+        uint256 vrfCostLINKTokens,
+        uint256 vrfCostUSDCents
+    ) {
+        contractLINKBalance = linkToken.balanceOf(address(this));
+        vrfRequestsAffordable = contractLINKBalance / vrfCostLINK;
+        vrfCostLINKTokens = vrfCostLINK;
+        vrfCostUSDCents = _getLINKCostInUSD();
+        
+        return (contractLINKBalance, vrfRequestsAffordable, vrfCostLINKTokens, vrfCostUSDCents);
+    }
+    
+    /**
+     * @dev Get current dynamic pricing breakdown
+     */
+    function getPricingBreakdown(uint8 reelCount) external view returns (
+        uint256 baseCostUSD,
+        uint256 vrfCostUSD,
+        uint256 reelMultiplier,
+        uint256 totalCostUSD,
+        uint256 totalCostCHIPS
+    ) {
+        require(reelCount >= 3 && reelCount <= 7, "Invalid reel count");
+        
+        baseCostUSD = baseChipPriceUSD;
+        vrfCostUSD = _getLINKCostInUSD();
+        reelMultiplier = _getReelMultiplier(reelCount);
+        totalCostUSD = ((baseCostUSD + vrfCostUSD) * reelMultiplier) / 10000;
+        totalCostCHIPS = getSpinCost(reelCount);
+        
+        return (baseCostUSD, vrfCostUSD, reelMultiplier, totalCostUSD, totalCostCHIPS);
+    }
+    
+    /**
+     * @dev Get VRF cost info and current gas conditions
+     */
+    function getVRFStats() external view returns (
+        uint256 currentGasPrice,
+        uint256 callbackGas,
+        uint256 vrfCostLINKTokens,
+        uint256 vrfCostUSDCents,
+        uint256 maxSlippage
+    ) {
+        currentGasPrice = tx.gasprice;
+        callbackGas = callbackGasLimit;
+        vrfCostLINKTokens = vrfCostLINK;
+        vrfCostUSDCents = _getLINKCostInUSD();
+        maxSlippage = maxSlippageBPS;
+        
+        return (currentGasPrice, callbackGas, vrfCostLINKTokens, vrfCostUSDCents, maxSlippage);
     }
 } 
 

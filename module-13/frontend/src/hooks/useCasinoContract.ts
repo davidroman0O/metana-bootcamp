@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useAccount, usePublicClient, useWalletClient, useBalance } from 'wagmi';
-import { formatEther, parseEther, type Address } from 'viem';
+import { useAccount, usePublicClient, useWalletClient, useBalance, useWatchContractEvent, useReadContract } from 'wagmi';
+import { formatEther, parseEther, type Address, decodeEventLog } from 'viem';
 import { CasinoSlotABI, getDeployment } from '../config/contracts';
 import toast from 'react-hot-toast';
 
@@ -20,6 +20,7 @@ interface PlayerStats {
   winnings: bigint;
   totalSpins: bigint;
   totalWon: bigint;
+  totalBet: bigint;
 }
 
 interface GameStats {
@@ -39,6 +40,7 @@ interface SpinCosts {
 
 interface SpinResult {
   requestId: bigint;
+  player: Address;
   reelCount: number;
   symbols: number[];
   payoutType: number;
@@ -51,52 +53,137 @@ export function useCasinoContract() {
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
   
-  // Core states
-  const [playerStats, setPlayerStats] = useState<PlayerStats>({
-    chipBalance: 0n,
-    ethBalance: 0n,
-    winnings: 0n,
-    totalSpins: 0n,
-    totalWon: 0n,
-  });
-  
-  const [gameStats, setGameStats] = useState<GameStats>({
-    prizePool: 0n,
-    houseEdge: 0n,
-    ethPrice: '$0',
-    chipRate: '0',
-  });
-  
-  const [spinCosts, setSpinCosts] = useState<SpinCosts>({
-    reels3: 0n,
-    reels4: 0n,
-    reels5: 0n,
-    reels6: 0n,
-    reels7: 0n,
-  });
-  
   // Transaction states
   const [buyChipsState, setBuyChipsState] = useState<TransactionState>({ status: 'idle' });
   const [spinState, setSpinState] = useState<TransactionState>({ status: 'idle' });
   const [withdrawState, setWithdrawState] = useState<TransactionState>({ status: 'idle' });
   
   // Spin tracking
-  const [pendingSpins, setPendingSpins] = useState<Map<bigint, { reelCount: number; betAmount: bigint }>>(new Map());
   const [latestSpinResult, setLatestSpinResult] = useState<SpinResult | null>(null);
+  const [pendingRequestId, setPendingRequestId] = useState<bigint | null>(null);
   
   // Approval states
   const [selectedReelCount, setSelectedReelCount] = useState<3 | 4 | 5 | 6 | 7>(3);
-  const [chipsToApprove, setChipsToApprove] = useState<bigint>(0n);
-  const [currentAllowance, setCurrentAllowance] = useState<bigint>(0n);
-  
-  // Loading states
-  const [isLoadingData, setIsLoadingData] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   
   // Refs for preventing duplicate calls
   const refreshTimeoutRef = useRef<NodeJS.Timeout>();
+
+  const { data: ethBalanceResult } = useBalance({ address });
+
+  // #region Contract Reads
+  const { data: playerStatsResult, refetch: refetchPlayerStats } = useReadContract({
+    address: CASINO_SLOT_ADDRESS,
+    abi: CasinoSlotABI,
+    functionName: 'getPlayerStats',
+    args: [address!],
+    query: { enabled: !!address },
+  });
+
+  const { data: gameStatsResult, refetch: refetchGameStats } = useReadContract({
+    address: CASINO_SLOT_ADDRESS,
+    abi: CasinoSlotABI,
+    functionName: 'getGameStats',
+    query: { enabled: isConnected },
+  });
+
+  const { data: poolStatsResult, refetch: refetchPoolStats } = useReadContract({
+    address: CASINO_SLOT_ADDRESS,
+    abi: CasinoSlotABI,
+    functionName: 'getPoolStats',
+    query: { enabled: isConnected },
+  });
+
+  const { data: currentAllowance, refetch: refetchAllowance } = useReadContract({
+    address: CASINO_SLOT_ADDRESS,
+    abi: CasinoSlotABI,
+    functionName: 'allowance',
+    args: [address!, CASINO_SLOT_ADDRESS],
+    query: { enabled: !!address },
+  });
+
+  const { data: spinCosts3, refetch: refetchSpinCost3 } = useReadContract({
+    address: CASINO_SLOT_ADDRESS, abi: CasinoSlotABI, functionName: 'getSpinCost', args: [3], query: { enabled: isConnected },
+  });
+  const { data: spinCosts4, refetch: refetchSpinCost4 } = useReadContract({
+    address: CASINO_SLOT_ADDRESS, abi: CasinoSlotABI, functionName: 'getSpinCost', args: [4], query: { enabled: isConnected },
+  });
+  const { data: spinCosts5, refetch: refetchSpinCost5 } = useReadContract({
+    address: CASINO_SLOT_ADDRESS, abi: CasinoSlotABI, functionName: 'getSpinCost', args: [5], query: { enabled: isConnected },
+  });
+  const { data: spinCosts6, refetch: refetchSpinCost6 } = useReadContract({
+    address: CASINO_SLOT_ADDRESS, abi: CasinoSlotABI, functionName: 'getSpinCost', args: [6], query: { enabled: isConnected },
+  });
+  const { data: spinCosts7, refetch: refetchSpinCost7 } = useReadContract({
+    address: CASINO_SLOT_ADDRESS, abi: CasinoSlotABI, functionName: 'getSpinCost', args: [7], query: { enabled: isConnected },
+  });
+
+  const spinCosts: SpinCosts = {
+    reels3: spinCosts3 ?? 0n,
+    reels4: spinCosts4 ?? 0n,
+    reels5: spinCosts5 ?? 0n,
+    reels6: spinCosts6 ?? 0n,
+    reels7: spinCosts7 ?? 0n,
+  };
+
+  const playerStats: PlayerStats = {
+    chipBalance: playerStatsResult?.[0] ?? 0n,
+    ethBalance: ethBalanceResult?.value ?? 0n,
+    winnings: playerStatsResult?.[1] ?? 0n,
+    totalSpins: playerStatsResult?.[2] ?? 0n,
+    totalWon: playerStatsResult?.[3] ?? 0n,
+    totalBet: playerStatsResult?.[4] ?? 0n,
+  };
+
+  const gameStats: GameStats = {
+    prizePool: gameStatsResult?.[0] ?? 0n,
+    houseEdge: gameStatsResult?.[1] ?? 0n,
+    ethPrice: poolStatsResult ? `$${(Number(poolStatsResult[2]) / 100).toFixed(0)}` : '$0',
+    chipRate: poolStatsResult ? (Number(poolStatsResult[2]) * 5).toFixed(0) : '0',
+  };
+  // #endregion
+
+  const refreshAllData = useCallback(() => {
+    refetchPlayerStats();
+    refetchGameStats();
+    refetchPoolStats();
+    refetchAllowance();
+    refetchSpinCost3();
+    refetchSpinCost4();
+    refetchSpinCost5();
+    refetchSpinCost6();
+    refetchSpinCost7();
+  }, [refetchPlayerStats, refetchGameStats, refetchPoolStats, refetchAllowance, refetchSpinCost3, refetchSpinCost4, refetchSpinCost5, refetchSpinCost6, refetchSpinCost7]);
+
+
+  // Event listener for spin results
+  useWatchContractEvent({
+    address: CASINO_SLOT_ADDRESS,
+    abi: CasinoSlotABI,
+    eventName: 'SpinResult',
+    onLogs(logs) {
+      if (!pendingRequestId) return;
+
+      for (const log of logs) {
+        const { requestId, player, reelCount, reels, payoutType, payout } = log.args as any;
+        
+        if (player === address && requestId === pendingRequestId) {
+          console.log('Matching spin result from contract for current user:', log.args);
+          setLatestSpinResult({
+            requestId,
+            player,
+            reelCount,
+            symbols: (reels as readonly bigint[]).map((r: bigint) => Number(r)),
+            payoutType,
+            payout,
+          });
+          setPendingRequestId(null); // Mark as processed
+          break; // Stop processing further logs
+        }
+      }
+    },
+  });
   
-  // Helper function to handle transaction execution
+  // Generic transaction executor (for non-spin transactions)
   const executeTransaction = useCallback(async (
     setTxState: (state: TransactionState) => void,
     operation: () => Promise<`0x${string}`>,
@@ -109,20 +196,15 @@ export function useCasinoContract() {
     
     try {
       setTxState({ status: 'pending' });
-      
       const hash = await operation();
       setTxState({ status: 'pending', hash });
       
-      // Wait for transaction receipt
       const receipt = await publicClient?.waitForTransactionReceipt({ hash });
       
       if (receipt?.status === 'success') {
         setTxState({ status: 'success', hash });
         toast.success(successMessage);
-        
-        // Refresh data after successful transaction
         setTimeout(() => refreshAllData(), 1000);
-        
         return hash;
       } else {
         throw new Error('Transaction failed');
@@ -134,212 +216,107 @@ export function useCasinoContract() {
       toast.error(errorMessage);
       return null;
     }
-  }, [walletClient, address, publicClient]);
-  
-  // Fetch all contract data
-  const refreshAllData = useCallback(async () => {
-    if (!publicClient || !isConnected || !address) return;
-    
-    setIsRefreshing(true);
-    
-    try {
-      // Get player stats
-      const stats = await publicClient.readContract({
-        address: CASINO_SLOT_ADDRESS,
-        abi: CasinoSlotABI,
-        functionName: 'getPlayerStats',
-        args: [address],
-      }) as readonly [bigint, bigint, bigint, bigint];
-      
-      // Get game stats  
-      const gameStatsResult = await publicClient.readContract({
-        address: CASINO_SLOT_ADDRESS,
-        abi: CasinoSlotABI,
-        functionName: 'getGameStats',
-      }) as readonly [bigint, bigint, Address];
-      
-      // Get pool stats for rates
-      const poolStats = await publicClient.readContract({
-        address: CASINO_SLOT_ADDRESS,
-        abi: CasinoSlotABI,
-        functionName: 'getPoolStats',
-      }) as readonly [bigint, bigint, bigint];
-      
-      // Get ETH balance
-      const ethBalance = await publicClient.getBalance({ address });
-      
-      // Get current allowance
-      const allowance = await publicClient.readContract({
-        address: CASINO_SLOT_ADDRESS,
-        abi: CasinoSlotABI,
-        functionName: 'allowance',
-        args: [address, CASINO_SLOT_ADDRESS],
-      }) as bigint;
-      
-      // Update states
-      setPlayerStats({
-        chipBalance: stats[0],
-        ethBalance,
-        winnings: stats[1],
-        totalSpins: stats[2],
-        totalWon: stats[3],
-      });
-      
-      setGameStats({
-        prizePool: gameStatsResult[0],
-        houseEdge: gameStatsResult[1],
-        ethPrice: `$${(Number(poolStats[2]) / 100).toFixed(0)}`,
-        chipRate: (Number(poolStats[2]) * 5).toFixed(0), // 5 CHIPS per USD
-      });
-      
-      setCurrentAllowance(allowance);
-      
-    } catch (error) {
-      console.error('Error fetching contract data:', error);
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [publicClient, isConnected, address]);
-  
-  // Get spin costs
-  const refreshSpinCosts = useCallback(async () => {
-    if (!publicClient) return;
-    
-    try {
-      const costs = await Promise.all([
-        publicClient.readContract({
-          address: CASINO_SLOT_ADDRESS,
-          abi: CasinoSlotABI,
-          functionName: 'getSpinCost',
-          args: [3],
-        }),
-        publicClient.readContract({
-          address: CASINO_SLOT_ADDRESS,
-          abi: CasinoSlotABI,
-          functionName: 'getSpinCost',
-          args: [4],
-        }),
-        publicClient.readContract({
-          address: CASINO_SLOT_ADDRESS,
-          abi: CasinoSlotABI,
-          functionName: 'getSpinCost',
-          args: [5],
-        }),
-        publicClient.readContract({
-          address: CASINO_SLOT_ADDRESS,
-          abi: CasinoSlotABI,
-          functionName: 'getSpinCost',
-          args: [6],
-        }),
-        publicClient.readContract({
-          address: CASINO_SLOT_ADDRESS,
-          abi: CasinoSlotABI,
-          functionName: 'getSpinCost',
-          args: [7],
-        }),
-      ]) as bigint[];
-      
-      setSpinCosts({
-        reels3: costs[0],
-        reels4: costs[1],
-        reels5: costs[2],
-        reels6: costs[3],
-        reels7: costs[4],
-      });
-    } catch (error) {
-      console.error('Error fetching spin costs:', error);
-    }
-  }, [publicClient]);
-  
-  // Contract interaction functions
+  }, [walletClient, address, publicClient, refreshAllData]);
   
   // Buy CHIPS with ETH
   const buyChips = useCallback(async (ethAmount: string) => {
     const ethValue = parseEther(ethAmount);
-    
-    return executeTransaction(
-      setBuyChipsState,
-      async () => {
-        return await walletClient!.writeContract({
-          address: CASINO_SLOT_ADDRESS,
-          abi: CasinoSlotABI,
-          functionName: 'buyChips',
-          value: ethValue,
-        });
-      },
+    return executeTransaction(setBuyChipsState, () => 
+      walletClient!.writeContract({
+        address: CASINO_SLOT_ADDRESS,
+        abi: CasinoSlotABI,
+        functionName: 'buyChips',
+        value: ethValue,
+      }),
       `Successfully bought CHIPS with ${ethAmount} ETH`
     );
   }, [executeTransaction, walletClient]);
   
   // Approve CHIPS spending
   const approveChips = useCallback(async (amount: bigint) => {
-    return executeTransaction(
-      setSpinState, // Use spin state since approval is part of spin flow
-      async () => {
-        return await walletClient!.writeContract({
-          address: CASINO_SLOT_ADDRESS,
-          abi: CasinoSlotABI,
-          functionName: 'approve',
-          args: [CASINO_SLOT_ADDRESS, amount],
-        });
-      },
+    return executeTransaction(setSpinState, () => 
+      walletClient!.writeContract({
+        address: CASINO_SLOT_ADDRESS,
+        abi: CasinoSlotABI,
+        functionName: 'approve',
+        args: [CASINO_SLOT_ADDRESS, amount],
+      }),
       `Approved ${formatEther(amount)} CHIPS for spending`
     );
   }, [executeTransaction, walletClient]);
   
-  // Spin reels
+  // Spin reels - custom logic to get requestId
   const spinReels = useCallback(async (reelCount: 3 | 4 | 5 | 6 | 7) => {
+    if (!walletClient || !publicClient) return null;
+
     const functionName = `spin${reelCount}Reels` as const;
-    
-    return executeTransaction(
-      setSpinState,
-      async () => {
-        const hash = await walletClient!.writeContract({
-          address: CASINO_SLOT_ADDRESS,
-          abi: CasinoSlotABI,
-          functionName,
-        });
-        
-        // Track pending spin
-        const cost = spinCosts[`reels${reelCount}` as keyof SpinCosts];
-        
-        // TODO: get the actual requestId from the event logs - For no w, just track by hash - im a bit close to finished it asap and it's all details anyway
-        
+    setSpinState({ status: 'pending' });
+    try {
+      const hash = await walletClient.writeContract({
+        address: CASINO_SLOT_ADDRESS,
+        abi: CasinoSlotABI,
+        functionName,
+      });
+      setSpinState({ status: 'pending', hash });
+
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+      if (receipt.status === 'success') {
+        setSpinState({ status: 'success', hash });
+        toast.success(`Started ${reelCount}-reel spin! Waiting for result...`);
+
+        // Find and decode the SpinRequested event to get the requestId
+        for (const log of receipt.logs) {
+          try {
+            const decodedLog = decodeEventLog({ abi: CasinoSlotABI, data: log.data, topics: log.topics });
+            if (decodedLog.eventName === 'SpinRequested') {
+              const { requestId } = decodedLog.args as any;
+              setPendingRequestId(requestId);
+              console.log(`Spin request ID tracked: ${requestId}`);
+              return hash; // Return hash on success
+            }
+          } catch (e) {
+            // Not the event we're looking for, ignore
+          }
+        }
+        console.error("Could not find SpinRequested event in transaction logs.");
         return hash;
-      },
-      `Started ${reelCount}-reel spin!`
-    );
-  }, [executeTransaction, walletClient, spinCosts]);
+      } else {
+        throw new Error('Spin transaction failed on-chain');
+      }
+    } catch (error: any) {
+      console.error('Spin transaction error:', error);
+      const errorMessage = error.message || 'Spin failed';
+      setSpinState({ status: 'error', error: errorMessage });
+      toast.error(errorMessage);
+      return null;
+    }
+  }, [walletClient, publicClient]);
   
   // Withdraw winnings
   const withdrawWinnings = useCallback(async () => {
-    return executeTransaction(
-      setWithdrawState,
-      async () => {
-        return await walletClient!.writeContract({
-          address: CASINO_SLOT_ADDRESS,
-          abi: CasinoSlotABI,
-          functionName: 'withdrawWinnings',
-        });
-      },
+    return executeTransaction(setWithdrawState, () =>
+      walletClient!.writeContract({
+        address: CASINO_SLOT_ADDRESS,
+        abi: CasinoSlotABI,
+        functionName: 'withdrawWinnings',
+      }),
       'Winnings withdrawn successfully'
     );
   }, [executeTransaction, walletClient]);
   
   // Helper functions
-  
-  // Check if user can spin with current reel count
   const canSpin = useCallback(() => {
-    const cost = spinCosts[`reels${selectedReelCount}` as keyof SpinCosts];
-    return playerStats.chipBalance >= cost && currentAllowance >= cost;
-  }, [playerStats.chipBalance, currentAllowance, selectedReelCount, spinCosts]);
+    if (!spinCosts) return false;
+    const cost = spinCosts[`reels${selectedReelCount}` as keyof SpinCosts] ?? 0n;
+    return playerStats.chipBalance >= cost && (currentAllowance ?? 0n) >= cost;
+  }, [playerStats.chipBalance, currentAllowance, spinCosts, selectedReelCount]);
   
-  // Get current spin cost
   const getCurrentSpinCost = useCallback(() => {
-    return spinCosts[`reels${selectedReelCount}` as keyof SpinCosts];
-  }, [selectedReelCount, spinCosts]);
+    if (!spinCosts) return 0n;
+    return spinCosts[`reels${selectedReelCount}` as keyof SpinCosts] ?? 0n;
+  }, [spinCosts, selectedReelCount]);
   
-  // Calculate expected CHIPS from ETH
   const calculateExpectedChips = useCallback((ethAmount: string) => {
     try {
       const eth = parseFloat(ethAmount);
@@ -350,51 +327,20 @@ export function useCasinoContract() {
     }
   }, [gameStats.ethPrice]);
   
-  // Set chips to approve for selected reel count
-  const setChipsForCurrentSpin = useCallback(() => {
-    const cost = getCurrentSpinCost();
-    setChipsToApprove(cost);
-  }, [getCurrentSpinCost]);
-
-  // Initial data loading
+  // This effect will reset the spin result after it has been handled.
   useEffect(() => {
-    if (isConnected && address) {
-      setIsLoadingData(true);
-      Promise.all([
-        refreshAllData(),
-        refreshSpinCosts(),
-      ]).finally(() => {
-        setIsLoadingData(false);
-      });
+    if (latestSpinResult) {
+      const timer = setTimeout(() => setLatestSpinResult(null), 500);
+      return () => clearTimeout(timer);
     }
-  }, [isConnected, address, refreshAllData, refreshSpinCosts]);
-  
-  // Auto-refresh on interval
-  useEffect(() => {
-    if (!isConnected) return;
-    
-    const interval = setInterval(() => {
-      refreshAllData();
-    }, 30000); // Refresh every 30 seconds
-    
-    return () => clearInterval(interval);
-  }, [isConnected, refreshAllData]);
-  
-  // Event listener for spin results (simplified for now)
-  useEffect(() => {
-    if (!publicClient || !isConnected) return;
-    
-    // TODO: Set up event listeners for SpinResult events - This would update latestSpinResult when VRF completes - again i need to move on to the next module (Metana)
-    
-  }, [publicClient, isConnected]);
+  }, [latestSpinResult]);
   
   return {
     // Data states
     playerStats,
     gameStats,
     spinCosts,
-    isLoadingData,
-    isRefreshing,
+    isLoadingData: false,
     
     // Transaction states
     buyChipsState,
@@ -404,9 +350,7 @@ export function useCasinoContract() {
     // Spin management
     selectedReelCount,
     setSelectedReelCount,
-    chipsToApprove,
-    setChipsToApprove,
-    currentAllowance,
+    currentAllowance: currentAllowance ?? 0n,
     latestSpinResult,
     
     // Contract functions
@@ -419,11 +363,10 @@ export function useCasinoContract() {
     canSpin,
     getCurrentSpinCost,
     calculateExpectedChips,
-    setChipsForCurrentSpin,
     refreshAllData,
     
     // Connection state
     isConnected,
     address,
   };
-} 
+}

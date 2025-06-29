@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { formatEther } from 'viem';
 import toast from 'react-hot-toast';
 import { useReadContract } from 'wagmi';
@@ -15,8 +15,7 @@ import { usePoolData } from '../hooks/usePoolData';
 
 import { QuoteManager } from '../utils/quotes';
 
-import { DegenSlotsABI } from '../config/contracts/DegenSlotsABI';
-import { CONTRACT_ADDRESSES } from '../config/wagmi';
+import { CasinoSlotABI } from '../config/contracts/CasinoSlotABI';
 
 const GameHeader: React.FC<{
   isConnected: boolean;
@@ -181,6 +180,7 @@ const GamePage: React.FC = () => {
     gameStats,
     spinCosts,
     isLoadingData,
+    latestSpinResult,
     
     // Transaction states
     buyChipsState,
@@ -252,13 +252,13 @@ const GamePage: React.FC = () => {
   // Refs
   const slotMachineRef = useRef<SlotMachineRef>(null);
 
-  // Reel configs
+  // Reel configs - removed static USD pricing since we now have dynamic VRF pricing
   const reelConfigs = [
-    { count: 3, cost: formatEther(spinCosts.reels3), price: '$0.20', name: 'Classic', color: 'bg-green-600' },
-    { count: 4, cost: formatEther(spinCosts.reels4), price: '$2.00', name: 'Extended', color: 'bg-blue-600' },
-    { count: 5, cost: formatEther(spinCosts.reels5), price: '$20', name: 'Premium', color: 'bg-purple-600' },
-    { count: 6, cost: formatEther(spinCosts.reels6), price: '$100', name: 'High Roller', color: 'bg-red-600' },
-    { count: 7, cost: formatEther(spinCosts.reels7), price: '$200', name: 'Whale Mode', color: 'bg-yellow-600' },
+    { count: 3, cost: formatEther(spinCosts.reels3), name: 'Classic', color: 'bg-green-600' },
+    { count: 4, cost: formatEther(spinCosts.reels4), name: 'Extended', color: 'bg-blue-600' },
+    { count: 5, cost: formatEther(spinCosts.reels5), name: 'Premium', color: 'bg-purple-600' },
+    { count: 6, cost: formatEther(spinCosts.reels6), name: 'High Roller', color: 'bg-red-600' },
+    { count: 7, cost: formatEther(spinCosts.reels7), name: 'Whale Mode', color: 'bg-yellow-600' },
   ];
 
   // Handle chip insert when disconnected - show funny popup
@@ -314,7 +314,7 @@ const GamePage: React.FC = () => {
     if (!canSpin()) {
       toast.error('Cannot spin - check CHIPS balance and approval');
       return;
-  }
+    }
 
     setGamePhase('spinning');
     slotMachineRef.current?.lcd.setMessage("Spinning... Waiting for VRF...");
@@ -326,12 +326,9 @@ const GamePage: React.FC = () => {
     const hash = await spinReels(selectedReelCount);
     
     if (hash) {
-      // Transaction successful - VRF will eventually call back
-      setTimeout(() => {
-        // In real implementation, this would come from VRF callback
-        const mockResult = Array(selectedReelCount).fill(0).map(() => Math.floor(Math.random() * 6) + 1);
-        handleSpinResult(mockResult, 0n, 0);
-      }, 5000);
+      // Transaction successful - VRF will eventually call back via event.
+      // We no longer need the mock result timeout.
+      console.log('Spin transaction sent:', hash);
     } else {
       setGamePhase('selecting');
       slotMachineRef.current?.lcd.setMessage("Spin failed. Try again.");
@@ -399,7 +396,15 @@ const GamePage: React.FC = () => {
         refreshAllData(); // Only refresh data when connected
       }
     }, 3000);
-  }, [selectedReelCount, refreshAllData, getQuoteTypeForPayout, isConnected]);
+  }, [selectedReelCount, refreshAllData, isConnected]);
+
+  // This effect handles the spin result from the contract event
+  useEffect(() => {
+    if (latestSpinResult && gamePhase === 'spinning') {
+      console.log("New spin result from contract:", latestSpinResult);
+      handleSpinResult(latestSpinResult.symbols, latestSpinResult.payout, latestSpinResult.payoutType);
+    }
+  }, [latestSpinResult, gamePhase, handleSpinResult]);
 
   // Event handlers for quotes
   const handleSlotResultWrapper = (symbols: number[], payout: number, payoutType: string) => {
@@ -471,6 +476,20 @@ const GamePage: React.FC = () => {
   const ethPrice = isConnected ? gameStats.ethPrice : poolData.ethPrice;
   const chipRate = isConnected ? gameStats.chipRate : poolData.chipRate;
 
+  const chipCostInEth = useMemo(() => {
+    if (!gameStats.ethPrice) return '...';
+    try {
+        const ethPriceNum = parseFloat(gameStats.ethPrice.replace('$', '').replace(',', ''));
+        if (ethPriceNum > 0) {
+            const cost = 0.20 / ethPriceNum;
+            return cost.toFixed(6);
+        }
+        return '...';
+    } catch {
+        return '...';
+    }
+  }, [gameStats.ethPrice]);
+
   // Calculate USD value of CHIPS balance
   const chipBalanceUSD = (() => {
     try {
@@ -483,6 +502,7 @@ const GamePage: React.FC = () => {
 
   // Check if currently spinning - this will disable ALL buttons
   const isSpinning = gamePhase === 'spinning';
+  const isLeverDisabled = !canSpin() || isSpinning;
 
   // Disconnected mode
   if (!isConnected) {
@@ -635,7 +655,7 @@ const GamePage: React.FC = () => {
                       selectedReelCount === config.count ? config.color : 'bg-gray-700 hover:bg-gray-600'
                     }`}
                   >
-                    {config.count} Reels • {config.cost} CHIPS • {config.price}
+                    {config.count} Reels • {config.cost} CHIPS
                   </button>
                 ))}
               </div>
@@ -757,6 +777,7 @@ const GamePage: React.FC = () => {
               reelCount={selectedReelCount}
               onCoinInsert={handleChipInsert}
               onLeverPull={handleLeverPull}
+              disabled={isLeverDisabled}
             />
           </div>
 
@@ -850,8 +871,13 @@ const GamePage: React.FC = () => {
                   )}
                 </button>
                 
-                <div className="text-xs text-gray-400 text-center">
-                  Send {ethAmount || '0'} ETH → Get ~{calculateExpectedChips(ethAmount).toString()} CHIPS
+                <div className="text-xs text-gray-400 text-center mt-2 space-y-1">
+                  <div>
+                    Send {ethAmount || '0'} ETH → Get ~{calculateExpectedChips(ethAmount).toString()} CHIPS
+                  </div>
+                  <div className="text-gray-500">
+                    (1 CHIP ≈ $0.20 / ~{chipCostInEth} ETH)
+                  </div>
                 </div>
               </div>
             </div>

@@ -19,9 +19,10 @@ async function main() {
   
   // Configure Chainlink addresses based on network
   let CHAINLINK_VRF_COORDINATOR, CHAINLINK_KEY_HASH, CHAINLINK_SUBSCRIPTION_ID, ETH_USD_PRICE_FEED;
+  let LINK_USD_PRICE_FEED, LINK_TOKEN, UNISWAP_V3_ROUTER, WETH_TOKEN;
   
   if (network.chainId === 31337) {
-    // Local development - use mocks
+    // Local development - use mocks for VRF but real mainnet addresses for DeFi (since we fork mainnet)
     console.log("🏗️  Local development detected - deploying mocks...");
     
     // Deploy MockVRFCoordinator first
@@ -32,7 +33,13 @@ async function main() {
     CHAINLINK_VRF_COORDINATOR = mockVRFCoordinator.address;
     CHAINLINK_KEY_HASH = "0x8af398995b04c28e9951adb9721ef74c74f93e6a478f39e7e0777be13527e7ef"; // Dummy hash
     CHAINLINK_SUBSCRIPTION_ID = 1; // Dummy ID
-    ETH_USD_PRICE_FEED = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"; // Mainnet address (forked)
+    
+    // Use real mainnet addresses since we're forking mainnet (for dynamic pricing)
+    ETH_USD_PRICE_FEED = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419";  // ETH/USD Chainlink
+    LINK_USD_PRICE_FEED = "0x2c1d072e956AFFC0D435Cb7AC38EF18d24d9127c"; // LINK/USD Chainlink
+    LINK_TOKEN = "0x514910771AF9Ca656af840dff83E8264EcF986CA";          // LINK token
+    UNISWAP_V3_ROUTER = "0xE592427A0AEce92De3Edee1F18E0157C05861564";   // Uniswap V3 router
+    WETH_TOKEN = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";        // WETH token
     
     console.log(`✅ MockVRFCoordinator deployed: ${CHAINLINK_VRF_COORDINATOR}`);
   } else {
@@ -41,6 +48,10 @@ async function main() {
     CHAINLINK_KEY_HASH = "0x8af398995b04c28e9951adb9721ef74c74f93e6a478f39e7e0777be13527e7ef";
     CHAINLINK_SUBSCRIPTION_ID = 1; // Update with your subscription ID
     ETH_USD_PRICE_FEED = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419";
+    LINK_USD_PRICE_FEED = "0x2c1d072e956AFFC0D435Cb7AC38EF18d24d9127c";
+    LINK_TOKEN = "0x514910771AF9Ca656af840dff83E8264EcF986CA";
+    UNISWAP_V3_ROUTER = "0xE592427A0AEce92De3Edee1F18E0157C05861564";
+    WETH_TOKEN = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
   }
 
   // Step 1: Deploy PayoutTables System (Complete version)
@@ -112,10 +123,14 @@ async function main() {
     [
       CHAINLINK_SUBSCRIPTION_ID,    // uint64 subscriptionId
       ETH_USD_PRICE_FEED,          // address ethUsdPriceFeedAddress  
+      LINK_USD_PRICE_FEED,         // address linkUsdPriceFeedAddress
+      LINK_TOKEN,                  // address linkTokenAddress
       payoutTables.address,        // address payoutTablesAddress
       CHAINLINK_VRF_COORDINATOR,   // address vrfCoordinatorAddress
-      CHAINLINK_KEY_HASH,          // bytes32 vrfKeyHash
-      deployer.address             // address initialOwner
+      UNISWAP_V3_ROUTER,          // address uniswapRouterAddress
+      WETH_TOKEN,                 // address wethTokenAddress
+      CHAINLINK_KEY_HASH,         // bytes32 vrfKeyHash
+      deployer.address            // address initialOwner
     ],
     {
       kind: 'uups',
@@ -141,6 +156,12 @@ async function main() {
   console.log("   🪙 Token Symbol:", tokenSymbol);
   console.log("   💰 Total CHIPS Supply:", ethers.utils.formatEther(totalSupply), "CHIPS");
   console.log("   📊 PayoutTables7 Chunks: 8 contracts deployed");
+  console.log("   🔗 VRF Coordinator:", CHAINLINK_VRF_COORDINATOR);
+  console.log("   💱 ETH/USD Price Feed:", ETH_USD_PRICE_FEED);
+  console.log("   💱 LINK/USD Price Feed:", LINK_USD_PRICE_FEED);
+  console.log("   🔗 LINK Token:", LINK_TOKEN);
+  console.log("   🦄 Uniswap V3 Router:", UNISWAP_V3_ROUTER);
+  console.log("   💧 WETH Token:", WETH_TOKEN);
 
   // Step 6: Fund with initial liquidity (optional)
   if (process.env.FUND_INITIAL_LIQUIDITY === "true") {
@@ -234,7 +255,11 @@ async function main() {
           vrfCoordinator: CHAINLINK_VRF_COORDINATOR,
           keyHash: CHAINLINK_KEY_HASH,
           subscriptionId: CHAINLINK_SUBSCRIPTION_ID,
-          ethUsdPriceFeed: ETH_USD_PRICE_FEED
+          ethUsdPriceFeed: ETH_USD_PRICE_FEED,
+          linkUsdPriceFeed: LINK_USD_PRICE_FEED,
+          linkToken: LINK_TOKEN,
+          uniswapRouter: UNISWAP_V3_ROUTER,
+          wethToken: WETH_TOKEN
         }
       },
       PayoutTables: {

@@ -73,6 +73,7 @@ interface SlotMachineProps {
   onLeverPull?: () => Promise<void>; // External lever callback
   isConnected?: boolean;
   reelCount?: number; // Number of reels (default: 3, min: 1, max: 10)
+  disabled?: boolean;
   showChipPopup?: boolean; // Show the chip insert popup
   chipPopupMessage?: string; // Message for the popup
 }
@@ -132,6 +133,7 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
   onLeverPull,
   isConnected = false,
   reelCount = 3,
+  disabled = false,
   showChipPopup = false,
   chipPopupMessage = ''
 }, ref) => {
@@ -1103,7 +1105,7 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
                 reelIndex={index}
                 onStateChange={handleReelStateChange}
                 onResult={handleReelResult}
-                disabled={leverDisabled}
+                disabled={disabled || leverDisabled}
                 width={SYMBOL_SIZE}
                 height={REEL_AREA_HEIGHT}
               />
@@ -1156,7 +1158,7 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
             showIndicator={false}
             cylinderDiameter={1.5}
             stickLength={1.2}
-            disabled={leverDisabled}
+            disabled={disabled || leverDisabled}
           />
         </div>
       </div>

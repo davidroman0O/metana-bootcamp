@@ -21,7 +21,7 @@ module.exports = {
       // Enable forking to access real mainnet contracts like Chainlink and Compound
       forking: {
         url: "https://eth-mainnet.g.alchemy.com/v2/UlgUe5NUoeezq_0_AxTSKl0qpQQeHSKV",
-        blockNumber: 18500000 // Use a recent block
+        blockNumber: 19000000 // Use a more recent block for better Uniswap liquidity
       },
       // Disable contract size limit for local testing
       allowUnlimitedContractSize: true,

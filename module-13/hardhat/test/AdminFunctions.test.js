@@ -8,6 +8,10 @@ describe("🔧 Admin Functions", function () {
 
   // Mainnet addresses
   const ETH_USD_PRICE_FEED = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419";
+  const LINK_USD_PRICE_FEED = "0x2c1d072e956AFFC0D435Cb7AC38EF18d24d9127c"; // LINK/USD price feed
+  const LINK_TOKEN = "0x514910771AF9Ca656af840dff83E8264EcF986CA"; // LINK token mainnet
+  const UNISWAP_V3_ROUTER = "0xE592427A0AEce92De3Edee1F18E0157C05861564"; // Uniswap V3 router mainnet
+  const WETH_TOKEN = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"; // WETH mainnet
   const CHAINLINK_KEY_HASH = "0x8af398995b04c28e9951adb9721ef74c74f93e6a478f39e7e0777be13527e7ef";
 
   // Remove duplicate enum - will be imported from contract
@@ -47,8 +51,12 @@ describe("🔧 Admin Functions", function () {
       [
         1, // VRF subscription ID
         ETH_USD_PRICE_FEED, // Real mainnet Chainlink ETH/USD feed
+        LINK_USD_PRICE_FEED, // Real mainnet Chainlink LINK/USD feed
+        LINK_TOKEN, // Real mainnet LINK token
         payoutTables.address,
         mockVRFCoordinator.address,
+        UNISWAP_V3_ROUTER, // Real mainnet Uniswap V3 router
+        WETH_TOKEN, // Real mainnet WETH
         CHAINLINK_KEY_HASH,
         owner.address
       ],
@@ -112,6 +120,7 @@ describe("🔧 Admin Functions", function () {
   describe("Pause/Unpause Controls", function () {
     it("Should allow owner to pause and unpause", async function () {
       // Initially unpaused
+      await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
       const tx1 = await casinoSlot.connect(player1).spin3Reels();
       expect(tx1).to.not.be.undefined;
       
@@ -124,6 +133,7 @@ describe("🔧 Admin Functions", function () {
       
       // Unpause
       await casinoSlot.unpause();
+      await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
       const tx2 = await casinoSlot.connect(player1).spin3Reels();
       expect(tx2).to.not.be.undefined;
     });
@@ -210,6 +220,7 @@ describe("🔧 Admin Functions", function () {
   describe("VRF Testing Functions", function () {
     it("Should allow owner to test VRF fulfillment", async function () {
       // Execute a spin first
+      await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
       const tx = await casinoSlot.connect(player1).spin3Reels();
       const receipt = await tx.wait();
       const requestId = receipt.events.find(e => e.event === "SpinRequested").args.requestId;
@@ -230,6 +241,7 @@ describe("🔧 Admin Functions", function () {
     it("Should prevent VRF testing on mainnet", async function () {
       // This would fail if actually on mainnet (chainId 1)
       // On hardhat fork, chainId is 31337, so test should work
+      await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
       const tx = await casinoSlot.connect(player1).spin3Reels();
       const receipt = await tx.wait();
       const requestId = receipt.events.find(e => e.event === "SpinRequested").args.requestId;

@@ -1,14 +1,20 @@
-import { useState, useCallback, useEffect } from 'react';
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { parseEther } from 'viem';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useBalance, usePublicClient, useWalletClient } from 'wagmi';
+import { parseEther, formatEther, type Address } from 'viem';
 import toast from 'react-hot-toast';
-import type { Address } from 'viem';
 import { useAppMode } from '../contexts/AppModeContext';
 import { useTransactionTracker } from './useTransactionTracker';
+import { CasinoSlotABI, getDeployment } from '../config/contracts';
 
-// Config imports
-import { CONTRACT_ADDRESSES } from '../config/wagmi';
-import { CasinoSlotABI } from '../config/contracts/CasinoSlotABI';
+const MOTIVATIONAL_QUOTES = [
+  "The next spin could be THE ONE!",
+  "Fortune favors the bold!",
+  "Your luck is about to change...",
+  "One more spin to victory!",
+  "The jackpot is calling your name!",
+  "This could be your lucky moment!",
+  "Keep spinning, keep winning!"
+];
 
 interface SlotMachineState {
   // UI state
@@ -30,19 +36,11 @@ interface SlotMachineState {
   } | null;
 }
 
-const MOTIVATIONAL_QUOTES = [
-  "The next spin could be THE ONE!",
-  "Fortune favors the bold!",
-  "Your luck is about to change...",
-  "One more spin to victory!",
-  "The jackpot is calling your name!",
-  "This could be your lucky moment!",
-  "Keep spinning, keep winning!"
-];
-
 export function useSlotMachine(chainId: number | undefined) {
-  const { address: account, isConnected } = useAccount();
+  const { address, isConnected } = useAccount();
   const { isRealMode, isManualMode } = useAppMode();
+  const publicClient = usePublicClient();
+  const { data: walletClient } = useWalletClient();
   
   // Transaction tracking for buy chips
   const {
@@ -55,7 +53,7 @@ export function useSlotMachine(chainId: number | undefined) {
     currentTransactionStatus,
     clearTransaction,
     retryTransaction
-  } = useTransactionTracker(account, chainId);
+  } = useTransactionTracker(address, chainId);
   
   // State management
   const [state, setState] = useState<SlotMachineState>({
@@ -66,37 +64,45 @@ export function useSlotMachine(chainId: number | undefined) {
     lastResult: null
   });
 
-  // Contract addresses (only used in real mode)
-  const addresses = CONTRACT_ADDRESSES[chainId || 31337] || {};
+  // Contract configuration
+  const getContractAddress = useCallback(() => {
+    try {
+      const deployment = getDeployment('hardhat', 'dev'); // For now, always use hardhat dev
+      return deployment.addresses.CASINO_SLOT as Address;
+    } catch (error) {
+      console.error('Error getting contract address:', error);
+      return undefined;
+    }
+  }, []);
 
   // Contract reads (only active in real mode)
   const { data: chipBalance, refetch: refetchChipBalance, error: chipBalanceError, isLoading: chipBalanceLoading } = useReadContract({
-    address: addresses.CASINO_SLOT,
+    address: getContractAddress(),
     abi: CasinoSlotABI,
     functionName: 'balanceOf',
-    args: [account!],
-    query: { enabled: !!account && !!addresses.CASINO_SLOT },
+    args: [address!],
+    query: { enabled: !!address && !!getContractAddress() },
   });
 
   const { data: chipAllowance } = useReadContract({
-    address: addresses.CASINO_SLOT,
+    address: getContractAddress(),
     abi: CasinoSlotABI,
     functionName: 'allowance',
-    args: [account!, addresses.CASINO_SLOT],
-    query: { enabled: !!account && !!addresses.CASINO_SLOT },
+    args: [address!, getContractAddress()!],
+    query: { enabled: !!address && !!getContractAddress() },
   });
 
   // Debug chipBalance hook
   useEffect(() => {
     console.log('🪙 CHIPS Balance Debug:', {
-      account,
-      contractAddress: addresses.CASINO_SLOT,
+      address,
+      contractAddress: getContractAddress(),
       chipBalance: chipBalance ? chipBalance.toString() : 'null/undefined',
       chipBalanceError: chipBalanceError?.message || 'none',
       chipBalanceLoading,
-      enabled: !!account && !!addresses.CASINO_SLOT
+      enabled: !!address && !!getContractAddress()
     });
-  }, [chipBalance, chipBalanceError, chipBalanceLoading, account, addresses.CASINO_SLOT]);
+  }, [chipBalance, chipBalanceError, chipBalanceLoading, address, getContractAddress]);
 
   // Contract writes (only used in real mode)
   const { writeContract: approveChips, data: approveHash, isPending: isApproving } = useWriteContract();
@@ -207,6 +213,13 @@ export function useSlotMachine(chainId: number | undefined) {
       return null;
     }
 
+    const contractAddress = getContractAddress();
+    if (!contractAddress) {
+      setState(prev => ({ ...prev, displayLCD: "Contract not available!" }));
+      toast.error('Contract address not available');
+      return null;
+    }
+
     if (!state.betAmount || parseFloat(state.betAmount) <= 0) {
       setState(prev => ({ ...prev, displayLCD: "Enter bet amount first!" }));
       toast.error('Please enter a valid bet amount');
@@ -234,7 +247,7 @@ export function useSlotMachine(chainId: number | undefined) {
       }));
 
       await spinSlots({
-        address: addresses.CASINO_SLOT,
+        address: contractAddress,
         abi: CasinoSlotABI,
         functionName: 'spin3Reels',
       });
@@ -250,7 +263,7 @@ export function useSlotMachine(chainId: number | undefined) {
       toast.error('Failed to spin');
       return null;
     }
-  }, [isConnected, state.betAmount, chipBalance, chipAllowance, addresses, spinSlots]);
+  }, [isConnected, state.betAmount, chipBalance, chipAllowance, getContractAddress, spinSlots]);
 
   // Manual spin function
   const performManualSpin = useCallback(async (): Promise<number[] | null> => {
@@ -301,12 +314,18 @@ export function useSlotMachine(chainId: number | undefined) {
   const approveChipsForPlay = useCallback(async () => {
     if (!isConnected) return;
 
+    const contractAddress = getContractAddress();
+    if (!contractAddress) {
+      toast.error('Contract address not available');
+      return;
+    }
+
     try {
       await approveChips({
-        address: addresses.CASINO_SLOT,
+        address: contractAddress,
         abi: CasinoSlotABI,
         functionName: 'approve',
-        args: [addresses.CASINO_SLOT, parseEther('999999999')], // Max approval
+        args: [contractAddress, parseEther('999999999')], // Max approval
       });
       
       setState(prev => ({ ...prev, displayLCD: "Approving CHIPS..." }));
@@ -315,7 +334,7 @@ export function useSlotMachine(chainId: number | undefined) {
       console.error('Approve error:', error);
       toast.error('Failed to approve CHIPS');
     }
-  }, [isConnected, addresses, approveChips]);
+  }, [isConnected, getContractAddress, approveChips]);
 
   // Buy chips function with transaction tracking
   const buyChipsWithETH = useCallback(async (ethAmount: string) => {
@@ -329,7 +348,13 @@ export function useSlotMachine(chainId: number | undefined) {
       return;
     }
 
-    console.log('🪙 Attempting to buy CHIPS:', { ethAmount, contractAddress: addresses.CASINO_SLOT });
+    const contractAddress = getContractAddress();
+    if (!contractAddress) {
+      toast.error('Contract address not available');
+      return;
+    }
+
+    console.log('🪙 Attempting to buy CHIPS:', { ethAmount, contractAddress });
 
     try {
       setState(prev => ({ 
@@ -342,7 +367,7 @@ export function useSlotMachine(chainId: number | undefined) {
       
       // Submit the transaction - buyChips() takes no parameters, uses msg.value
       await buyChips({
-        address: addresses.CASINO_SLOT as Address,
+        address: contractAddress,
         abi: CasinoSlotABI,
         functionName: 'buyChips',
         value: parseEther(ethAmount), // ETH amount goes in value, not as parameter
@@ -361,7 +386,7 @@ export function useSlotMachine(chainId: number | undefined) {
       toast.error(`Failed to buy CHIPS: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
     }
-  }, [isConnected, addresses, buyChips, hasActiveBuyTransaction]);
+  }, [isConnected, getContractAddress, buyChips, hasActiveBuyTransaction]);
 
   return {
     // State
