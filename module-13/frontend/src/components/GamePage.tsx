@@ -360,6 +360,19 @@ const GamePage: React.FC = () => {
     }
   };
 
+  // Helper function to format CHIPS amount properly
+  const formatChipsAmount = (payout: bigint): string => {
+    const amount = Number(formatEther(payout));
+    
+    // If amount is very small (< 0.0001), round to 0
+    if (amount < 0.0001) {
+      return "0";
+    }
+    
+    // Format to maximum 4 decimal places, removing trailing zeros
+    return parseFloat(amount.toFixed(4)).toString();
+  };
+
   // Phase 4: Handle spin result
   const handleSpinResult = useCallback((symbols: number[], payout: bigint, payoutType: number) => {
     setGamePhase('result');
@@ -378,7 +391,8 @@ const GamePage: React.FC = () => {
       
       // Only show toast notifications in connected mode
       if (isConnected) {
-        toast.success(`🎉 ${resultQuote} Won ${formatEther(payout)} CHIPS!`);
+        const formattedPayout = formatChipsAmount(payout);
+        toast.success(`🎉 ${resultQuote} Won ${formattedPayout} CHIPS!`);
       }
     } else {
       // Get encouraging message for losses

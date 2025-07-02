@@ -679,19 +679,6 @@ export const CasinoSlotABI = [
   },
   {
     "inputs": [],
-    "name": "COORDINATOR",
-    "outputs": [
-      {
-        "internalType": "contract IVRFCoordinator",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "REEL_3_MULTIPLIER",
     "outputs": [
       {
@@ -1158,9 +1145,9 @@ export const CasinoSlotABI = [
   {
     "inputs": [
       {
-        "internalType": "uint64",
+        "internalType": "uint256",
         "name": "subscriptionId",
-        "type": "uint64"
+        "type": "uint256"
       },
       {
         "internalType": "address",
@@ -1399,9 +1386,22 @@ export const CasinoSlotABI = [
     "name": "s_subscriptionId",
     "outputs": [
       {
-        "internalType": "uint64",
+        "internalType": "uint256",
         "name": "",
-        "type": "uint64"
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "s_vrfCoordinator",
+    "outputs": [
+      {
+        "internalType": "contract IVRFCoordinatorV2Plus",
+        "name": "",
+        "type": "address"
       }
     ],
     "stateMutability": "view",

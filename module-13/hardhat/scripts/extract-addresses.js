@@ -11,23 +11,38 @@ async function extractAddresses() {
     await hre.run("compile");
     console.log("✅ Smart contracts compiled successfully");
 
-    // Read deployment data
+    // Determine which deployment files to process
     const deploymentDir = path.join(__dirname, "../deployments");
-    const hardhatDeploymentFile = path.join(deploymentDir, "deployment-31337.json");
-    
-    if (!fs.existsSync(hardhatDeploymentFile)) {
-      console.error("❌ Deployment file not found:", hardhatDeploymentFile);
-      console.error("Please run deployment first: npm run deploy:fork");
+    const deploymentFiles = [
+      { file: "deployment-31337.json", network: "hardhat" },
+      { file: "deployment-11155111.json", network: "sepolia" }
+    ];
+
+    // Filter to only existing deployment files
+    const existingDeployments = deploymentFiles.filter(({ file }) => 
+      fs.existsSync(path.join(deploymentDir, file))
+    );
+
+    if (existingDeployments.length === 0) {
+      console.error("❌ No deployment files found in:", deploymentDir);
+      console.error("Available files should be: deployment-31337.json, deployment-11155111.json");
       process.exit(1);
     }
 
-    const deploymentData = JSON.parse(fs.readFileSync(hardhatDeploymentFile, "utf8"));
-    console.log("📊 Read deployment data for network:", deploymentData.network.chainId);
+    console.log(`📊 Found ${existingDeployments.length} deployment(s):`, 
+      existingDeployments.map(d => d.network).join(", "));
 
-    // Extract contract addresses
-    const casinoSlotAddress = deploymentData.contracts.CasinoSlot.address;
-
-    console.log("CasinoSlot address:", casinoSlotAddress);
+    // Process each deployment file
+    const processedDeployments = [];
+    for (const { file, network } of existingDeployments) {
+      console.log(`\n🔄 Processing ${network} deployment...`);
+      
+      const deploymentPath = path.join(deploymentDir, file);
+      const deploymentData = JSON.parse(fs.readFileSync(deploymentPath, "utf8"));
+      
+      processedDeployments.push({ network, deploymentData });
+      await processDeployment(deploymentData, network);
+    }
 
     // Frontend config directory
     const frontendConfigDir = path.join(__dirname, "../../frontend/src/config/contracts");
@@ -35,35 +50,45 @@ async function extractAddresses() {
       fs.mkdirSync(frontendConfigDir, { recursive: true });
     }
 
-    // Determine network and environment
-    const chainId = deploymentData.network.chainId;
-    const networkName = getNetworkName(chainId);
-    const environment = mapEnvironment(process.env.NODE_ENV || 'dev');
-    
-    console.log(`🌐 Network: ${networkName}, Environment: ${environment}`);
-
-    // Generate network + environment specific file
-    await generateNetworkEnvFile(frontendConfigDir, networkName, environment, {
-      casinoSlotAddress,
-      deploymentData
-    });
-
-    // Generate types file
+    // Generate types file (only once)
     await generateTypesFile(frontendConfigDir);
 
-    // Generate or update ABIs
-    await generateABIs(frontendConfigDir, deploymentData);
+    // Generate or update ABIs (only once, using first deployment)
+    await generateABIs(frontendConfigDir, processedDeployments[0].deploymentData);
 
-    // Update index file
+    // Update index file after all networks are processed
     await updateIndexFile(frontendConfigDir);
 
-    console.log("\n🎉 Contract addresses successfully extracted!");
-    console.log(`📁 Generated: ${networkName}-${environment}.ts, types.ts, ABIs, and index.ts`);
+    console.log("\n🎉 Contract addresses successfully extracted for all networks!");
+    console.log(`📁 Generated files for networks: ${processedDeployments.map(d => d.network).join(", ")}`);
 
   } catch (error) {
     console.error("❌ Failed to extract addresses:", error);
     process.exit(1);
   }
+}
+
+async function processDeployment(deploymentData, networkName) {
+  // Extract contract addresses
+  const casinoSlotAddress = deploymentData.contracts.CasinoSlot.address;
+  console.log(`   CasinoSlot address: ${casinoSlotAddress}`);
+
+  // Frontend config directory
+  const frontendConfigDir = path.join(__dirname, "../../frontend/src/config/contracts");
+  if (!fs.existsSync(frontendConfigDir)) {
+    fs.mkdirSync(frontendConfigDir, { recursive: true });
+  }
+
+  // Determine environment
+  const environment = mapEnvironment(process.env.NODE_ENV || 'dev');
+  
+  console.log(`   🌐 Network: ${networkName}, Environment: ${environment}`);
+
+  // Generate network + environment specific file
+  await generateNetworkEnvFile(frontendConfigDir, networkName, environment, {
+    casinoSlotAddress,
+    deploymentData
+  });
 }
 
 function getNetworkName(chainId) {
@@ -176,11 +201,11 @@ export type AllDeployments = Partial<Record<NetworkName, Partial<NetworkDeployme
 function getChainlinkAddresses(chainId) {
   const addresses = {
     1: { // Mainnet
-      vrfCoordinator: "0x271682DEB8C4E0901D1a1550aD2e64D568E69909",
+      vrfCoordinator: "0x271682DEB8C4E0901D1a1550aD2e64D568E69909", // VRF v2
       ethUsdPriceFeed: "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419"
     },
     11155111: { // Sepolia
-      vrfCoordinator: "0x8103B0A8A00be2DDC778e6e7eaa21791Cd364625", 
+      vrfCoordinator: "0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B", // VRF v2.5
       ethUsdPriceFeed: "0x694AA1769357215DE4FAC081bf1f309aDC325306"
     },
     31337: null // Hardhat - uses mocks

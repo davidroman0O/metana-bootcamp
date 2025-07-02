@@ -43,9 +43,12 @@ async function testPlayerSpin() {
         
         console.log(`🎯 Connected to CasinoSlot: ${casinoSlotAddress}`);
         
-        // Get CasinoSlot contract
-        const CasinoSlot = await ethers.getContractFactory("CasinoSlot");
+        // Get CasinoSlot contract (use test version for local development)
+        const contractFactory = network.chainId === 31337 ? "CasinoSlotTest" : "CasinoSlot";
+        const CasinoSlot = await ethers.getContractFactory(contractFactory);
         const casinoSlot = CasinoSlot.attach(casinoSlotAddress);
+        
+        console.log(`🔧 Using contract factory: ${contractFactory}`);
         
         // Get test player (use account #1 - different from deployer)
         const [deployer, testPlayer] = await ethers.getSigners();
@@ -122,6 +125,14 @@ async function testPlayerSpin() {
             
             spinCompleted = true;
         });
+        
+        // Approve CHIPS for the spin first
+        console.log(`🔑 Approving CHIPS for spin...`);
+        const approveTx = await casinoSlot.connect(testPlayer).approve(casinoSlot.address, spinCost, {
+            gasLimit: 100000
+        });
+        await approveTx.wait();
+        console.log(`✅ CHIPS approved for spending\n`);
         
         // Execute the spin
         console.log(`🚀 Executing spin transaction...`);

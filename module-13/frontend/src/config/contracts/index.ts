@@ -2,16 +2,21 @@
 import type { NetworkDeployment, AllDeployments, NetworkName, Environment } from './types';
 import { SUPPORTED_CHAINS } from './types';
 import { HARDHAT_DEV_DEPLOYMENT } from './hardhat-dev';
+import { SEPOLIA_DEV_DEPLOYMENT } from './sepolia-dev';
 
 export * from './types';
 export * from './CasinoSlotABI';
 
 export { HARDHAT_DEV_DEPLOYMENT } from './hardhat-dev';
+export { SEPOLIA_DEV_DEPLOYMENT } from './sepolia-dev';
 
 // Network -> Environment -> Deployment structure
 const DEPLOYMENTS: AllDeployments = {
   hardhat: {
     dev: HARDHAT_DEV_DEPLOYMENT,
+  },
+  sepolia: {
+    dev: SEPOLIA_DEV_DEPLOYMENT,
   },
 };
 

@@ -19,11 +19,13 @@ async function startVRFListenerService() {
     try {
         // Get network info
         const network = await hre.ethers.provider.getNetwork();
+        console.log(`🌐 Network: ${network.name} (Chain ID: ${network.chainId})`);
         
         if (network.chainId !== 31337) {
-            console.log("⚠️  VRF Fulfiller service only works on local development (chainId 31337)");
-            console.log("   For mainnet/testnet, use real Chainlink VRF subscription");
-            return;
+            console.log("⚠️  VRF Fulfiller service is designed for local development (chainId 31337)");
+            console.log("   For mainnet/testnet deployments, use real Chainlink VRF subscription");
+            console.log("   This service will attempt to run but may not work on live networks");
+            console.log("   Press Ctrl+C to stop or continue at your own risk...\n");
         }
         
         // Load deployment data
@@ -32,7 +34,14 @@ async function startVRFListenerService() {
         const deploymentFile = path.join(__dirname, "../deployments", `deployment-${network.chainId}.json`);
         
         if (!fs.existsSync(deploymentFile)) {
-            console.error("❌ Deployment file not found. Please deploy contracts first.");
+            console.error(`❌ Deployment file not found: deployment-${network.chainId}.json`);
+            console.error("Available deployment files:");
+            const deploymentDir = path.join(__dirname, "../deployments");
+            if (fs.existsSync(deploymentDir)) {
+                const files = fs.readdirSync(deploymentDir).filter(f => f.startsWith('deployment-'));
+                files.forEach(file => console.error(`   - ${file}`));
+            }
+            console.error("Please deploy contracts first or check network connection.");
             return;
         }
         
@@ -42,10 +51,18 @@ async function startVRFListenerService() {
         
         console.log(`🎰 Monitoring CasinoSlot: ${casinoSlotAddress}`);
         console.log(`📍 VRF Coordinator: ${vrfCoordinatorAddress}`);
+        console.log(`🔗 Deployment: ${deploymentData.network.name} (${deploymentData.network.chainId})`);
         
-        // Get CasinoSlot contract
-        const CasinoSlot = await ethers.getContractFactory("CasinoSlot");
+        if (deploymentData.vrfVersion) {
+            console.log(`🎲 VRF Version: ${deploymentData.vrfVersion}`);
+        }
+        
+        // Get CasinoSlot contract (use test version for local development)
+        const contractFactory = network.chainId === 31337 ? "CasinoSlotTest" : "CasinoSlot";
+        const CasinoSlot = await ethers.getContractFactory(contractFactory);
         const casinoSlot = CasinoSlot.attach(casinoSlotAddress);
+        
+        console.log(`🔧 Using contract factory: ${contractFactory}`);
         
         // Get signer for funding VRF coordinator with gas
         const [deployer] = await ethers.getSigners();
@@ -79,8 +96,15 @@ async function startVRFListenerService() {
                 
                 console.log(`   🎲 Generated random words: ${randomWords.map(w => w.toString())}`);
                 
-                // Impersonate the VRF coordinator to call rawFulfillRandomWords
+                // Fulfill VRF request (method depends on network)
                 console.log(`   ⚡ Auto-fulfilling VRF request...`);
+                
+                if (network.chainId === 31337) {
+                    console.log(`   🔧 Using hardhat impersonation for local development`);
+                } else {
+                    console.log(`   ⚠️  Attempting VRF fulfillment on live network - this may fail`);
+                    console.log(`   💡 For production, use real Chainlink VRF subscription`);
+                }
                 
                 // Use hardhat_impersonateAccount to call from VRF coordinator address
                 await hre.network.provider.request({
@@ -91,21 +115,26 @@ async function startVRFListenerService() {
                 // Get the impersonated signer
                 const vrfCoordinatorSigner = await ethers.getSigner(vrfCoordinatorAddress);
                 
-                // Only fund the VRF coordinator if it's not the mock (check if it has a receive function)
+                // Fund the VRF coordinator with gas (network-specific handling)
                 try {
-                    await deployer.sendTransaction({
-                      to: vrfCoordinatorAddress,
-                      value: ethers.utils.parseEther("1.0")
-                    });
-                    console.log(`   💰 Funded VRF coordinator with gas ETH`);
+                    if (network.chainId === 31337) {
+                        // Hardhat network - use setBalance for mock coordinator
+                        await hre.network.provider.send("hardhat_setBalance", [
+                            vrfCoordinatorAddress,
+                            "0xDE0B6B3A7640000", // 1 ETH in hex
+                        ]);
+                        console.log(`   💰 Set mock VRF coordinator balance to 1 ETH for gas`);
+                    } else {
+                        // Live network - attempt to send ETH (may fail for real VRF coordinators)
+                        await deployer.sendTransaction({
+                          to: vrfCoordinatorAddress,
+                          value: ethers.utils.parseEther("0.1") // Smaller amount for live networks
+                        });
+                        console.log(`   💰 Funded VRF coordinator with 0.1 ETH for gas`);
+                    }
                 } catch (fundingError) {
-                    console.log(`   ⚠️  Mock VRF coordinator doesn't need funding (expected for local testing)`);
-                    // For mock coordinator, set balance directly using hardhat
-                    await hre.network.provider.send("hardhat_setBalance", [
-                        vrfCoordinatorAddress,
-                        "0xDE0B6B3A7640000", // 1 ETH in hex
-                    ]);
-                    console.log(`   💰 Set mock VRF coordinator balance to 1 ETH for gas`);
+                    console.log(`   ⚠️  Could not fund VRF coordinator: ${fundingError.message}`);
+                    console.log(`   🔄 Continuing with fulfillment attempt...`);
                 }
                 
                 // Call rawFulfillRandomWords from the VRF coordinator
