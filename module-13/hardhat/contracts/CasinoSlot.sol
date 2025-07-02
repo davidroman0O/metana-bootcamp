@@ -10,7 +10,8 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interfaces/IPayoutTables.sol";
 import "./interfaces/IPriceFeed.sol";
-import "./interfaces/IVRFCoordinator.sol";
+import "@chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
+import "@chainlink/contracts/src/v0.8/vrf/dev/interfaces/IVRFCoordinatorV2Plus.sol";
 import "./interfaces/IUniswapV3Router.sol";
 import "./interfaces/IWETH9.sol";
 
@@ -30,8 +31,8 @@ contract CasinoSlot is
 {
     
     // Chainlink VRF - stored as state variables instead of immutable
-    IVRFCoordinator public COORDINATOR;
-    uint64 public s_subscriptionId;
+    IVRFCoordinatorV2Plus public s_vrfCoordinator;
+    uint256 public s_subscriptionId;
     bytes32 public keyHash; // VRF key hash - identifies gas price tier and oracle selection
     uint32 public callbackGasLimit;
     uint16 public requestConfirmations;
@@ -115,7 +116,7 @@ contract CasinoSlot is
      * @dev Initialize the contract (replaces constructor for upgradeable pattern)
      */
     function initialize(
-        uint64 subscriptionId,
+        uint256 subscriptionId,
         address ethUsdPriceFeedAddress,
         address linkUsdPriceFeedAddress,
         address linkTokenAddress,
@@ -131,8 +132,7 @@ contract CasinoSlot is
         __ReentrancyGuard_init();
         __Pausable_init();
         __Ownable_init(initialOwner);
-        
-        COORDINATOR = IVRFCoordinator(vrfCoordinatorAddress);
+        s_vrfCoordinator = IVRFCoordinatorV2Plus(vrfCoordinatorAddress);
         s_subscriptionId = subscriptionId;
         ethUsdPriceFeed = IPriceFeed(ethUsdPriceFeedAddress);
         linkUsdPriceFeed = IPriceFeed(linkUsdPriceFeedAddress);
@@ -338,13 +338,16 @@ contract CasinoSlot is
         totalPrizePool += prizePoolAmount;
         emit PrizePoolStateChanged(totalPrizePool, int256(prizePoolAmount), 0);
         
-        // Request randomness using purchased LINK
-        requestId = COORDINATOR.requestRandomWords(
-            keyHash,
-            s_subscriptionId,
-            requestConfirmations,
-            callbackGasLimit,
-            numWords
+        // Request randomness using VRF v2.5 format
+        requestId = s_vrfCoordinator.requestRandomWords(
+            VRFV2PlusClient.RandomWordsRequest({
+                keyHash: keyHash,
+                subId: s_subscriptionId,
+                requestConfirmations: requestConfirmations,
+                callbackGasLimit: callbackGasLimit,
+                numWords: numWords,
+                extraArgs: VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({nativePayment: false})) // Use LINK payment
+            })
         );
         
         // NEW: Reset allowance to 0 after spin to force re-approval
@@ -526,14 +529,16 @@ contract CasinoSlot is
         return (payoutType, payout);
     }
     
+
+    
     /**
-     * @dev Chainlink VRF callback - called directly by VRF Coordinator
+     * @dev VRF callback function (called by Coordinator)
      */
     function rawFulfillRandomWords(uint256 requestId, uint256[] memory randomWords) external {
-        require(msg.sender == address(COORDINATOR), "Only VRFCoordinator can fulfill");
+        require(msg.sender == address(s_vrfCoordinator), "Only VRF Coordinator can fulfill");
         fulfillRandomWords(requestId, randomWords);
     }
-    
+
     /**
      * @dev Internal VRF fulfillment logic
      */

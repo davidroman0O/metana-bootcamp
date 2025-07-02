@@ -5,8 +5,8 @@ describe("🎰 CasinoSlot - COMPLETE END-TO-END REAL WORLD SIMULATION", function
   let casinoSlot, payoutTables;
   let owner, player1, player2, player3, whale;
   
-  const MOCK_KEY_HASH = "0x8af398995b04c28e9951adb9721ef74c74f93e6a478f39e7e0777be13527e7ef";
-  const MOCK_SUB_ID = 1;
+  const MOCK_KEY_HASH = "0x787d74caea10b2b357790d5b5247c2f63d1d91572a9846f780606e4d953677ae"; // VRF v2.5 key hash
+  const MOCK_SUB_ID = ethers.BigNumber.from("123456789"); // VRF v2.5 subscription ID (uint256)
   const MOCK_ETH_USD_PRICE_FEED = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419";
   const MOCK_LINK_USD_PRICE_FEED = "0x2c1d072e956AFFC0D435Cb7AC38EF18d24d9127c";
   const MOCK_LINK_TOKEN = "0x514910771AF9Ca656af840dff83E8264EcF986CA";

@@ -12,7 +12,7 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
   const LINK_TOKEN = "0x514910771AF9Ca656af840dff83E8264EcF986CA";
   const UNISWAP_V3_ROUTER = "0xE592427A0AEce92De3Edee1F18E0157C05861564";
   const WETH_TOKEN = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
-  const CHAINLINK_KEY_HASH = "0x8af398995b04c28e9951adb9721ef74c74f93e6a478f39e7e0777be13527e7ef"; // 500 gwei
+  const CHAINLINK_KEY_HASH = "0x787d74caea10b2b357790d5b5247c2f63d1d91572a9846f780606e4d953677ae"; // VRF v2.5 key hash
 
   before(async function () {
     [owner, player1, player2] = await ethers.getSigners();
@@ -47,15 +47,15 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
     casinoSlot = await upgrades.deployProxy(
       CasinoSlotTest,
       [
-        1,                        // uint64 subscriptionId
+        ethers.BigNumber.from("123456789"), // VRF v2.5 subscription ID (uint256)
         ETH_USD_PRICE_FEED,       // address ethUsdPriceFeedAddress
-        LINK_USD_PRICE_FEED,
-        LINK_TOKEN,
+        LINK_USD_PRICE_FEED,      // address linkUsdPriceFeedAddress
+        LINK_TOKEN,               // address linkTokenAddress
         payoutTables.address,     // address payoutTablesAddress
         mockVRFCoordinator.address, // address vrfCoordinatorAddress
-        UNISWAP_V3_ROUTER,
-        WETH_TOKEN,
-        CHAINLINK_KEY_HASH,       // bytes32 vrfKeyHash
+        UNISWAP_V3_ROUTER,        // address uniswapRouterAddress
+        WETH_TOKEN,               // address wethTokenAddress
+        CHAINLINK_KEY_HASH,       // bytes32 vrfKeyHash (v2.5)
         owner.address             // address initialOwner
       ],
       {

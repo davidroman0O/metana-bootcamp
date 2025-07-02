@@ -12,7 +12,7 @@ describe("🔧 Admin Functions", function () {
   const LINK_TOKEN = "0x514910771AF9Ca656af840dff83E8264EcF986CA"; // LINK token mainnet
   const UNISWAP_V3_ROUTER = "0xE592427A0AEce92De3Edee1F18E0157C05861564"; // Uniswap V3 router mainnet
   const WETH_TOKEN = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"; // WETH mainnet
-  const CHAINLINK_KEY_HASH = "0x8af398995b04c28e9951adb9721ef74c74f93e6a478f39e7e0777be13527e7ef";
+  const CHAINLINK_KEY_HASH = "0x787d74caea10b2b357790d5b5247c2f63d1d91572a9846f780606e4d953677ae"; // VRF v2.5 key hash
 
   // Remove duplicate enum - will be imported from contract
 
@@ -49,7 +49,7 @@ describe("🔧 Admin Functions", function () {
     casinoSlot = await upgrades.deployProxy(
       CasinoSlotTest,
       [
-        1, // VRF subscription ID
+        ethers.BigNumber.from("123456789"), // VRF v2.5 subscription ID (uint256)
         ETH_USD_PRICE_FEED, // Real mainnet Chainlink ETH/USD feed
         LINK_USD_PRICE_FEED, // Real mainnet Chainlink LINK/USD feed
         LINK_TOKEN, // Real mainnet LINK token

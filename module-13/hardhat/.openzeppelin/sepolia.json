@@ -1,0 +1,837 @@
+{
+  "manifestVersion": "3.2",
+  "proxies": [
+    {
+      "address": "0x54905c57633E2d5d1D12268862D2dAc943D6C554",
+      "txHash": "0x42e556ea8d36ad45f318d36da9ac8b2b1718a6187d3519140461fc8bf9ceb8ed",
+      "kind": "uups"
+    }
+  ],
+  "impls": {
+    "a674cd9e599a425b3b71cf58ba471cfa2240045fdce489e3e986410c4c863e59": {
+      "address": "0x1b1e906111dA10F7058F9658f4BB54203c03E0e1",
+      "txHash": "0xde82299ebb8e500bfd5a6274a6768e491d9db79033d5cb396d8dae92d3282a47",
+      "layout": {
+        "solcVersion": "0.8.22",
+        "storage": [
+          {
+            "label": "COORDINATOR",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_contract(IVRFCoordinator)5398",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:33"
+          },
+          {
+            "label": "s_subscriptionId",
+            "offset": 20,
+            "slot": "0",
+            "type": "t_uint64",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:34"
+          },
+          {
+            "label": "keyHash",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_bytes32",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:35"
+          },
+          {
+            "label": "callbackGasLimit",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_uint32",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:36"
+          },
+          {
+            "label": "requestConfirmations",
+            "offset": 4,
+            "slot": "2",
+            "type": "t_uint16",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:37"
+          },
+          {
+            "label": "numWords",
+            "offset": 6,
+            "slot": "2",
+            "type": "t_uint32",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:38"
+          },
+          {
+            "label": "payoutTables",
+            "offset": 10,
+            "slot": "2",
+            "type": "t_contract(IPayoutTables)5276",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:41"
+          },
+          {
+            "label": "ethUsdPriceFeed",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_contract(IPriceFeed)5323",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:42"
+          },
+          {
+            "label": "linkUsdPriceFeed",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_contract(IPriceFeed)5323",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:43"
+          },
+          {
+            "label": "linkToken",
+            "offset": 0,
+            "slot": "5",
+            "type": "t_contract(IERC20)2146",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:44"
+          },
+          {
+            "label": "uniswapRouter",
+            "offset": 0,
+            "slot": "6",
+            "type": "t_contract(IUniswapV3Router)5379",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:45"
+          },
+          {
+            "label": "wethToken",
+            "offset": 0,
+            "slot": "7",
+            "type": "t_contract(IWETH9)5415",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:46"
+          },
+          {
+            "label": "totalPrizePool",
+            "offset": 0,
+            "slot": "8",
+            "type": "t_uint256",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:49"
+          },
+          {
+            "label": "houseEdge",
+            "offset": 0,
+            "slot": "9",
+            "type": "t_uint256",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:50"
+          },
+          {
+            "label": "baseChipPriceUSD",
+            "offset": 0,
+            "slot": "10",
+            "type": "t_uint256",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:53"
+          },
+          {
+            "label": "vrfCostLINK",
+            "offset": 0,
+            "slot": "11",
+            "type": "t_uint256",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:54"
+          },
+          {
+            "label": "maxSlippageBPS",
+            "offset": 0,
+            "slot": "12",
+            "type": "t_uint256",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:55"
+          },
+          {
+            "label": "uniswapFee",
+            "offset": 0,
+            "slot": "13",
+            "type": "t_uint24",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:56"
+          },
+          {
+            "label": "spins",
+            "offset": 0,
+            "slot": "14",
+            "type": "t_mapping(t_uint256,t_struct(Spin)2823_storage)",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:66"
+          },
+          {
+            "label": "playerWinnings",
+            "offset": 0,
+            "slot": "15",
+            "type": "t_mapping(t_address,t_uint256)",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:67"
+          },
+          {
+            "label": "totalSpins",
+            "offset": 0,
+            "slot": "16",
+            "type": "t_mapping(t_address,t_uint256)",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:68"
+          },
+          {
+            "label": "totalWon",
+            "offset": 0,
+            "slot": "17",
+            "type": "t_mapping(t_address,t_uint256)",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:69"
+          },
+          {
+            "label": "totalBet",
+            "offset": 0,
+            "slot": "18",
+            "type": "t_mapping(t_address,t_uint256)",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:70"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_array(t_uint256)dyn_storage": {
+            "label": "uint256[]",
+            "numberOfBytes": "32"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_bytes32": {
+            "label": "bytes32",
+            "numberOfBytes": "32"
+          },
+          "t_contract(IERC20)2146": {
+            "label": "contract IERC20",
+            "numberOfBytes": "20"
+          },
+          "t_contract(IPayoutTables)5276": {
+            "label": "contract IPayoutTables",
+            "numberOfBytes": "20"
+          },
+          "t_contract(IPriceFeed)5323": {
+            "label": "contract IPriceFeed",
+            "numberOfBytes": "20"
+          },
+          "t_contract(IUniswapV3Router)5379": {
+            "label": "contract IUniswapV3Router",
+            "numberOfBytes": "20"
+          },
+          "t_contract(IVRFCoordinator)5398": {
+            "label": "contract IVRFCoordinator",
+            "numberOfBytes": "20"
+          },
+          "t_contract(IWETH9)5415": {
+            "label": "contract IWETH9",
+            "numberOfBytes": "20"
+          },
+          "t_enum(PayoutType)5265": {
+            "label": "enum IPayoutTables.PayoutType",
+            "members": [
+              "LOSE",
+              "SMALL_WIN",
+              "MEDIUM_WIN",
+              "BIG_WIN",
+              "MEGA_WIN",
+              "ULTRA_WIN",
+              "SPECIAL_COMBO",
+              "JACKPOT"
+            ],
+            "numberOfBytes": "1"
+          },
+          "t_mapping(t_address,t_uint256)": {
+            "label": "mapping(address => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_struct(Spin)2823_storage)": {
+            "label": "mapping(uint256 => struct CasinoSlot.Spin)",
+            "numberOfBytes": "32"
+          },
+          "t_struct(Spin)2823_storage": {
+            "label": "struct CasinoSlot.Spin",
+            "members": [
+              {
+                "label": "player",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "betAmount",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "reelCount",
+                "type": "t_uint8",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "reels",
+                "type": "t_array(t_uint256)dyn_storage",
+                "offset": 0,
+                "slot": "3"
+              },
+              {
+                "label": "payoutType",
+                "type": "t_enum(PayoutType)5265",
+                "offset": 0,
+                "slot": "4"
+              },
+              {
+                "label": "payout",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "5"
+              },
+              {
+                "label": "settled",
+                "type": "t_bool",
+                "offset": 0,
+                "slot": "6"
+              },
+              {
+                "label": "timestamp",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "7"
+              }
+            ],
+            "numberOfBytes": "256"
+          },
+          "t_uint16": {
+            "label": "uint16",
+            "numberOfBytes": "2"
+          },
+          "t_uint24": {
+            "label": "uint24",
+            "numberOfBytes": "3"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          },
+          "t_uint32": {
+            "label": "uint32",
+            "numberOfBytes": "4"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_uint8": {
+            "label": "uint8",
+            "numberOfBytes": "1"
+          },
+          "t_mapping(t_address,t_mapping(t_address,t_uint256))": {
+            "label": "mapping(address => mapping(address => uint256))"
+          },
+          "t_string_storage": {
+            "label": "string"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.Ownable": [
+            {
+              "contract": "OwnableUpgradeable",
+              "label": "_owner",
+              "type": "t_address",
+              "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:24"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Pausable": [
+            {
+              "contract": "PausableUpgradeable",
+              "label": "_paused",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol:21"
+            }
+          ],
+          "erc7201:openzeppelin.storage.ReentrancyGuard": [
+            {
+              "contract": "ReentrancyGuardUpgradeable",
+              "label": "_status",
+              "type": "t_uint256",
+              "src": "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol:43"
+            }
+          ],
+          "erc7201:openzeppelin.storage.ERC20": [
+            {
+              "contract": "ERC20Upgradeable",
+              "label": "_balances",
+              "type": "t_mapping(t_address,t_uint256)",
+              "src": "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol:33"
+            },
+            {
+              "contract": "ERC20Upgradeable",
+              "label": "_allowances",
+              "type": "t_mapping(t_address,t_mapping(t_address,t_uint256))",
+              "src": "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol:35"
+            },
+            {
+              "contract": "ERC20Upgradeable",
+              "label": "_totalSupply",
+              "type": "t_uint256",
+              "src": "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol:37"
+            },
+            {
+              "contract": "ERC20Upgradeable",
+              "label": "_name",
+              "type": "t_string_storage",
+              "src": "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol:39"
+            },
+            {
+              "contract": "ERC20Upgradeable",
+              "label": "_symbol",
+              "type": "t_string_storage",
+              "src": "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol:40"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:69"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:73"
+            }
+          ]
+        }
+      }
+    },
+    "a333efaac929f43f7f031b021dc414492df6b096c1eec47ad7968114c11fc046": {
+      "address": "0x9f7563D49f713dEa313523d37eeD5fBDD27C403f",
+      "txHash": "0xbe706152c8dc52d6376d0f4d20284bab5e20c654da71d9a0bedac201ebbc2dec",
+      "layout": {
+        "solcVersion": "0.8.22",
+        "storage": [
+          {
+            "label": "s_vrfCoordinator",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_contract(IVRFCoordinatorV2Plus)17",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:34"
+          },
+          {
+            "label": "s_subscriptionId",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_uint256",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:35"
+          },
+          {
+            "label": "keyHash",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_bytes32",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:36"
+          },
+          {
+            "label": "callbackGasLimit",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_uint32",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:37"
+          },
+          {
+            "label": "requestConfirmations",
+            "offset": 4,
+            "slot": "3",
+            "type": "t_uint16",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:38"
+          },
+          {
+            "label": "numWords",
+            "offset": 6,
+            "slot": "3",
+            "type": "t_uint32",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:39"
+          },
+          {
+            "label": "payoutTables",
+            "offset": 10,
+            "slot": "3",
+            "type": "t_contract(IPayoutTables)5436",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:42"
+          },
+          {
+            "label": "ethUsdPriceFeed",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_contract(IPriceFeed)5483",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:43"
+          },
+          {
+            "label": "linkUsdPriceFeed",
+            "offset": 0,
+            "slot": "5",
+            "type": "t_contract(IPriceFeed)5483",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:44"
+          },
+          {
+            "label": "linkToken",
+            "offset": 0,
+            "slot": "6",
+            "type": "t_contract(IERC20)2295",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:45"
+          },
+          {
+            "label": "uniswapRouter",
+            "offset": 0,
+            "slot": "7",
+            "type": "t_contract(IUniswapV3Router)5539",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:46"
+          },
+          {
+            "label": "wethToken",
+            "offset": 0,
+            "slot": "8",
+            "type": "t_contract(IWETH9)5556",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:47"
+          },
+          {
+            "label": "totalPrizePool",
+            "offset": 0,
+            "slot": "9",
+            "type": "t_uint256",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:50"
+          },
+          {
+            "label": "houseEdge",
+            "offset": 0,
+            "slot": "10",
+            "type": "t_uint256",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:51"
+          },
+          {
+            "label": "baseChipPriceUSD",
+            "offset": 0,
+            "slot": "11",
+            "type": "t_uint256",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:54"
+          },
+          {
+            "label": "vrfCostLINK",
+            "offset": 0,
+            "slot": "12",
+            "type": "t_uint256",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:55"
+          },
+          {
+            "label": "maxSlippageBPS",
+            "offset": 0,
+            "slot": "13",
+            "type": "t_uint256",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:56"
+          },
+          {
+            "label": "uniswapFee",
+            "offset": 0,
+            "slot": "14",
+            "type": "t_uint24",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:57"
+          },
+          {
+            "label": "spins",
+            "offset": 0,
+            "slot": "15",
+            "type": "t_mapping(t_uint256,t_struct(Spin)2973_storage)",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:67"
+          },
+          {
+            "label": "playerWinnings",
+            "offset": 0,
+            "slot": "16",
+            "type": "t_mapping(t_address,t_uint256)",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:68"
+          },
+          {
+            "label": "totalSpins",
+            "offset": 0,
+            "slot": "17",
+            "type": "t_mapping(t_address,t_uint256)",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:69"
+          },
+          {
+            "label": "totalWon",
+            "offset": 0,
+            "slot": "18",
+            "type": "t_mapping(t_address,t_uint256)",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:70"
+          },
+          {
+            "label": "totalBet",
+            "offset": 0,
+            "slot": "19",
+            "type": "t_mapping(t_address,t_uint256)",
+            "contract": "CasinoSlot",
+            "src": "contracts/CasinoSlot.sol:71"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_array(t_uint256)dyn_storage": {
+            "label": "uint256[]",
+            "numberOfBytes": "32"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_bytes32": {
+            "label": "bytes32",
+            "numberOfBytes": "32"
+          },
+          "t_contract(IERC20)2295": {
+            "label": "contract IERC20",
+            "numberOfBytes": "20"
+          },
+          "t_contract(IPayoutTables)5436": {
+            "label": "contract IPayoutTables",
+            "numberOfBytes": "20"
+          },
+          "t_contract(IPriceFeed)5483": {
+            "label": "contract IPriceFeed",
+            "numberOfBytes": "20"
+          },
+          "t_contract(IUniswapV3Router)5539": {
+            "label": "contract IUniswapV3Router",
+            "numberOfBytes": "20"
+          },
+          "t_contract(IVRFCoordinatorV2Plus)17": {
+            "label": "contract IVRFCoordinatorV2Plus",
+            "numberOfBytes": "20"
+          },
+          "t_contract(IWETH9)5556": {
+            "label": "contract IWETH9",
+            "numberOfBytes": "20"
+          },
+          "t_enum(PayoutType)5425": {
+            "label": "enum IPayoutTables.PayoutType",
+            "members": [
+              "LOSE",
+              "SMALL_WIN",
+              "MEDIUM_WIN",
+              "BIG_WIN",
+              "MEGA_WIN",
+              "ULTRA_WIN",
+              "SPECIAL_COMBO",
+              "JACKPOT"
+            ],
+            "numberOfBytes": "1"
+          },
+          "t_mapping(t_address,t_uint256)": {
+            "label": "mapping(address => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_struct(Spin)2973_storage)": {
+            "label": "mapping(uint256 => struct CasinoSlot.Spin)",
+            "numberOfBytes": "32"
+          },
+          "t_struct(Spin)2973_storage": {
+            "label": "struct CasinoSlot.Spin",
+            "members": [
+              {
+                "label": "player",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "betAmount",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "reelCount",
+                "type": "t_uint8",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "reels",
+                "type": "t_array(t_uint256)dyn_storage",
+                "offset": 0,
+                "slot": "3"
+              },
+              {
+                "label": "payoutType",
+                "type": "t_enum(PayoutType)5425",
+                "offset": 0,
+                "slot": "4"
+              },
+              {
+                "label": "payout",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "5"
+              },
+              {
+                "label": "settled",
+                "type": "t_bool",
+                "offset": 0,
+                "slot": "6"
+              },
+              {
+                "label": "timestamp",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "7"
+              }
+            ],
+            "numberOfBytes": "256"
+          },
+          "t_uint16": {
+            "label": "uint16",
+            "numberOfBytes": "2"
+          },
+          "t_uint24": {
+            "label": "uint24",
+            "numberOfBytes": "3"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          },
+          "t_uint32": {
+            "label": "uint32",
+            "numberOfBytes": "4"
+          },
+          "t_uint8": {
+            "label": "uint8",
+            "numberOfBytes": "1"
+          },
+          "t_mapping(t_address,t_mapping(t_address,t_uint256))": {
+            "label": "mapping(address => mapping(address => uint256))"
+          },
+          "t_string_storage": {
+            "label": "string"
+          },
+          "t_uint64": {
+            "label": "uint64"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.Ownable": [
+            {
+              "contract": "OwnableUpgradeable",
+              "label": "_owner",
+              "type": "t_address",
+              "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:24"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Pausable": [
+            {
+              "contract": "PausableUpgradeable",
+              "label": "_paused",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol:21"
+            }
+          ],
+          "erc7201:openzeppelin.storage.ReentrancyGuard": [
+            {
+              "contract": "ReentrancyGuardUpgradeable",
+              "label": "_status",
+              "type": "t_uint256",
+              "src": "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol:43"
+            }
+          ],
+          "erc7201:openzeppelin.storage.ERC20": [
+            {
+              "contract": "ERC20Upgradeable",
+              "label": "_balances",
+              "type": "t_mapping(t_address,t_uint256)",
+              "src": "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol:33"
+            },
+            {
+              "contract": "ERC20Upgradeable",
+              "label": "_allowances",
+              "type": "t_mapping(t_address,t_mapping(t_address,t_uint256))",
+              "src": "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol:35"
+            },
+            {
+              "contract": "ERC20Upgradeable",
+              "label": "_totalSupply",
+              "type": "t_uint256",
+              "src": "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol:37"
+            },
+            {
+              "contract": "ERC20Upgradeable",
+              "label": "_name",
+              "type": "t_string_storage",
+              "src": "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol:39"
+            },
+            {
+              "contract": "ERC20Upgradeable",
+              "label": "_symbol",
+              "type": "t_string_storage",
+              "src": "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol:40"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:69"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:73"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

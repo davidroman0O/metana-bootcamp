@@ -8,23 +8,17 @@
     "test": "hardhat test --network hardhat",
     "test:gas": "REPORT_GAS=true hardhat test",
     "test:single": "hardhat test --grep",
-    
     "test:integration": "hardhat test test/DegenSlotsIntegration.test.js --network hardhat",
     "test:payouttables": "hardhat test test/PayoutTablesBasic.test.js --network hardhat",
     "test:payouts": "hardhat test test/PayoutCombinations.test.js --network hardhat",
     "test:vrf": "hardhat test test/VRFMechanics.test.js --network hardhat",
     "test:admin": "hardhat test test/AdminFunctions.test.js --network hardhat",
     "test:e2e": "hardhat test test/FullE2EIntegration.test.js --network hardhat",
-    
     "test:all": "npm run test:integration && npm run test:payouttables && npm run test:payouts && npm run test:vrf && npm run test:admin && npm run test:e2e",
-    
     "deploy": "hardhat run scripts/deploy.js --network localhost",
     "deploy:local": "hardhat run scripts/deploy.js --network localhost",
-    "deploy:fork": "hardhat run scripts/deploy.js --network hardhat",
-    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
     "extract-addresses": "node scripts/extract-addresses.js",
     "measure-gas": "hardhat run scripts/measureGas.js --network hardhat",
-    
     "node": "hardhat node",
     "node:fork": "hardhat node --fork https://eth-mainnet.g.alchemy.com/v2/UlgUe5NUoeezq_0_AxTSKl0qpQQeHSKV",
     "vrf:fulfiller": "hardhat run scripts/vrf-fulfiller.js --network localhost",
@@ -36,7 +30,13 @@
     "lint": "solhint 'contracts/**/*.sol'",
     "format": "prettier --write 'contracts/**/*.sol'",
     "dev": "npm run compile && concurrently \"npm run node:fork\" \"npm run deploy:watch\"",
-    "deploy:watch": "wait-on http://127.0.0.1:8545 && npm run deploy"
+    "deploy:watch": "wait-on http://127.0.0.1:8545 && npm run deploy",
+    "deploy:full": "npm run deploy:init && npm run deploy:payouts && npm run deploy:casino",
+    "deploy:init": "hardhat run scripts/deployment/00-init.js",
+    "deploy:payouts": "hardhat run scripts/deployment/01-deploy-payout-tables.js",
+    "deploy:casino": "hardhat run scripts/deployment/02-deploy-casino-slot.js",
+    "verify:contracts": "hardhat run scripts/deployment/03-verify-contracts.js",
+    "verify:proxy": "hardhat run scripts/deployment/04-verify-proxy.js"
   },
   "keywords": [
     "ethereum",
@@ -47,22 +47,24 @@
     "slots",
     "hardhat"
   ],
-  "author": "Metana Bootcamp",
-  "license": "MIT",
+  "author": "",
+  "license": "ISC",
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "^2.2.3",
     "@nomiclabs/hardhat-waffle": "^2.0.6",
     "chai": "^4.3.10",
+    "concurrently": "^8.2.2",
     "ethereum-waffle": "^4.0.10",
     "ethers": "^5.8.0",
     "hardhat": "^2.24.1",
-    "concurrently": "^8.2.2",
-    "wait-on": "^8.0.1",
+    "ts-node": "^10.9.2",
     "typescript": "^5.8.3",
-    "ts-node": "^10.9.2"
+    "wait-on": "^8.0.1"
   },
   "dependencies": {
     "@chainlink/contracts": "^1.2.0",
+    "@nomicfoundation/hardhat-ledger": "^1.1.0",
+    "@nomicfoundation/hardhat-verify": "^2.0.14",
     "@openzeppelin/contracts": "^5.1.0",
     "@openzeppelin/contracts-upgradeable": "^5.1.0",
     "@openzeppelin/hardhat-upgrades": "^1.28.0",

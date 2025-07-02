@@ -1,3 +1,5 @@
+require("@nomicfoundation/hardhat-verify");
+require("@nomicfoundation/hardhat-ledger");
 require("@nomiclabs/hardhat-ethers");
 require("@nomiclabs/hardhat-waffle");
 require("@openzeppelin/hardhat-upgrades");
@@ -48,10 +50,18 @@ module.exports = {
     },
     sepolia: {
       url: "https://eth-sepolia.g.alchemy.com/v2/UlgUe5NUoeezq_0_AxTSKl0qpQQeHSKV",
-      accounts: [PRIVATE_KEY]
+      chainId: 11155111, // Sepolia testnet chain ID
+      ledgerAccounts: [
+        process.env.LEDGER_ACCOUNT
+      ],
+      gasPrice: 50000000000 // 50 gwei
     }
   },
   etherscan: {
+    enabled: true,
     apiKey: process.env.ETHERSCAN_API_KEY
+  },
+  sourcify: {
+    enabled: false
   }
 };

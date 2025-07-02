@@ -1,0 +1,23 @@
+{
+  "payouts": {
+    "payoutTables3": "0x1352dA24Bd2Bf4E96CAEF171342fCf271774426B",
+    "payoutTables4": "0x0c8126305aF012EE2616Ec471521F7c75D2b5226",
+    "payoutTables5": "0x56cBE79a59B02b1Dab898fA9f581d805930bE4a6",
+    "payoutTables6": "0xf760A220bB3862B01a5F7db2926675E32E6B8541",
+    "payoutTables7_Part1": "0xee911c8bFb965b7BBacF272C98aBA69f934fD1Aa",
+    "payoutTables7_Part2": "0x5827b5F3e186b59820C490FB60616b4B4C3Dde70",
+    "payoutTables7_Part3": "0xDd3e415275ea010D9a72DCF9F0EB68dF5318f500",
+    "payoutTables7_Part4": "0xD1B8157d7c57D034cDBD07C07D9AF0e9e53DCAD2",
+    "payoutTables7_Part5": "0x88F2bAbB8Fc74Edb0aDFbC246d195d4A7CBF0D6A",
+    "payoutTables7_Part6": "0x931d4bAf147b3f2276AedF85333eCCdA60F54697",
+    "payoutTables7_Part7": "0x96B750fEc2ae195e555dd30Aa2fe9E6fE1Bb0B30",
+    "payoutTables7_Part8": "0x364716A5C45e0e7eC835D3Ee3697b1Bd5ce28956",
+    "payoutTables7Router": "0xbd922712031186FD594Cd4682448F629DF0bedDa",
+    "payoutTablesAPI": "0xffc2E8f0742b645759FEB1eD766238becEc34188"
+  },
+  "casino": {
+    "proxy": "0x54905c57633E2d5d1D12268862D2dAc943D6C554",
+    "implementation": "0x9f7563D49f713dEa313523d37eeD5fBDD27C403f",
+    "admin": "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86"
+  }
+}

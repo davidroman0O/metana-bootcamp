@@ -23,8 +23,8 @@ describe("🎯 Payout Combinations Testing", function () {
   const LINK_TOKEN = "0x514910771AF9Ca656af840dff83E8264EcF986CA";
   const UNISWAP_V3_ROUTER = "0xE592427A0AEce92De3Edee1F18E0157C05861564";
   const WETH_TOKEN = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
-  const dummyKeyHash = ethers.utils.formatBytes32String("dummy");
-  const subscriptionId = 1;
+  const vrfKeyHash = "0x787d74caea10b2b357790d5b5247c2f63d1d91572a9846f780606e4d953677ae"; // VRF v2.5 key hash
+  const subscriptionId = ethers.BigNumber.from("123456789"); // VRF v2.5 subscription ID (uint256)
 
   before(async function () {
     [owner, player1] = await ethers.getSigners();
@@ -67,7 +67,7 @@ describe("🎯 Payout Combinations Testing", function () {
         mockVRFCoordinator.address,
         UNISWAP_V3_ROUTER,
         WETH_TOKEN,
-        dummyKeyHash,
+        vrfKeyHash,
         owner.address // Initial owner
       ],
       { kind: "uups" }
