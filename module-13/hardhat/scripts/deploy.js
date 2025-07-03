@@ -128,7 +128,7 @@ async function main() {
   console.log("🎉 ALL payout tables deployed with full 7-reel chunked system!");
 
   // Step 2: Deploy CasinoSlot (which is now both casino AND token with VRF v2.5)
-  const contractName = network.chainId === 31337 ? "CasinoSlotTest" : "CasinoSlot";
+  const contractName = network.chainId === 31337 ? "CasinoSlotTest" : "CasinoSlot"; // we will never use the normal CasinoSlot contract on that script anyway
   console.log(`\n🎰 Deploying ${contractName} Casino-Token with VRF v2.5...`);
   const CasinoSlot = await ethers.getContractFactory(contractName);
   const casinoSlot = await upgrades.deployProxy(

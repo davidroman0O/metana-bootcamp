@@ -11,14 +11,30 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interfaces/IPayoutTables.sol";
 import "./interfaces/IPriceFeed.sol";
 import "@chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
-import "@chainlink/contracts/src/v0.8/vrf/dev/interfaces/IVRFCoordinatorV2Plus.sol";
-import "./interfaces/IUniswapV3Router.sol";
+import "./interfaces/IUniswapV2Router.sol";
 import "./interfaces/IWETH9.sol";
+
+// VRF Wrapper interface for direct funding
+interface IVRFV2PlusWrapper {
+    function requestRandomness(
+        uint32 _callbackGasLimit,
+        uint16 _requestConfirmations,
+        uint32 _numWords,
+        bytes memory extraArgs
+    ) external returns (uint256 requestId, uint256 reqPrice);
+    
+    function requestRandomnessPayInNative(
+        uint32 _callbackGasLimit,
+        uint16 _requestConfirmations,
+        uint32 _numWords,
+        bytes memory extraArgs
+    ) external payable returns (uint256 requestId, uint256 reqPrice);
+}
 
 /**
  * @title CasinoSlot - Professional-grade on-chain slot machine with real-time ETH→LINK swapping
  * @author David Roman
- * @notice Advanced casino system with Uniswap V3 integration for VRF cost management
+ * @notice Advanced casino system with Uniswap V2 integration for VRF cost management
  * @dev UUPS upgradeable contract with real-time LINK purchasing per spin
  */
 contract CasinoSlot is 
@@ -30,10 +46,8 @@ contract CasinoSlot is
     OwnableUpgradeable
 {
     
-    // Chainlink VRF - stored as state variables instead of immutable
-    IVRFCoordinatorV2Plus public s_vrfCoordinator;
-    uint256 public s_subscriptionId;
-    bytes32 public keyHash; // VRF key hash - identifies gas price tier and oracle selection
+    // Chainlink VRF Direct Funding - MUCH SIMPLER!
+    IVRFV2PlusWrapper public vrfWrapper;
     uint32 public callbackGasLimit;
     uint16 public requestConfirmations;
     uint32 public numWords;
@@ -43,7 +57,7 @@ contract CasinoSlot is
     IPriceFeed internal ethUsdPriceFeed;
     IPriceFeed internal linkUsdPriceFeed; // LINK/USD price feed
     IERC20 public linkToken; // LINK token contract (ERC20)
-    IUniswapV3Router public uniswapRouter; // Uniswap V3 router
+    IUniswapV2Router public uniswapRouter; // Uniswap V2 router
     IWETH9 public wethToken; // WETH contract
     
     // Core game state
@@ -54,7 +68,6 @@ contract CasinoSlot is
     uint256 public baseChipPriceUSD; // Base CHIP price in cents (e.g., 20 = $0.20)
     uint256 public vrfCostLINK; // VRF cost in LINK tokens (18 decimals)
     uint256 public maxSlippageBPS; // Maximum slippage for LINK swaps (basis points)
-    uint24 public uniswapFee; // Uniswap pool fee tier (3000 = 0.3%)
     
     // Reel scaling multipliers (basis points - 10000 = 100%)
     uint256 public constant REEL_3_MULTIPLIER = 10000;  // 100% (base)
@@ -116,15 +129,13 @@ contract CasinoSlot is
      * @dev Initialize the contract (replaces constructor for upgradeable pattern)
      */
     function initialize(
-        uint256 subscriptionId,
         address ethUsdPriceFeedAddress,
         address linkUsdPriceFeedAddress,
         address linkTokenAddress,
         address payoutTablesAddress,
-        address vrfCoordinatorAddress,
+        address wrapperAddress,
         address uniswapRouterAddress,
         address wethTokenAddress,
-        bytes32 vrfKeyHash,
         address initialOwner
     ) public initializer {
         __ERC20_init("CasinoSlot Casino Chips", "CHIPS");
@@ -132,15 +143,14 @@ contract CasinoSlot is
         __ReentrancyGuard_init();
         __Pausable_init();
         __Ownable_init(initialOwner);
-        s_vrfCoordinator = IVRFCoordinatorV2Plus(vrfCoordinatorAddress);
-        s_subscriptionId = subscriptionId;
+        
+        vrfWrapper = IVRFV2PlusWrapper(wrapperAddress);
         ethUsdPriceFeed = IPriceFeed(ethUsdPriceFeedAddress);
         linkUsdPriceFeed = IPriceFeed(linkUsdPriceFeedAddress);
         linkToken = IERC20(linkTokenAddress);
         payoutTables = IPayoutTables(payoutTablesAddress);
-        uniswapRouter = IUniswapV3Router(uniswapRouterAddress);
+        uniswapRouter = IUniswapV2Router(uniswapRouterAddress);
         wethToken = IWETH9(wethTokenAddress);
-        keyHash = vrfKeyHash;
         
         // Initialize VRF parameters
         callbackGasLimit = 200000;
@@ -152,7 +162,6 @@ contract CasinoSlot is
         baseChipPriceUSD = 20; // $0.20 in cents
         vrfCostLINK = 0.01 ether; // 0.01 LINK per VRF request (~$0.14) - higher for testable amounts
         maxSlippageBPS = 300; // 3% max slippage
-        uniswapFee = 500; // 0.05% fee tier (better liquidity for WETH/LINK)
         
         emit ContractInitialized(1);
     }
@@ -240,10 +249,10 @@ contract CasinoSlot is
         require(uint256(linkPriceUSD) >= 1 * 1e8, "LINK price too low"); // Min $1
         require(uint256(linkPriceUSD) <= 1000 * 1e8, "LINK price too high"); // Max $1000
         
-        // Calculate VRF cost in USD cents with 10% buffer
-        // vrfCostLINK (18 decimals) * linkPriceUSD (8 decimals) * 110 (buffer) / (1e18 * 1e8)
+        // Calculate VRF cost in USD cents with 25% buffer (increased from 10%)
+        // vrfCostLINK (18 decimals) * linkPriceUSD (8 decimals) * 125 (buffer) / (1e18 * 1e8)
         // = USD cents with proper precision
-        uint256 vrfCostUSDCents = (vrfCostLINK * uint256(linkPriceUSD) * 110) / (1e18 * 1e8);
+        uint256 vrfCostUSDCents = (vrfCostLINK * uint256(linkPriceUSD) * 125) / (1e18 * 1e8);
         
         return vrfCostUSDCents;
     }
@@ -294,22 +303,25 @@ contract CasinoSlot is
     function _executeSpin(uint8 reelCount, uint256 cost) internal returns (uint256 requestId) {
         require(reelCount >= 3 && reelCount <= 7, "Invalid reel count");
         
-        // Check player has enough CHIPS
-        require(balanceOf(msg.sender) >= cost, "Insufficient CHIPS balance");
-        
-        // Check for sufficient allowance before proceeding
-        require(allowance(msg.sender, address(this)) >= cost, "CasinoSlot: insufficient allowance, approve CHIPS first");
+        // Critical checks only
+        require(balanceOf(msg.sender) >= cost, "Insufficient CHIPS");
+        require(allowance(msg.sender, address(this)) >= cost, "Insufficient allowance");
+        require(address(this).balance > 0, "No ETH balance");
 
         // Burn CHIPS from player 
         _burn(msg.sender, cost);
         
         // Calculate ETH value of burned CHIPS
         uint256 ethValue = calculateETHFromCHIPS(cost);
-        require(address(this).balance >= ethValue, "Insufficient contract ETH balance");
+        require(ethValue > 0, "ETH calc failed");
+        require(address(this).balance >= ethValue, "Insufficient ETH");
         
-        // Calculate VRF cost in ETH (convert LINK cost to ETH)
+        // VRF cost calculations
         uint256 vrfCostUSD = _getLINKCostInUSD();
+        require(vrfCostUSD > 0, "VRF cost zero");
+        
         uint256 vrfCostETH = _convertUSDCentsToETH(vrfCostUSD);
+        require(vrfCostETH > 0, "VRF ETH zero");
         
         // Use portion of ETH value for LINK purchase (ensure we have enough)
         uint256 ethForLINK;
@@ -324,8 +336,16 @@ contract CasinoSlot is
             }
         }
         
+        require(ethForLINK > 0, "ETH for LINK zero");
+        
+        // Check initial LINK balance
+        uint256 linkBalanceBefore = linkToken.balanceOf(address(this));
+        
         // Swap ETH for LINK
         uint256 linkReceived = _swapETHForLINK(ethForLINK);
+        
+        require(linkReceived > 0, "LINK swap failed");
+        require(linkToken.balanceOf(address(this)) > linkBalanceBefore, "No LINK increase");
         
         // Calculate remaining ETH after LINK purchase
         uint256 remainingETH = ethValue - ethForLINK;
@@ -338,19 +358,25 @@ contract CasinoSlot is
         totalPrizePool += prizePoolAmount;
         emit PrizePoolStateChanged(totalPrizePool, int256(prizePoolAmount), 0);
         
-        // Request randomness using VRF v2.5 format
-        requestId = s_vrfCoordinator.requestRandomWords(
-            VRFV2PlusClient.RandomWordsRequest({
-                keyHash: keyHash,
-                subId: s_subscriptionId,
-                requestConfirmations: requestConfirmations,
-                callbackGasLimit: callbackGasLimit,
-                numWords: numWords,
-                extraArgs: VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({nativePayment: false})) // Use LINK payment
-            })
+        // VRF checks
+        require(address(vrfWrapper) != address(0), "VRF wrapper zero");
+        require(linkToken.balanceOf(address(this)) > 0, "No LINK for VRF");
+        
+        // 🎯 DIRECT VRF REQUEST - NO SUBSCRIPTION NEEDED!
+        bytes memory extraArgs = VRFV2PlusClient._argsToBytes(
+            VRFV2PlusClient.ExtraArgsV1({nativePayment: false}) // Pay with LINK
         );
         
-        // NEW: Reset allowance to 0 after spin to force re-approval
+        (requestId, ) = vrfWrapper.requestRandomness(
+            callbackGasLimit,
+            requestConfirmations,
+            numWords,
+            extraArgs
+        );
+        
+        require(requestId > 0, "VRF request failed");
+        
+        // Reset allowance to 0 after spin to force re-approval
         _approve(msg.sender, address(this), 0);
 
         emit HouseFeeCollected(requestId, msg.sender, houseAmount);
@@ -416,43 +442,55 @@ contract CasinoSlot is
     }
     
     /**
-     * @dev Swap ETH for LINK using Uniswap V3 - spend exact ETH amount
+     * @dev Swap ETH for LINK using Uniswap V2 - spend exact ETH amount
      * @param ethAmountToSpend Exact amount of ETH to spend
      * @return linkReceived Amount of LINK tokens received
      */
     function _swapETHForLINK(uint256 ethAmountToSpend) internal virtual returns (uint256 linkReceived) {
-        require(address(this).balance >= ethAmountToSpend, "Insufficient ETH for LINK swap");
-        require(ethAmountToSpend > 0, "ETH amount must be positive");
+        require(ethAmountToSpend > 0, "ETH amount zero");
+        require(address(this).balance >= ethAmountToSpend, "Insufficient ETH");
         
-        // Wrap ETH to WETH for Uniswap
-        wethToken.deposit{value: ethAmountToSpend}();
+        // Verify key addresses
+        require(address(uniswapRouter) != address(0), "Router zero");
+        require(address(linkToken) != address(0), "LINK zero");
         
-        // Approve router to spend WETH
-        require(wethToken.approve(address(uniswapRouter), ethAmountToSpend), "WETH approval failed");
+        // Check router has code (simplified)
+        require(address(uniswapRouter).code.length > 0, "Router no code");
         
-        // Perform exact input swap (we spend exact ETH amount)
-        IUniswapV3Router.ExactInputSingleParams memory params = IUniswapV3Router.ExactInputSingleParams({
-            tokenIn: address(wethToken),      // WETH
-            tokenOut: address(linkToken),     // LINK
-            fee: uniswapFee,                  // Pool fee tier
-            recipient: address(this),         // Receive LINK to this contract
-            deadline: block.timestamp + 300, // 5 minute deadline
-            amountIn: ethAmountToSpend,       // Exact ETH amount to spend
-            amountOutMinimum: 0,              // Accept any amount of LINK
-            sqrtPriceLimitX96: 0              // No price limit
-        });
+        uint256 initialLINKBalance = linkToken.balanceOf(address(this));
         
-        // Execute swap
-        linkReceived = uniswapRouter.exactInputSingle(params);
+        // Create path: ETH -> WETH -> LINK
+        address[] memory path = new address[](2);
+        path[0] = uniswapRouter.WETH();     // WETH from router
+        path[1] = address(linkToken);       // LINK token
         
-        // Unwrap any remaining WETH back to ETH (there shouldn't be any)
-        uint256 wethBalance = wethToken.balanceOf(address(this));
-        if (wethBalance > 0) {
-            wethToken.withdraw(wethBalance);
+        // Calculate minimum acceptable output with slippage protection
+        uint256[] memory amountsOut = uniswapRouter.getAmountsOut(ethAmountToSpend, path);
+        uint256 minLinkOut = amountsOut[1] * (10000 - maxSlippageBPS) / 10000; // Apply max slippage
+        
+        // Execute V2 swap: ETH -> LINK with slippage protection
+        try uniswapRouter.swapExactETHForTokens{value: ethAmountToSpend}(
+            minLinkOut,                    // minimum LINK to receive
+            path,                          // path [WETH, LINK]
+            address(this),                 // recipient
+            block.timestamp + 300          // deadline (5 minutes)
+        ) returns (uint256[] memory amounts) {
+            linkReceived = amounts[1];     // Amount of LINK received
+        } catch {
+            // Fallback to zero slippage protection if first attempt fails
+            uint256[] memory amounts = uniswapRouter.swapExactETHForTokens{value: ethAmountToSpend}(
+                0,                         // accept any amount (last resort)
+                path,                      // path [WETH, LINK]
+                address(this),             // recipient
+                block.timestamp + 300      // deadline (5 minutes)
+            );
+            linkReceived = amounts[1];     // Amount of LINK received
         }
         
-        // Verify we received some LINK
-        require(linkReceived > 0, "LINK swap failed - no LINK received");
+        require(linkReceived > 0, "Swap failed");
+        
+        // Verify LINK balance increased
+        require(linkToken.balanceOf(address(this)) > initialLINKBalance, "No LINK increase");
         
         return linkReceived;
     }
@@ -532,10 +570,10 @@ contract CasinoSlot is
 
     
     /**
-     * @dev VRF callback function (called by Coordinator)
+     * @dev VRF callback function (called by wrapper)
      */
     function rawFulfillRandomWords(uint256 requestId, uint256[] memory randomWords) external {
-        require(msg.sender == address(s_vrfCoordinator), "Only VRF Coordinator can fulfill");
+        require(msg.sender == address(vrfWrapper), "Only VRF Wrapper can fulfill");
         fulfillRandomWords(requestId, randomWords);
     }
 
@@ -737,6 +775,20 @@ contract CasinoSlot is
         
         require(linkToken.transfer(owner(), amount), "LINK transfer failed");
         emit LINKWithdrawn(owner(), amount);
+    }
+    
+    /**
+     * @dev Withdraw all available LINK tokens, keeping only the required buffer for VRF requests (owner only)
+     */
+    function withdrawAllAvailableLINK() external onlyOwner {
+        uint256 contractBalance = linkToken.balanceOf(address(this));
+        uint256 requiredBuffer = vrfCostLINK * 10; // Keep 10 VRF requests worth of LINK
+        
+        require(contractBalance > requiredBuffer, "No excess LINK to withdraw");
+        
+        uint256 withdrawAmount = contractBalance - requiredBuffer;
+        require(linkToken.transfer(owner(), withdrawAmount), "LINK transfer failed");
+        emit LINKWithdrawn(owner(), withdrawAmount);
     }
     
     /**

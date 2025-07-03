@@ -1,0 +1,19 @@
+{
+  "network": {
+    "name": "sepolia",
+    "chainId": 11155111
+  },
+  "spinTester": {
+    "address": "0x9dE978e4f3E2a03b4412Cd8761Ea349212CCdCFe",
+    "deployer": "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86",
+    "deployedAt": "2025-07-03T13:41:37.900Z"
+  },
+  "parameters": {
+    "ethUsdPriceFeed": "0x694AA1769357215DE4FAC081bf1f309aDC325306",
+    "linkUsdPriceFeed": "0xc59E3633BAAC79493d908e63626716e204A45EdF",
+    "linkToken": "0x779877A7B0D9E8603169DdbD7836e478b4624789",
+    "vrfWrapper": "0x195f15F2d49d693cE265b4fB0fdDbE15b1850Cc1",
+    "uniswapRouter": "0xC8CA6d96BB798FD960C4D11f65A55C19EdB17f1C"
+  },
+  "mainCasinoAddress": "0xB4194600b54F9FAfAdc75f4383691714010d421C"
+}

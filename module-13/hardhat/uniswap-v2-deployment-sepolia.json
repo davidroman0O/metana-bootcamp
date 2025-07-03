@@ -1,0 +1,18 @@
+{
+  "network": "sepolia",
+  "timestamp": "2025-07-03T00:12:26.745Z",
+  "deployer": "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86",
+  "uniswapV2": {
+    "factory": "0xE800a82e514B674426E93a02D973ebdC4a1C1725",
+    "router": "0xC8CA6d96BB798FD960C4D11f65A55C19EdB17f1C",
+    "wethLinkPair": "0xF05187217801F4e2b58c16CC6c83AAF99FD3052E",
+    "weth": "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14",
+    "link": "0x779877A7B0D9E8603169DdbD7836e478b4624789"
+  },
+  "transactions": {
+    "factory": "0x0afe26a01d9c7134432e77d904d7a42ecbd7d51803ff0329719c32628327fabd",
+    "router": "0xbbef3145237fd8ec7e8d9864adcae716f40cb790c934217bad7d2d7e229a6c14",
+    "createPair": "0xa62ec12b589be5645161b57bb926a0e209a5b867cab1263ef2a84afac68d26dc",
+    "addLiquidity": "0xda7b229f7581599ad319be304f51fb1d622ee84cc5a9a8970bb752c2af5b3d31"
+  }
+}

@@ -15,9 +15,28 @@
     "payoutTables7Router": "0xbd922712031186FD594Cd4682448F629DF0bedDa",
     "payoutTablesAPI": "0xffc2E8f0742b645759FEB1eD766238becEc34188"
   },
+  "uniswap": {
+    "factory": "0xE800a82e514B674426E93a02D973ebdC4a1C1725",
+    "router": "0xC8CA6d96BB798FD960C4D11f65A55C19EdB17f1C",
+    "wethLinkPair": "0xF05187217801F4e2b58c16CC6c83AAF99FD3052E",
+    "wethToken": "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14",
+    "linkToken": "0x779877A7B0D9E8603169DdbD7836e478b4624789",
+    "version": "v2",
+    "deployedAt": "2025-01-27T04:00:00.000Z"
+  },
+  "liquidity": {
+    "pairAddress": "0xF05187217801F4e2b58c16CC6c83AAF99FD3052E",
+    "ethAmount": "0.1",
+    "linkAmount": "1.0",
+    "lpTokens": "calculated_by_pair",
+    "provider": "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86",
+    "version": "v2",
+    "addedAt": "2025-01-27T04:00:00.000Z",
+    "note": "V2 liquidity successfully added and tested"
+  },
   "casino": {
-    "proxy": "0x54905c57633E2d5d1D12268862D2dAc943D6C554",
-    "implementation": "0x9f7563D49f713dEa313523d37eeD5fBDD27C403f",
+    "proxy": "0xB4194600b54F9FAfAdc75f4383691714010d421C",
+    "implementation": "0x5575087DB4669C868092c5087BB46a2b0c770f21",
     "admin": "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86"
   }
 }
