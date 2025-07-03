@@ -6,6 +6,12 @@ async function main() {
     console.log("\n🔗 Sending LINK tokens to SpinTester contract");
     console.log("===========================================");
     
+    // Get amount from command line args
+    let amountStr = "1";
+    if (process.env.AMOUNT) {
+        amountStr = process.env.AMOUNT;
+    }
+    
     // Load tester deployment info
     const deploymentPath = path.join(__dirname, '../deployments', `spin-tester-${network.name}.json`);
     
@@ -43,8 +49,8 @@ async function main() {
     console.log(`Your ${linkSymbol} balance: ${ethers.utils.formatUnits(signerBalance, linkDecimals)}`);
     console.log(`SpinTester ${linkSymbol} balance: ${ethers.utils.formatUnits(testerBalance, linkDecimals)}`);
     
-    // Define amount to send - 1 LINK should be enough for testing
-    const amountToSend = ethers.utils.parseUnits("1", linkDecimals);
+    // Define amount to send
+    const amountToSend = ethers.utils.parseUnits(amountStr, linkDecimals);
     console.log(`\n💸 Amount to send: ${ethers.utils.formatUnits(amountToSend, linkDecimals)} ${linkSymbol}`);
     
     if (signerBalance.lt(amountToSend)) {

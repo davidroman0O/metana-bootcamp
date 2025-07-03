@@ -38,6 +38,8 @@ contract UpgradableSpinTester is Initializable, OwnableUpgradeable, UUPSUpgradea
     struct RequestStatus {
         bool fulfilled;
         uint256[] randomWords;
+        uint256 paid;
+        bool nativePayment;
     }
     mapping(uint256 => RequestStatus) public requests;
     uint256 public lastRequestId;
@@ -45,7 +47,7 @@ contract UpgradableSpinTester is Initializable, OwnableUpgradeable, UUPSUpgradea
     // Events to track test results
     event TestCompleted(string testName, bool success, string details);
     event ETHReceived(uint256 amount);
-    event RandomWordsRequested(uint256 indexed requestId, uint256 paid);
+    event RandomWordsRequested(uint256 indexed requestId, uint256 paid, bool nativePayment);
     event RandomWordsFulfilled(uint256 indexed requestId, uint256[] randomWords);
     
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -178,25 +180,25 @@ contract UpgradableSpinTester is Initializable, OwnableUpgradeable, UUPSUpgradea
         }
     }
     
-    // TEST 5: Direct VRF Request - Implemented directly using the VRF wrapper
-    function test_VRFRequest() external returns (bool success, uint256 requestId) {
+    // TEST 5A: Direct VRF Request with LINK payment
+    function test_VRFRequestWithLINK() external returns (bool success, uint256 requestId) {
         // Check if the contract has enough LINK
         uint256 linkBalance = linkToken.balanceOf(address(this));
         
         if (linkBalance < vrfCostLINK) {
-            emit TestCompleted("VRFRequest", false, "Insufficient LINK balance");
+            emit TestCompleted("VRFRequestWithLINK", false, "Insufficient LINK balance");
             return (false, 0);
         }
-        
-        // Approve LINK transfer to the VRF wrapper
-        linkToken.approve(address(vrfWrapper), vrfCostLINK);
         
         // Make direct VRF request with LINK payment
         bytes memory extraArgs = VRFV2PlusClient._argsToBytes(
             VRFV2PlusClient.ExtraArgsV1({nativePayment: false})
         );
         
-        // Request randomness directly from the wrapper
+        // Approve LINK transfer to the VRF wrapper
+        linkToken.approve(address(vrfWrapper), vrfCostLINK);
+        
+        // Direct call for LINK payment
         (uint256 _requestId, uint256 _price) = vrfWrapper.requestRandomWords(
             callbackGasLimit,
             requestConfirmations,
@@ -207,11 +209,61 @@ contract UpgradableSpinTester is Initializable, OwnableUpgradeable, UUPSUpgradea
         lastRequestId = _requestId;
         requests[_requestId] = RequestStatus({
             fulfilled: false,
-            randomWords: new uint256[](0)
+            randomWords: new uint256[](0),
+            paid: _price,
+            nativePayment: false
         });
         
-        emit RandomWordsRequested(_requestId, _price);
-        emit TestCompleted("VRFRequest", true, _uint2str(_requestId));
+        emit RandomWordsRequested(_requestId, _price, false);
+        emit TestCompleted("VRFRequestWithLINK", true, string(abi.encodePacked("RequestId: ", _uint2str(_requestId), ", Cost: ", _uint2str(_price))));
+        return (true, _requestId);
+    }
+    
+    // TEST 5B: Direct VRF Request with Native ETH payment
+    function test_VRFRequestWithETH() external payable returns (bool success, uint256 requestId) {
+        // Check if the contract has enough ETH
+        if (address(this).balance < msg.value) {
+            emit TestCompleted("VRFRequestWithETH", false, "Insufficient ETH balance");
+            return (false, 0);
+        }
+        
+        // For native ETH payment, we need to use a different approach
+        // Since we can't use the interface directly with value, we'll use a low-level call
+        
+        // Prepare the call data for requestRandomWords
+        bytes memory extraArgs = VRFV2PlusClient._argsToBytes(
+            VRFV2PlusClient.ExtraArgsV1({nativePayment: true})
+        );
+        
+        bytes memory callData = abi.encodeWithSignature(
+            "requestRandomWords(uint32,uint16,uint32,bytes)",
+            callbackGasLimit,
+            requestConfirmations,
+            numWords,
+            extraArgs
+        );
+        
+        // Make the low-level call
+        (bool success_, bytes memory returnData) = address(vrfWrapper).call{value: msg.value}(callData);
+        
+        if (!success_) {
+            emit TestCompleted("VRFRequestWithETH", false, "VRF request failed");
+            return (false, 0);
+        }
+        
+        // Decode the return data
+        (uint256 _requestId, uint256 _price) = abi.decode(returnData, (uint256, uint256));
+        
+        lastRequestId = _requestId;
+        requests[_requestId] = RequestStatus({
+            fulfilled: false,
+            randomWords: new uint256[](0),
+            paid: _price,
+            nativePayment: true
+        });
+        
+        emit RandomWordsRequested(_requestId, _price, true);
+        emit TestCompleted("VRFRequestWithETH", true, string(abi.encodePacked("RequestId: ", _uint2str(_requestId), ", Cost: ", _uint2str(_price))));
         return (true, _requestId);
     }
     
@@ -236,28 +288,30 @@ contract UpgradableSpinTester is Initializable, OwnableUpgradeable, UUPSUpgradea
                 "Request ID: ", 
                 _uint2str(_requestId), 
                 " | Random value: ", 
-                _uint2str(_randomWords[0])
+                _uint2str(_randomWords[0]),
+                " | Native payment: ",
+                requests[_requestId].nativePayment ? "true" : "false"
             ))
         );
     }
     
-    // TEST 6: Full Spin Flow Test
-    function test_FullSpinFlow(uint8 reelCount) external payable returns (bool success, string memory failurePoint) {
+    // TEST 6: Full Spin Flow Test with LINK payment
+    function test_FullSpinFlow(uint8 reelCount) external payable returns (bool success, string memory failurePoint, uint256 requestId) {
         // Step 1: Calculate spin cost
         uint256 spinCost = getSpinCost(reelCount);
         if (spinCost == 0) {
-            return (false, "Spin cost calculation failed");
+            return (false, "Spin cost calculation failed", 0);
         }
         
         // Step 2: Calculate ETH value of cost
         uint256 ethValue = calculateETHFromCHIPS(spinCost);
         if (ethValue == 0) {
-            return (false, "ETH calculation failed");
+            return (false, "ETH calculation failed", 0);
         }
         
         // Check if contract has enough ETH
         if (address(this).balance < ethValue) {
-            return (false, "Insufficient ETH balance");
+            return (false, "Insufficient ETH balance", 0);
         }
         
         // Step 3: Calculate VRF cost
@@ -265,10 +319,10 @@ contract UpgradableSpinTester is Initializable, OwnableUpgradeable, UUPSUpgradea
         try this.getLINKCostInUSD() returns (uint256 _vrfCostUSD) {
             vrfCostUSD = _vrfCostUSD;
             if (vrfCostUSD == 0) {
-                return (false, "VRF cost calculation failed");
+                return (false, "VRF cost calculation failed", 0);
             }
         } catch {
-            return (false, "VRF cost calculation error");
+            return (false, "VRF cost calculation error", 0);
         }
         
         // Step 4: Convert VRF cost to ETH
@@ -276,10 +330,10 @@ contract UpgradableSpinTester is Initializable, OwnableUpgradeable, UUPSUpgradea
         try this.convertUSDCentsToETH(vrfCostUSD) returns (uint256 _vrfCostETH) {
             vrfCostETH = _vrfCostETH;
             if (vrfCostETH == 0) {
-                return (false, "VRF cost ETH conversion failed");
+                return (false, "VRF cost ETH conversion failed", 0);
             }
         } catch {
-            return (false, "VRF cost ETH conversion error");
+            return (false, "VRF cost ETH conversion error", 0);
         }
         
         // Step 5: Calculate ETH for LINK purchase
@@ -294,7 +348,7 @@ contract UpgradableSpinTester is Initializable, OwnableUpgradeable, UUPSUpgradea
         }
         
         if (ethForLINK == 0) {
-            return (false, "ETH for LINK calculation failed");
+            return (false, "ETH for LINK calculation failed", 0);
         }
         
         // Step 6: Swap ETH for LINK
@@ -302,16 +356,51 @@ contract UpgradableSpinTester is Initializable, OwnableUpgradeable, UUPSUpgradea
         try this.swapETHForLINK(ethForLINK) returns (uint256 _linkReceived) {
             linkReceived = _linkReceived;
             if (linkReceived == 0) {
-                return (false, "ETH to LINK swap failed");
+                return (false, "ETH to LINK swap failed", 0);
             }
         } catch {
-            return (false, "ETH to LINK swap error");
+            return (false, "ETH to LINK swap error", 0);
         }
         
         // Step 7: Calculate prize pool contribution
         uint256 remainingETH = ethValue - ethForLINK;
         uint256 houseAmount = (remainingETH * houseEdge) / 10000;
         uint256 prizePoolAmount = remainingETH - houseAmount;
+        
+        // Step 8: Make VRF request with LINK payment
+        bytes memory extraArgs = VRFV2PlusClient._argsToBytes(
+            VRFV2PlusClient.ExtraArgsV1({nativePayment: false})
+        );
+        
+        // Approve LINK transfer to the VRF wrapper
+        linkToken.approve(address(vrfWrapper), vrfCostLINK);
+        
+        // Direct call for LINK payment
+        uint256 _requestId;
+        uint256 _price;
+        try vrfWrapper.requestRandomWords(
+            callbackGasLimit,
+            requestConfirmations,
+            numWords,
+            extraArgs
+        ) returns (uint256 reqId, uint256 reqPrice) {
+            _requestId = reqId;
+            _price = reqPrice;
+        } catch Error(string memory reason) {
+            return (false, string(abi.encodePacked("VRF request failed: ", reason)), 0);
+        } catch {
+            return (false, "VRF request failed with unknown error", 0);
+        }
+        
+        lastRequestId = _requestId;
+        requests[_requestId] = RequestStatus({
+            fulfilled: false,
+            randomWords: new uint256[](0),
+            paid: _price,
+            nativePayment: false
+        });
+        
+        emit RandomWordsRequested(_requestId, _price, false);
         
         // All steps succeeded
         emit TestCompleted(
@@ -321,11 +410,92 @@ contract UpgradableSpinTester is Initializable, OwnableUpgradeable, UUPSUpgradea
                 "SpinCost: ", _uint2str(spinCost),
                 ", ETH: ", _uint2str(ethValue),
                 ", LINK: ", _uint2str(linkReceived),
-                ", Prize: ", _uint2str(prizePoolAmount)
+                ", Prize: ", _uint2str(prizePoolAmount),
+                ", RequestId: ", _uint2str(_requestId)
             ))
         );
         
-        return (true, "All steps succeeded");
+        return (true, "All steps succeeded", _requestId);
+    }
+    
+    // TEST 7: Full Spin Flow Test with Native ETH payment
+    function test_FullSpinFlowNative(uint8 reelCount) external payable returns (bool success, string memory failurePoint, uint256 requestId) {
+        // Step 1: Calculate spin cost
+        uint256 spinCost = getSpinCost(reelCount);
+        if (spinCost == 0) {
+            return (false, "Spin cost calculation failed", 0);
+        }
+        
+        // Step 2: Calculate ETH value of cost
+        uint256 ethValue = calculateETHFromCHIPS(spinCost);
+        if (ethValue == 0) {
+            return (false, "ETH calculation failed", 0);
+        }
+        
+        // Check if contract has enough ETH
+        if (address(this).balance < ethValue) {
+            return (false, "Insufficient ETH balance", 0);
+        }
+        
+        // Step 3: Calculate VRF cost in ETH directly
+        uint256 vrfCostETH = 0.0001 ether; // Approximate cost for VRF in ETH
+        
+        // Step 4: Calculate prize pool contribution
+        uint256 remainingETH = ethValue - vrfCostETH;
+        uint256 houseAmount = (remainingETH * houseEdge) / 10000;
+        uint256 prizePoolAmount = remainingETH - houseAmount;
+        
+        // Step 5: Make VRF request with Native ETH payment
+        bytes memory extraArgs = VRFV2PlusClient._argsToBytes(
+            VRFV2PlusClient.ExtraArgsV1({nativePayment: true})
+        );
+        
+        // Prepare the call data for requestRandomWords
+        bytes memory callData = abi.encodeWithSignature(
+            "requestRandomWords(uint32,uint16,uint32,bytes)",
+            callbackGasLimit,
+            requestConfirmations,
+            numWords,
+            extraArgs
+        );
+        
+        // Make the low-level call
+        uint256 _requestId;
+        uint256 _price;
+        
+        (bool success_, bytes memory returnData) = address(vrfWrapper).call{value: vrfCostETH}(callData);
+        
+        if (!success_) {
+            return (false, "VRF request failed with low-level call", 0);
+        }
+        
+        // Decode the return data
+        (_requestId, _price) = abi.decode(returnData, (uint256, uint256));
+        
+        lastRequestId = _requestId;
+        requests[_requestId] = RequestStatus({
+            fulfilled: false,
+            randomWords: new uint256[](0),
+            paid: _price,
+            nativePayment: true
+        });
+        
+        emit RandomWordsRequested(_requestId, _price, true);
+        
+        // All steps succeeded
+        emit TestCompleted(
+            "FullSpinFlowNative", 
+            true, 
+            string(abi.encodePacked(
+                "SpinCost: ", _uint2str(spinCost),
+                ", ETH: ", _uint2str(ethValue),
+                ", VrfCostETH: ", _uint2str(vrfCostETH),
+                ", Prize: ", _uint2str(prizePoolAmount),
+                ", RequestId: ", _uint2str(_requestId)
+            ))
+        );
+        
+        return (true, "All steps succeeded", _requestId);
     }
     
     // Internal function implementations (similar to CasinoSlot but standalone)
@@ -490,7 +660,12 @@ contract UpgradableSpinTester is Initializable, OwnableUpgradeable, UUPSUpgradea
     }
     
     // Get the result of a VRF request
-    function getVRFResult(uint256 _requestId) external view returns (bool fulfilled, uint256[] memory randomWords) {
-        return (requests[_requestId].fulfilled, requests[_requestId].randomWords);
+    function getVRFResult(uint256 _requestId) external view returns (bool fulfilled, uint256[] memory randomWords, uint256 paid, bool nativePayment) {
+        return (
+            requests[_requestId].fulfilled,
+            requests[_requestId].randomWords,
+            requests[_requestId].paid,
+            requests[_requestId].nativePayment
+        );
     }
 } 

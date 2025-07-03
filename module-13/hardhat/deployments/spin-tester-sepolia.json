@@ -4,9 +4,9 @@
     "chainId": 11155111
   },
   "spinTester": {
-    "address": "0x9dE978e4f3E2a03b4412Cd8761Ea349212CCdCFe",
+    "address": "0xF18B722b117990eC5aFB23cB451F4d0B25111704",
     "deployer": "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86",
-    "deployedAt": "2025-07-03T13:41:37.900Z"
+    "deployedAt": "2025-07-03T17:44:53.031Z"
   },
   "parameters": {
     "ethUsdPriceFeed": "0x694AA1769357215DE4FAC081bf1f309aDC325306",
