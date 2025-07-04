@@ -1,0 +1,25 @@
+{
+  "network": {
+    "name": "sepolia",
+    "chainId": 11155111,
+    "timestamp": "2025-07-04T04:18:50.560Z"
+  },
+  "contracts": {
+    "CasinoSlot": {
+      "address": "0x8eab795D2fdB63256AEa0510953ef72922D18b72",
+      "implementation": "0xc0f47486A508a6709dFE658C07926137Ddc3f0d7",
+      "admin": "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86",
+      "constructor": {
+        "vrfWrapper": "0x195f15F2d49d693cE265b4fB0fdDbE15b1850Cc1",
+        "ethUsdPriceFeed": "0x694AA1769357215DE4FAC081bf1f309aDC325306",
+        "payoutTablesAddress": "0xffc2E8f0742b645759FEB1eD766238becEc34188"
+      }
+    }
+  },
+  "deployer": "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86",
+  "vrfVersion": "v2.5-DirectFunding-NativeETH",
+  "uniswapVersion": "v2-custom",
+  "swapMethod": "working-v2-swaps",
+  "productionMode": true,
+  "lastUpdated": "2025-07-04T04:18:50.560Z"
+}

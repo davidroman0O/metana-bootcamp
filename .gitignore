@@ -31,3 +31,7 @@ module-12/defi/cache
 module-12/defi/lib
 
 **/build
+
+# I'm on an M1 Mac, so I need to clone the graph-node-master repo to run the graph-node container (build my own image)
+module-13/thegraph/graph-node-master
+module-13/thegraph/casino-slot-subgraph/data

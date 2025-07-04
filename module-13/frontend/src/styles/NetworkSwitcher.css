@@ -1,0 +1,256 @@
+.network-switcher {
+  background: linear-gradient(135deg, #1e293b, #334155);
+  border: 1px solid #475569;
+  border-radius: 12px;
+  padding: 20px;
+  color: white;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.network-switcher h3 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+.network-switcher h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+/* Wallet Section */
+.wallet-section {
+  margin-bottom: 20px;
+}
+
+.connect-btn {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+  font-size: 14px;
+}
+
+.connect-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2563eb, #1e40af);
+  transform: translateY(-1px);
+}
+
+.connect-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.wallet-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.account-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.account-address {
+  font-weight: 600;
+  color: #e2e8f0;
+  font-size: 14px;
+}
+
+.account-balance {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.disconnect-btn {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.disconnect-btn:hover {
+  background: #dc2626;
+}
+
+/* Network Section */
+.network-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.current-network {
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  border: 1px solid #374151;
+}
+
+.network-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.network-status.supported .network-name {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.network-status.unsupported .network-name {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.warning {
+  background: #fbbf24;
+  color: #1f2937;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.dev-badge {
+  background: #8b5cf6;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Available Networks */
+.network-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.network-btn {
+  background: #374151;
+  color: #e2e8f0;
+  border: 1px solid #4b5563;
+  padding: 12px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 14px;
+  text-align: left;
+  width: 100%;
+}
+
+.network-btn:hover:not(:disabled) {
+  background: #4b5563;
+  border-color: #6b7280;
+  transform: translateX(4px);
+}
+
+.network-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.network-btn.active {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border-color: #10b981;
+  color: white;
+}
+
+.network-btn.dev {
+  border-color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.1);
+}
+
+/* Contract Addresses */
+.contract-addresses {
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  border: 1px solid #374151;
+}
+
+.addresses {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.contract-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+  flex-wrap: wrap;
+}
+
+.contract-name {
+  font-weight: 600;
+  color: #e2e8f0;
+  font-size: 13px;
+}
+
+.contract-address {
+  font-family: 'Courier New', monospace;
+  color: #94a3b8;
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+/* Development Info */
+.dev-info {
+  padding: 12px;
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid #8b5cf6;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.dev-info p {
+  margin: 0;
+  color: #c4b5fd;
+  font-size: 13px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .network-switcher {
+    padding: 16px;
+  }
+  
+  .wallet-info {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .contract-item {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+} 
