@@ -1,4 +1,12 @@
 
+If i had to do it again:
+- Simulate millions of spins of the payout tables to ensure edge is positive over time
+- Unit-test redemption limits and pause mechanism
+- Monitor Chinalink wrapper fee vs ETH price and adjust vrfMarkupBP when network condition change
+- Monte-Carlo EV emulation
+
+
+---
 
 ```
 # hardhat
@@ -11,14 +19,23 @@ npm run start
 
 ```
 
-
+```
+npx hardhat run scripts/deployment/00-init.js --network sepolia
+npx hardhat run scripts/deployment/01-deploy-payout-tables.js --network sepolia
+npx hardhat run scripts/deployment/02-deploy-casino-slot.js --network sepolia
+npx hardhat run scripts/deployment/03-verify-contracts.js --network sepolia
+npx hardhat run scripts/deployment/04-verify-proxy.js --network sepolia
+```
 
 helper for direct funding https://remix.ethereum.org/#url=https://docs.chain.link/samples/VRF/v2-5/DirectFundingConsumer.sol&autoCompile=true&lang=en&optimize=false&runs=200&evmVersion=null&version=soljson-v0.8.19+commit.7dd6d404.js
+
+---
+
+# debugging progress
 
 
 Hypothesis why it doesn't works:
 - adding liquidity on uniswap pool?
-
 
 
 ```
@@ -202,4 +219,64 @@ npx hardhat run scripts/upgradable-spin-test-verify.js --network sepolia
 npx hardhat run scripts/upgradable-spin-test-run.js --network sepolia
 ```
 
+---
+
+Ok it works and i'm super pissed 
+
+6h later, i need to test the native or link spending with chainlink 
+
+```
+# Deploy the SpinTester contract
+npx hardhat run scripts/spin-test-deploy.js --network sepolia
+
+# Fund the contract with ETH and LINK
+npx hardhat run scripts/spin-test-fund-eth.js --network sepolia
+npx hardhat run scripts/spin-test-fund-link.js --network sepolia
+
+# Test VRF with native ETH payment
+npx hardhat run scripts/spin-test-vrf-native.js --network sepolia
+
+# Test full spin flow with native ETH payment
+npx hardhat run scripts/spin-test-run-native.js --network sepolia
+
+# Run all tests
+npx hardhat run scripts/spin-test-run.js --network sepolia
+```
+
+AND
+
+```
+# 1. Deploy the UpgradableSpinTester contract
+npx hardhat run scripts/upgradable-spin-test-deploy.js --network sepolia
+
+# 2. Fund the contract with ETH and LINK
+npx hardhat run scripts/upgradable-spin-test-fund.js --network sepolia
+
+# 3. Test VRF request with LINK payment
+npx hardhat run scripts/upgradable-spin-test-vrf-link.js --network sepolia
+
+# 4. Wait 1-3 minutes for VRF fulfillment
+# Then check the fulfillment status
+npx hardhat run scripts/upgradable-spin-test-check-vrf.js --network sepolia
+
+# 5. Test VRF request with native ETH payment
+npx hardhat run scripts/upgradable-spin-test-vrf-native.js --network sepolia
+
+# 6. Wait 1-3 minutes for VRF fulfillment
+# Then check the fulfillment status again
+npx hardhat run scripts/upgradable-spin-test-check-vrf.js --network sepolia
+```
+
+Increased the callbackGasLimit from 200,000 to 500,000
+Increased the vrfCostLINK from 0.01 LINK to 0.1 LINK
+Added try/catch error handling to the test_VRFRequestWithLINK function
+Increased the ETH amount for native payment in test_FullSpinFlowNative from 0.0001 ETH to 0.001 ETH
+
+time to test now... 
+
+Ok now i have the normal contract that works for both native and link. The link payment, i had to increase the gas cost ("out of gas")!
+Time to test the upgradable contract now...
+
+
+OK so we will do native payment now
 

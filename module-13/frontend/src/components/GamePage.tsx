@@ -241,6 +241,7 @@ const GamePage: React.FC = () => {
     const [buyChipsState, setBuyChipsState] = useState<TransactionState>({ status: 'idle' });
     const [spinState, setSpinState] = useState<TransactionState>({ status: 'idle' });
     const [withdrawState, setWithdrawState] = useState<TransactionState>({ status: 'idle' });
+    const [swapChipsState, setSwapChipsState] = useState<TransactionState>({ status: 'idle' });
     
     // Simplified spin tracking
     const [spinTracker, setSpinTracker] = useState<SpinTracker>({
@@ -251,6 +252,7 @@ const GamePage: React.FC = () => {
     // UI states
     const [selectedReelCount, setSelectedReelCount] = useState<3 | 4 | 5 | 6 | 7>(3);
     const [ethAmount, setEthAmount] = useState<string>('0.1');
+    const [chipsAmount, setChipsAmount] = useState<string>('100');
     const [showChipTease, setShowChipTease] = useState(false);
     const [chipTeaseMessage, setChipTeaseMessage] = useState('');
     
@@ -487,6 +489,47 @@ const GamePage: React.FC = () => {
         enabled: !!account && !!CASINO_SLOT_ADDRESS,
         pollingInterval: 1000,
     });
+
+    // Watch for ChipsSwapped events
+    const handleChipsSwappedEvents = useCallback((logs: any[]) => {
+        if (!account) {
+            console.log('No address available, ignoring ChipsSwapped events');
+            return;
+        }
+        
+        console.log(`ChipsSwapped event(s) received: ${logs.length} logs`);
+        
+        for (const log of logs) {
+            if (!log.args) continue;
+            const { player, chipsAmount, ethValue } = log.args as any;
+            
+            if (player?.toLowerCase() !== account.toLowerCase()) {
+                continue;
+            }
+            
+            console.log('✅ Processing chips swap for current user:', log.args);
+            
+            // Show success message with transaction details
+            const chipsFormatted = formatChipsAmount(chipsAmount);
+            const ethFormatted = formatEther(ethValue);
+            toast.success(`🎉 Swapped ${chipsFormatted} CHIPS for ${parseFloat(ethFormatted).toFixed(6)} ETH!`);
+            
+            // Refresh data after swap
+            setTimeout(() => {
+                console.log('Refreshing data after chips swap...');
+                refreshAllData();
+            }, 1000);
+        }
+    }, [account, refreshAllData, formatChipsAmount]);
+    
+    useWatchContractEvent({
+        address: CASINO_SLOT_ADDRESS,
+        abi: CasinoSlotABI,
+        eventName: 'ChipsSwapped',
+        onLogs: handleChipsSwappedEvents,
+        enabled: !!account && !!CASINO_SLOT_ADDRESS,
+        pollingInterval: 1000,
+    });
     
     const executeTransaction = useCallback(async (
         setTxState: (state: TransactionState) => void,
@@ -646,6 +689,67 @@ const GamePage: React.FC = () => {
         );
     }, [executeTransaction, walletClient, CASINO_SLOT_ADDRESS]);
     
+    const swapChipsToETH = useCallback(async (chipsAmount: string) => {
+        if (!CASINO_SLOT_ADDRESS) return null;
+        
+        if (!walletClient || !account) {
+            toast.error('Wallet not connected');
+            return null;
+        }
+        
+        try {
+            setSwapChipsState({ status: 'pending' });
+            const chipsValue = parseEther(chipsAmount);
+            
+            const hash = await walletClient.writeContract({
+                address: CASINO_SLOT_ADDRESS,
+                abi: CasinoSlotABI,
+                functionName: 'swapChipsToETH',
+                args: [chipsValue],
+            });
+            
+            setSwapChipsState({ status: 'pending', hash });
+            
+            const receipt = await publicClient?.waitForTransactionReceipt({
+                hash,
+                timeout: 300_000
+            });
+            
+            if (receipt?.status === 'success') {
+                setSwapChipsState({ status: 'success', hash });
+                toast.success(`Successfully swapped ${chipsAmount} CHIPS to ETH`);
+                setTimeout(() => refreshAllData(), 1000);
+                return hash;
+            } else {
+                throw new Error('Transaction failed');
+            }
+        } catch (error: any) {
+            console.error('Swap transaction error:', error);
+            
+            // Check for the exact contract error string you specified
+            const errorString = JSON.stringify(error);
+            console.log('Full error string:', errorString);
+            
+            let errorMessage = 'Transaction failed';
+            
+            if (errorString.includes('Insufficient contract ETH balance')) {
+                errorMessage = 'CASINO HAS INSUFFICIENT ETH LIQUIDITY - Please try a smaller amount or contact support';
+            } else if (errorString.includes('Insufficient CHIPS balance')) {
+                errorMessage = 'Insufficient CHIPS balance - Withdraw your winnings first';
+            } else if (errorString.includes('rejected')) {
+                errorMessage = 'Transaction was rejected by wallet';
+            } else if (error.shortMessage) {
+                errorMessage = error.shortMessage;
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+            
+            setSwapChipsState({ status: 'error', error: errorMessage });
+            toast.error(errorMessage);
+            return null;
+        }
+    }, [walletClient, account, publicClient, refreshAllData, CASINO_SLOT_ADDRESS]);
+    
     const canSpin = useCallback(() => {
         if (!spinCosts) return false;
         const cost = spinCosts[`reels${selectedReelCount}` as keyof SpinCosts] ?? 0n;
@@ -663,6 +767,18 @@ const GamePage: React.FC = () => {
             if(isNaN(eth)) return 0;
             const ethPriceUSD = parseFloat(gameStats.ethPrice.replace('$', ''));
             return Math.floor(eth * ethPriceUSD * 5);
+        } catch {
+            return 0;
+        }
+    }, [gameStats.ethPrice]);
+
+    const calculateExpectedETH = useCallback((chipsAmount: string) => {
+        try {
+            const chips = parseFloat(chipsAmount);
+            if(isNaN(chips)) return 0;
+            const ethPriceUSD = parseFloat(gameStats.ethPrice.replace('$', ''));
+            const ethValue = (chips * 0.20) / ethPriceUSD;
+            return ethValue;
         } catch {
             return 0;
         }
@@ -787,6 +903,15 @@ const GamePage: React.FC = () => {
             // toast.success('Winnings withdrawn successfully!');
         }
     }, [withdrawWinnings]);
+
+    // Swap chips handler
+    const handleSwapChips = useCallback(async () => {
+        const hash = await swapChipsToETH(chipsAmount);
+        // Success message is already handled in swapChipsToETH function
+        if (hash) {
+            toast.success('CHIPS swapped to ETH successfully!');
+        }
+    }, [swapChipsToETH, chipsAmount]);
 
     // Network switching handlers
     const handleSwitchToLocal = () => switchToNetwork('hardhat');
@@ -1284,6 +1409,123 @@ const GamePage: React.FC = () => {
                                     <span className="text-purple-400 font-medium">
                                         {totalSpins > 0 ? ((Number(totalWon) / totalSpins) * 100).toFixed(1) : '0'}%
                                     </span>
+                                </div>
+                            </div>
+                            
+                            {/* Swap CHIPS to ETH Form */}
+                            <div className="mt-3 pt-3 border-t border-gray-600">
+                                <h4 className="text-md font-bold text-orange-400 mb-2">💸 Swap CHIPS to ETH</h4>
+                                
+                                {parseFloat(playerWinnings) > 0 && (
+                                    <div className="mb-2 p-2 rounded-lg bg-yellow-500/20 border border-yellow-500/50">
+                                        <div className="text-xs text-yellow-300">
+                                            ⚠️ You have {playerWinnings} CHIPS in winnings. Withdraw them first to swap to ETH.
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                {swapChipsState.status === 'pending' && (
+                                    <div className="mb-3 p-3 rounded-lg border bg-orange-500/20 border-orange-500/50">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div className="text-sm font-bold text-orange-300">
+                                                🔄 CHIPS Swap in Progress
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="space-y-2 text-sm">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-300">Amount:</span>
+                                                <span className="text-orange-300 font-bold">{chipsAmount} CHIPS</span>
+                                            </div>
+                                            
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-300">Status:</span>
+                                                <div className="flex items-center space-x-2">
+                                                    <div className="w-2 h-2 bg-orange-400 rounded-full animate-pulse"></div>
+                                                    <span className="text-orange-300 font-medium">Confirming...</span>
+                                                </div>
+                                            </div>
+                                            
+                                            {swapChipsState.hash && (
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-300">Transaction:</span>
+                                                <a
+                                                    href={getBlockExplorerUrl(swapChipsState.hash)}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-blue-400 hover:text-blue-300 font-mono text-xs bg-gray-800/50 px-2 py-1 rounded cursor-pointer transition-colors hover:bg-gray-700/50"
+                                                >
+                                                    {swapChipsState.hash.slice(0, 8)}...{swapChipsState.hash.slice(-6)}
+                                                </a>
+                                            </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                <div className="space-y-2">
+                                    <div className="relative">
+                                        <input
+                                            type="number"
+                                            placeholder="100"
+                                            value={chipsAmount}
+                                            onChange={(e) => {
+                                                const value = e.target.value;
+                                                // Allow empty string or valid numbers within balance
+                                                if (value === '' || (!isNaN(parseFloat(value)) && parseFloat(value) >= 0)) {
+                                                    setChipsAmount(value);
+                                                }
+                                            }}
+                                            min="0"
+                                            step="1"
+                                            disabled={swapChipsState.status === 'pending' || isSpinning}
+                                            className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 pr-20 text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                // Use slightly less than max to avoid precision issues
+                                                const maxChips = parseFloat(formatChipsAmount(playerStats.chipBalance));
+                                                // Subtract a small amount to ensure we're always under the limit
+                                                const safeMaxChips = Math.max(0, maxChips - 0.01);
+                                                setChipsAmount(safeMaxChips.toString());
+                                            }}
+                                            disabled={swapChipsState.status === 'pending' || parseFloat(playerBalance) <= 0 || isSpinning}
+                                            className="absolute right-16 top-1/2 -translate-y-1/2 bg-blue-600/30 disabled:bg-gray-600/30 disabled:cursor-not-allowed text-blue-400 disabled:text-gray-500 text-xs font-bold px-1 py-0.5 rounded select-none"
+                                        >
+                                            MAX
+                                        </button>
+                                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-orange-400 font-bold text-sm">
+                                            CHIPS
+                                        </div>
+                                    </div>
+                                    
+                                    <button
+                                        onClick={handleSwapChips}
+                                        disabled={!isConnected || !chipsAmount || parseFloat(chipsAmount) <= 0 || parseEther(chipsAmount) > playerStats.chipBalance || swapChipsState.status === 'pending' || isSpinning}
+                                        className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 rounded-lg text-sm transition-colors"
+                                    >
+                                        {swapChipsState.status === 'pending' ? (
+                                            <>🔄 Swap in Progress...</>
+                                        ) : isSpinning ? (
+                                            <>🎰 Spinning - Please Wait...</>
+                                        ) : parseFloat(chipsAmount) > parseFloat(playerBalance) ? (
+                                            <>❌ Insufficient CHIPS Balance</>
+                                        ) : (
+                                            <>💸 Swap CHIPS to ETH</>
+                                        )}
+                                    </button>
+                                    
+                                    <div className="text-xs text-gray-400 text-center mt-2 space-y-1">
+                                        <div>
+                                            Swap {chipsAmount || '0'} CHIPS → Get ~{calculateExpectedETH(chipsAmount).toFixed(6)} ETH
+                                        </div>
+                                        <div className="text-gray-500">
+                                            (1 CHIP ≈ $0.20 / ~{chipCostInEth} ETH)
+                                        </div>
+                                        <div className="text-gray-500 mt-1">
+                                            Available: {playerBalance} CHIPS | Winnings: {playerWinnings} CHIPS
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
