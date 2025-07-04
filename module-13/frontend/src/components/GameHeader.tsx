@@ -1,7 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Wallet, Network, LogOut, Zap } from 'lucide-react';
 import type { Address } from 'viem';
 import PoolStats from './PoolStats';
+import NetworkSwitcher from './NetworkSwitcher';
+import SmartConnectButton from './SmartConnectButton';
+
+
 
 interface GameHeaderProps {
   // Connection state
@@ -21,7 +25,7 @@ interface GameHeaderProps {
   onSwitchToSepolia: () => void;
   isSwitchPending: boolean;
   
-  // Pool info s
+  // Pool info 
   poolData: {
     poolETH: string | null;
     ethPrice: string | null;
@@ -80,53 +84,17 @@ const GameHeader: React.FC<GameHeaderProps> = ({
             />
           )}
 
-          {/* Right Section - Wallet & Network */}
+          {/* Right Section - Network & Wallet */}
           <div className="flex items-center space-x-4">
-            {/* Network Status & Switch - Only when connected */}
-            {isConnected && currentChain && (
-              <div className="network-section flex items-center space-x-2">
-                {/* Current Network Display */}
-                <div className={`flex items-center space-x-2 px-3 py-2 rounded-lg border ${
-                  isSupported 
-                    ? 'bg-green-500/20 border-green-500/30 text-green-400' 
-                    : 'bg-red-500/20 border-red-500/30 text-red-400'
-                }`}>
-                  <Network size={16} />
-                  <span className="text-sm font-medium">
-                    {isSwitchPending ? (
-                      <span className="flex items-center gap-1">
-                        <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin"></div>
-                        Switching...
-                      </span>
-                    ) : (
-                      currentChain.name
-                    )}
-                  </span>
-                </div>
-
-                {/* Network Switch Buttons - Only when unsupported */}
-                {!isSupported && (
-                  <div className="flex items-center space-x-1">
-                    <button
-                      onClick={onSwitchToLocal}
-                      disabled={isSwitchPending}
-                      className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition-colors"
-                      title="Switch to Hardhat Local"
-                    >
-                      Local
-                    </button>
-                    <button
-                      onClick={onSwitchToSepolia}
-                      disabled={isSwitchPending}
-                      className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition-colors"
-                      title="Switch to Sepolia Testnet"
-                    >
-                      Sepolia
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Network Switcher - Only when connected */}
+            <NetworkSwitcher
+              currentChain={currentChain}
+              isSupported={isSupported}
+              isSwitchPending={isSwitchPending}
+              onSwitchToLocal={onSwitchToLocal}
+              onSwitchToSepolia={onSwitchToSepolia}
+              isConnected={isConnected}
+            />
 
             {/* Wallet Section */}
             {isConnected && account ? (
@@ -159,27 +127,14 @@ const GameHeader: React.FC<GameHeaderProps> = ({
                 </button>
               </>
             ) : (
-              <button
-                onClick={onConnect}
-                disabled={connecting}
-                className="flex items-center space-x-2 bg-yellow-500 hover:bg-yellow-600 
-                         text-black font-bold rounded-lg px-6 py-3 text-lg
-                         transition-all duration-200 hover:scale-105 
-                         disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100
-                         shadow-lg hover:shadow-xl border-2 border-yellow-400"
-              >
-                {connecting ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
-                    <span>Connecting...</span>
-                  </>
-                ) : (
-                  <>
-                    <Wallet size={20} />
-                    <span>Connect Wallet</span>
-                  </>
-                )}
-              </button>
+              /* Smart Connect Button - Only when disconnected */
+              <SmartConnectButton
+                connecting={connecting}
+                onConnect={onConnect}
+                onSwitchToLocal={onSwitchToLocal}
+                onSwitchToSepolia={onSwitchToSepolia}
+                variant="hero"
+              />
             )}
           </div>
         </div>

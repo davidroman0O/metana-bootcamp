@@ -409,6 +409,7 @@ export const QUOTE_SYSTEM: QuoteSystem = {
     "This is the way!"
   ],
 
+  // non-connected quotes
   // Special quotes to incentivize connecting wallet
   connect_incentives: [
     "Connect wallet for REAL wins!",
@@ -428,6 +429,7 @@ export const QUOTE_SYSTEM: QuoteSystem = {
     "Real winners connect wallets!"
   ],
 
+  // non-connected quotes
   // Funny quotes when disconnected users click INSERT CHIPS
   chip_insert_teases: [
     "Nice try! 🤡 But you need a wallet first!",

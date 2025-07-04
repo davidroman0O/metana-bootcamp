@@ -46,6 +46,10 @@ contract CasinoSlot is
     uint16 public requestConfirmations;
     uint32 public numWords;
     
+    // Mark-up applied on top of the raw VRF cost returned by the wrapper.
+    // Example: 1500 = +15 %. Helps the house remain profitable even when gas/LINK prices fluctuate.
+    uint256 public vrfMarkupBP;
+    
     // External contracts
     IPayoutTables public payoutTables;
     IPriceFeed internal ethUsdPriceFeed;
@@ -95,6 +99,8 @@ contract CasinoSlot is
     event VRFCostUpdated(uint256 newVrfCostUSD);
     event DynamicPricingUpdated(uint256 baseChipPriceUSD, uint256 vrfCostUSD);
     event VRFPayment(uint256 indexed requestId, uint256 ethPaid);
+    event VRFMarkupUpdated(uint256 newVrfMarkupBP);
+    event ChipsSwapped(address indexed player, uint256 chipsAmount, uint256 ethValue);
     
     struct Spin {
         address player;
@@ -140,6 +146,7 @@ contract CasinoSlot is
         // Initialize economic parameters
         baseChipPriceUSD = 20; // $0.20 in cents
         vrfCostUSD = 600; // $6.00 in cents - dynamic cost
+        vrfMarkupBP = 1500; // 15 % markup on VRF cost (basis-points)
         
         emit ContractInitialized(1);
     }
@@ -194,9 +201,9 @@ contract CasinoSlot is
         uint256 reelMultiplier = _getReelMultiplier(reelCount);
         uint256 scaledCostUSD = (totalBaseCostUSD * reelMultiplier) / 10000;
         
-        // scaledCostUSD is in cents, 1 CHIP = $0.20, so 5 CHIPS per dollar
-        // Formula: (scaledCostUSD * 5 * 1e18) / 100 = CHIPS with 18 decimals
-        uint256 costInCHIPS = (scaledCostUSD * 5 * 1e18) / 100;
+        // chipsPerUSD (18-dec) = 100 cents / baseChipPriceUSD
+        uint256 chipsPerUSD = (100 * 1e18) / baseChipPriceUSD;
+        uint256 costInCHIPS = (scaledCostUSD * chipsPerUSD) / 100;
         
         return costInCHIPS;
     }
@@ -217,8 +224,29 @@ contract CasinoSlot is
      * @dev Get VRF cost in USD cents (dynamic pricing)
      */
     function _getVRFCostInUSD() internal view virtual returns (uint256) {
-        // Simply return the configured USD cost - no conversion needed!
-        return vrfCostUSD;
+        // 1. Ask the wrapper for the exact ETH fee for this request size
+        uint256 priceETH = vrfWrapper.calculateRequestPriceNative(
+            callbackGasLimit,
+            numWords
+        );
+
+        // 2. Convert that ETH fee → USD cents using Chainlink price feed
+        (, int256 ethPriceUSD, , , ) = ethUsdPriceFeed.latestRoundData();
+        uint256 rawCostUSD;
+        if (priceETH > 0 && ethPriceUSD > 0) {
+            // priceETH is in wei (1e18) and ethPriceUSD has 8 decimals.
+            // USD cents = (wei * USD(8dec) * 100) / 1e26
+            rawCostUSD = (priceETH * uint256(ethPriceUSD) * 100) / 1e26;
+        }
+
+        // 3. Fallback to the manually configured vrfCostUSD if wrapper returns 0 (local chain)
+        if (rawCostUSD == 0) {
+            rawCostUSD = vrfCostUSD;
+        }
+
+        // 4. Add house markup so we always earn on the request itself
+        uint256 markup = (rawCostUSD * vrfMarkupBP) / 10000;
+        return rawCostUSD + markup;
     }
     
     /**
@@ -253,7 +281,7 @@ contract CasinoSlot is
         
         // If price is zero, calculate from USD cost or use fallback
         if (price == 0) {
-            uint256 calculatedPrice = _convertUSDCentsToETH(vrfCostUSD);
+            uint256 calculatedPrice = _convertUSDCentsToETH(_getVRFCostInUSD());
             price = calculatedPrice > 0 ? calculatedPrice : 0.002 ether; // Fallback
         }
         
@@ -317,21 +345,24 @@ contract CasinoSlot is
     function _executeSpin(uint8 reelCount, uint256 cost) internal returns (uint256 requestId) {
         require(reelCount >= 3 && reelCount <= 7, "Invalid reel count");
         
-        // Critical checks only
+        // Cost volatility check: ensure the provided cost is close to the current on-chain calculated cost
+        uint256 currentCost = getSpinCost(reelCount);
+        uint256 difference = (cost > currentCost) ? cost - currentCost : currentCost - cost;
+        // Allow up to a 5% difference to account for minor price oracle fluctuations
+        require(difference * 100 / currentCost <= 500, "Price has changed, please retry");
+        
         require(balanceOf(msg.sender) >= cost, "Insufficient CHIPS");
-        require(allowance(msg.sender, address(this)) >= cost, "Insufficient allowance");
         require(address(this).balance > 0, "No ETH balance");
 
         // Burn CHIPS from player 
         _burn(msg.sender, cost);
         
-        // Calculate ETH value of burned CHIPS
+        // Calculate ETH value of burned CHIPS and the cost of the VRF in a single pass
+        uint256 vrfCostInUSD = _getVRFCostInUSD();
+        uint256 ethForVRF = _convertUSDCentsToETH(vrfCostInUSD);
         uint256 ethValue = calculateETHFromCHIPS(cost);
-        require(ethValue > 0, "ETH calc failed");
-        require(address(this).balance >= ethValue, "Insufficient ETH");
-        
-        // Calculate VRF payment amount dynamically from USD cost
-        uint256 ethForVRF = _convertUSDCentsToETH(vrfCostUSD);
+
+        require(ethValue > ethForVRF, "ETH value of CHIPS is less than VRF cost");
         require(address(this).balance >= ethForVRF, "Insufficient ETH for VRF");
         
         // Calculate remaining ETH after VRF payment
@@ -354,7 +385,7 @@ contract CasinoSlot is
         
         require(requestId > 0, "VRF request failed");
         
-        // Reset allowance to 0 after spin to force re-approval
+        // Reset allowance to 0 after spin to force re-approval next time
         _approve(msg.sender, address(this), 0);
 
         emit HouseFeeCollected(requestId, msg.sender, houseAmount);
@@ -608,6 +639,35 @@ contract CasinoSlot is
     }
     
     /**
+     * @dev Swap CHIPS back to ETH
+     */
+    function swapChipsToETH(uint256 chipsAmount) external nonReentrant {
+        require(chipsAmount > 0, "Must specify CHIPS amount");
+        require(balanceOf(msg.sender) >= chipsAmount, "Insufficient CHIPS balance");
+        
+        // Calculate ETH equivalent
+        uint256 ethValue = calculateETHFromCHIPS(chipsAmount);
+        require(ethValue > 0, "ETH calculation failed");
+        require(address(this).balance >= ethValue, "Insufficient contract ETH balance");
+        
+        // Burn CHIPS from user
+        _burn(msg.sender, chipsAmount);
+        
+        // Update prize pool (ETH is leaving the pool)
+        if (totalPrizePool >= ethValue) {
+            totalPrizePool -= ethValue;
+        } else {
+            totalPrizePool = 0;
+        }
+        emit PrizePoolStateChanged(totalPrizePool, -int256(ethValue), 2);
+        
+        // Transfer ETH to user
+        payable(msg.sender).transfer(ethValue);
+        
+        emit ChipsSwapped(msg.sender, chipsAmount, ethValue);
+    }
+    
+    /**
      * @dev Calculate CHIPS amount from ETH amount
      */
     function calculateChipsFromETH(uint256 ethAmount) public view returns (uint256) {
@@ -627,7 +687,7 @@ contract CasinoSlot is
         require(ethAmount <= 1000 ether, "ETH amount too large"); // Fixed 1000 ETH max
         
         // Convert to CHIPS (1 CHIP = $0.20, so 5 CHIPS per USD)
-        uint256 chipsAmount = (ethAmount * uint256(ethPriceUSD) * 5) / 1e8;
+        uint256 chipsAmount = (ethAmount * uint256(ethPriceUSD) * 100) / (1e8 * baseChipPriceUSD);
         
         require(chipsAmount > 0, "Calculated amount too small");
         
@@ -643,7 +703,7 @@ contract CasinoSlot is
         uint256 ethPrice
     ) {
         totalETH = address(this).balance;
-        chipPrice = 1e18 / 5; // 1 CHIP = $0.20, so 0.2 ETH worth at current price
+        chipPrice = (baseChipPriceUSD * 1e18) / 100; // Price of one CHIP in wei assuming 1 CHIP = baseChipPriceUSD cents.
         
         (, int256 ethPriceUSD, , , ) = ethUsdPriceFeed.latestRoundData();
         ethPrice = uint256(ethPriceUSD) / 1e6; // Convert from 8 decimals to cents (2 decimals)
@@ -684,7 +744,7 @@ contract CasinoSlot is
     ) {
         currentGasPrice = tx.gasprice;
         callbackGas = callbackGasLimit;
-        vrfCostETHTokens = _convertUSDCentsToETH(vrfCostUSD); // Dynamic conversion
+        vrfCostETHTokens = _convertUSDCentsToETH(_getVRFCostInUSD());
         vrfCostUSDCents = _getVRFCostInUSD();
         ethBalance = address(this).balance;
         
@@ -701,7 +761,7 @@ contract CasinoSlot is
         uint256 vrfCostUSDCents
     ) {
         contractETHBalance = address(this).balance;
-        vrfCostETHTokens = _convertUSDCentsToETH(vrfCostUSD); // Dynamic conversion
+        vrfCostETHTokens = _convertUSDCentsToETH(_getVRFCostInUSD());
         vrfRequestsAffordable = vrfCostETHTokens > 0 ? contractETHBalance / vrfCostETHTokens : 0;
         vrfCostUSDCents = _getVRFCostInUSD();
         
@@ -715,14 +775,17 @@ contract CasinoSlot is
         uint32 _callbackGasLimit,
         uint16 _requestConfirmations,
         uint32 _numWords,
-        uint256 _vrfCostUSD
+        uint256 _vrfCostUSD,
+        uint256 _vrfMarkupBP
     ) external onlyOwner {
         callbackGasLimit = _callbackGasLimit;
         requestConfirmations = _requestConfirmations;
         numWords = _numWords;
         vrfCostUSD = _vrfCostUSD;
+        vrfMarkupBP = _vrfMarkupBP;
         
         emit VRFCostUpdated(_vrfCostUSD);
+        emit VRFMarkupUpdated(_vrfMarkupBP);
     }
 } 
 

@@ -240,6 +240,31 @@ export const CasinoSlotABI = [
     "anonymous": false,
     "inputs": [
       {
+        "indexed": true,
+        "internalType": "address",
+        "name": "player",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "chipsAmount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "ethValue",
+        "type": "uint256"
+      }
+    ],
+    "name": "ChipsSwapped",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
         "indexed": false,
         "internalType": "uint8",
         "name": "version",
@@ -562,6 +587,19 @@ export const CasinoSlotABI = [
       }
     ],
     "name": "VRFCostUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "newVrfMarkupBP",
+        "type": "uint256"
+      }
+    ],
+    "name": "VRFMarkupUpdated",
     "type": "event"
   },
   {
@@ -1371,6 +1409,19 @@ export const CasinoSlotABI = [
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "chipsAmount",
+        "type": "uint256"
+      }
+    ],
+    "name": "swapChipsToETH",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "symbol",
     "outputs": [
@@ -1591,6 +1642,11 @@ export const CasinoSlotABI = [
         "internalType": "uint256",
         "name": "_vrfCostUSD",
         "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_vrfMarkupBP",
+        "type": "uint256"
       }
     ],
     "name": "updateVRFParameters",
@@ -1619,6 +1675,19 @@ export const CasinoSlotABI = [
   {
     "inputs": [],
     "name": "vrfCostUSD",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "vrfMarkupBP",
     "outputs": [
       {
         "internalType": "uint256",

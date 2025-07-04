@@ -1,137 +1,128 @@
 import React from 'react';
-import { Wallet, LogOut, Network, Zap } from 'lucide-react';
-import { useWallet } from '../hooks/useWallet';
-import { useNetworks } from '../hooks/useNetworks';
-import '../styles/NetworkSwitcher.css';
+import { Network, ChevronDown } from 'lucide-react';
 
-const NetworkSwitcher: React.FC = () => {
-  const {
-    account,
-    isConnected,
-    connecting,
-    balance,
-    connectWallet,
-    disconnectWallet,
-    formatAddress,
-    formatBalance,
-  } = useWallet();
+interface NetworkSwitcherProps {
+  currentChain: any;
+  isSupported: boolean;
+  isSwitchPending: boolean;
+  onSwitchToLocal: () => void;
+  onSwitchToSepolia: () => void;
+  isConnected: boolean;
+}
 
-  const {
-    currentNetwork,
-    availableNetworks,
-    isNetworkSupported,
-    switchingNetwork,
-    switchToNetwork,
-  } = useNetworks();
+// Environment detection
+const isDevelopment = process.env.NODE_ENV === 'development' || 
+                    window.location.hostname === 'localhost' ||
+                    window.location.hostname === '127.0.0.1';
+
+interface NetworkOption {
+  id: string;
+  name: string;
+  chainId: number;
+  isDev: boolean;
+  onClick: () => void;
+}
+
+const NetworkSwitcher: React.FC<NetworkSwitcherProps> = ({
+  currentChain,
+  isSupported,
+  isSwitchPending,
+  onSwitchToLocal,
+  onSwitchToSepolia,
+  isConnected,
+}) => {
+  const [isOpen, setIsOpen] = React.useState(false);
+
+  if (!isConnected || !currentChain) {
+    return null; // Only show for connected users
+  }
+
+  // Available networks based on environment (only networks with deployments)
+  const availableNetworks: NetworkOption[] = [
+    ...(isDevelopment ? [{
+      id: 'hardhat',
+      name: 'Hardhat Local',
+      chainId: 31337,
+      isDev: true,
+      onClick: onSwitchToLocal,
+    }] : []),
+    {
+      id: 'sepolia',
+      name: 'Sepolia Testnet',
+      chainId: 11155111,
+      isDev: false,
+      onClick: onSwitchToSepolia,
+    },
+    // Note: No mainnet - we don't have deployed contracts there
+  ];
+
+  const handleNetworkSelect = (network: NetworkOption) => {
+    network.onClick();
+    setIsOpen(false);
+  };
 
   return (
-    <div className="bg-black/30 backdrop-blur-md rounded-xl p-6 border border-gray-600 max-w-md mx-auto">
-      <h2 className="text-xl font-bold text-white mb-4 flex items-center">
-        <Network className="mr-2" size={20} />
-        Network Switcher
-      </h2>
+    <div className="relative">
+      {/* Current Network Display */}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        disabled={isSwitchPending}
+        className={`flex items-center space-x-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+          isSupported 
+            ? 'bg-green-500/20 border-green-500/30 text-green-400 hover:bg-green-500/30' 
+            : 'bg-red-500/20 border-red-500/30 text-red-400 hover:bg-red-500/30'
+        } ${isSwitchPending ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+      >
+        <Network size={16} />
+        <span>
+          {isSwitchPending ? (
+            <span className="flex items-center gap-1">
+              <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin"></div>
+              Switching...
+            </span>
+          ) : (
+            currentChain.name
+          )}
+        </span>
+        <ChevronDown size={14} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
 
-      {/* Wallet Section */}
-      <div className="mb-6">
-        <h3 className="text-sm font-semibold text-gray-300 mb-2">Wallet</h3>
-        {isConnected && account ? (
-          <div className="space-y-2">
-            <div className="bg-gray-800/50 rounded-lg p-3">
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-400">Address:</span>
-                <span className="text-white font-mono">{formatAddress(account)}</span>
-              </div>
-              <div className="flex justify-between items-center text-sm mt-1">
-                <span className="text-gray-400">Balance:</span>
-                <span className="text-green-400 font-semibold">{formatBalance(balance, 4)} ETH</span>
-              </div>
-            </div>
-            <button
-              onClick={disconnectWallet}
-              className="w-full bg-red-500/20 hover:bg-red-500/30 text-red-300 hover:text-red-200 rounded-lg px-3 py-2 text-sm font-medium transition-all flex items-center justify-center"
-            >
-              <LogOut size={16} className="mr-2" />
-              Disconnect
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={connectWallet}
-            disabled={connecting}
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-lg px-4 py-2 transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:scale-100 flex items-center justify-center"
-          >
-            <Wallet size={16} className="mr-2" />
-            {connecting ? 'Connecting...' : 'Connect Wallet'}
-          </button>
-        )}
-      </div>
-
-      {/* Network Section */}
-      <div>
-        <h3 className="text-sm font-semibold text-gray-300 mb-2">Network</h3>
-        
-        {/* Current Network */}
-        {currentNetwork && (
-          <div className={`mb-3 p-3 rounded-lg border ${
-            isNetworkSupported 
-              ? 'bg-green-500/10 border-green-500/30 text-green-300'
-              : 'bg-red-500/10 border-red-500/30 text-red-300'
-          }`}>
-            <div className="flex items-center justify-between">
-              <span className="font-medium">{currentNetwork.name}</span>
-              <div className="flex items-center">
-                {isNetworkSupported ? (
-                  <span className="text-xs bg-green-500/20 px-2 py-1 rounded">✓ Supported</span>
-                ) : (
-                  <span className="text-xs bg-red-500/20 px-2 py-1 rounded">⚠ Unsupported</span>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Available Networks */}
-        <div className="space-y-2">
-          {availableNetworks.map((network) => (
-            <button
-              key={network.id}
-              onClick={() => switchToNetwork(network.id)}
-              disabled={switchingNetwork || (currentNetwork?.id === network.id && isNetworkSupported)}
-              className={`w-full p-3 rounded-lg text-left transition-all ${
-                currentNetwork?.id === network.id && isNetworkSupported
-                  ? 'bg-blue-500/20 border border-blue-500/30 text-blue-300 cursor-default'
-                  : 'bg-gray-800/50 hover:bg-gray-700/50 border border-gray-600 text-gray-300 hover:text-white'
-              } disabled:opacity-50`}
-            >
-              <div className="flex items-center justify-between">
-                <div>
+      {/* Dropdown Menu */}
+      {isOpen && !isSwitchPending && (
+        <div className="absolute top-full left-0 mt-1 w-48 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-50">
+          <div className="py-1">
+            {availableNetworks.map((network) => (
+              <button
+                key={network.id}
+                onClick={() => handleNetworkSelect(network)}
+                className={`w-full flex items-center space-x-3 px-4 py-2 text-left hover:bg-gray-700 transition-colors text-sm ${
+                  currentChain.id === network.chainId ? 'bg-blue-600/20 text-blue-300' : 'text-gray-300'
+                }`}
+              >
+                <Network size={14} />
+                <div className="flex-1">
                   <div className="font-medium">{network.name}</div>
-                  <div className="text-xs opacity-75">
+                  <div className="text-xs text-gray-500">
                     Chain ID: {network.chainId}
-                    {network.isDev && ' • Development'}
+                    {network.isDev && ' • Dev'}
                   </div>
                 </div>
-                <div className="flex items-center">
-                  {network.isPending && (
-                    <div className="animate-spin mr-2">
-                      <Zap size={16} />
-                    </div>
-                  )}
-                  {currentNetwork?.id === network.id && isNetworkSupported && (
-                    <span className="text-xs bg-blue-500/20 px-2 py-1 rounded">Current</span>
-                  )}
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-
-        {availableNetworks.length === 0 && (
-          <div className="text-center py-4 text-gray-400">
-            No networks available
+                {currentChain.id === network.chainId && (
+                  <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                )}
+              </button>
+            ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Click outside to close */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 z-40" 
+          onClick={() => setIsOpen(false)}
+        />
+      )}
     </div>
   );
 };

@@ -500,7 +500,8 @@ const SlotMachine = forwardRef<SlotMachineRef, SlotMachineProps>(({
       targetSymbolsRef.current = null;
     }
     
-    console.log(`🎮 SlotMachine: Starting spin${targetSymbols ? ` with targets [${targetSymbols.join(', ')}]` : ''}`);
+    console.log(`🎰 SlotMachine.startSpin() called - starting animation${targetSymbols ? ` with targets [${targetSymbols.join(', ')}]` : ''}`);
+    
     transitionToState(MACHINE_STATE_SPINNING_UP);
     return true;
   };

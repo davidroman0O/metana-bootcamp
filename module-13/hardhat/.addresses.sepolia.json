@@ -35,8 +35,8 @@
     "note": "V2 liquidity successfully added and tested"
   },
   "casino": {
-    "proxy": "0xd7d43dfF132Aa68F9F05ECc3adD467A6aE9B7Da2",
-    "implementation": "0xaF6832D4068A3459aa66A0C678452da798618742",
+    "proxy": "0x8eab795D2fdB63256AEa0510953ef72922D18b72",
+    "implementation": "0xc0f47486A508a6709dFE658C07926137Ddc3f0d7",
     "admin": "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86"
   }
 }

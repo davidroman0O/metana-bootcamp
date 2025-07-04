@@ -27,8 +27,30 @@ export function useWallet() {
   }, [connect, connectors]);
 
   const disconnectWallet = useCallback(() => {
-    disconnect();
-    toast('👋 Wallet disconnected');
+    try {
+      console.log('Disconnecting wallet...');
+      
+      // First, call the wagmi disconnect function
+      disconnect();
+      
+      // Clear any wagmi-related localStorage items
+      Object.keys(localStorage).forEach(key => {
+        if (key.includes('wagmi') || key.includes('wallet') || key.includes('connect')) {
+          localStorage.removeItem(key);
+        }
+      });
+      
+      // Show toast notification
+      toast('👋 Wallet disconnected');
+      
+      // Force reload the page after a short delay to ensure complete state reset
+      setTimeout(() => {
+        window.location.reload();
+      }, 300);
+    } catch (error) {
+      console.error('Error disconnecting wallet:', error);
+      toast.error('Failed to disconnect wallet');
+    }
   }, [disconnect]);
 
   const formatAddress = useCallback((address?: string): string => {

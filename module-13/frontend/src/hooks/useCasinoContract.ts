@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useAccount, usePublicClient, useWalletClient, useBalance, useWatchContractEvent, useReadContract, useChainId } from 'wagmi';
+import { useAccount, usePublicClient, useWalletClient, useBalance, useReadContract, useChainId, useWriteContract, useWatchContractEvent } from 'wagmi';
 import { formatEther, parseEther, type Address, decodeEventLog } from 'viem';
 import { CasinoSlotABI, getDeployment } from '../config/contracts';
 import toast from 'react-hot-toast';
@@ -73,13 +73,13 @@ export function useCasinoContract() {
   
   // Spin tracking
   const [latestSpinResult, setLatestSpinResult] = useState<SpinResult | null>(null);
-  const [pendingRequestId, setPendingRequestId] = useState<bigint | null>(null);
   
   // Approval states
   const [selectedReelCount, setSelectedReelCount] = useState<3 | 4 | 5 | 6 | 7>(3);
   
   // Refs for preventing duplicate calls
   const refreshTimeoutRef = useRef<NodeJS.Timeout>();
+  const processedRequestIds = useRef(new Set<string>());
 
   const { data: ethBalanceResult } = useBalance({ address });
 
@@ -167,33 +167,74 @@ export function useCasinoContract() {
     refetchSpinCost7();
   }, [refetchPlayerStats, refetchGameStats, refetchPoolStats, refetchAllowance, refetchSpinCost3, refetchSpinCost4, refetchSpinCost5, refetchSpinCost6, refetchSpinCost7]);
 
+  // Handle SpinResult events with useWatchContractEvent hook
+  const handleSpinResultEvents = useCallback((logs: any[]) => {
+    if (!address) {
+      console.log('No address available, ignoring SpinResult events');
+      return;
+    }
 
-  // Event listener for spin results
+    console.log(`SpinResult event(s) received: ${logs.length} logs`);
+
+    for (const log of logs) {
+      // The log object from wagmi's watcher should have args pre-parsed
+      if (!log.args) continue;
+
+      const { requestId, player, reelCount, reels, payoutType, payout } = log.args as any;
+
+      // Filter to current player only
+      if (player?.toLowerCase() !== address.toLowerCase()) {
+        continue;
+      }
+
+      // Use a Set to track processed request IDs for robust duplicate detection.
+      const requestIdStr = requestId.toString();
+      if (processedRequestIds.current.has(requestIdStr)) {
+        console.log(`Skipping duplicate result for requestId ${requestIdStr}`);
+        continue;
+      }
+
+      console.log('✅ Processing spin result for current user:', log.args);
+
+      const result: SpinResult = {
+        requestId,
+        player,
+        reelCount: Number(reelCount),
+        symbols: Array.isArray(reels) ? reels.map((r: bigint) => Number(r)) : [],
+        payoutType: Number(payoutType),
+        payout,
+      };
+
+      // Store last processed id to avoid duplicates
+      processedRequestIds.current.add(requestIdStr);
+
+      // Update state with result
+      setLatestSpinResult(result);
+      
+      // Reset spin state to success
+      setSpinState({ status: 'success' });
+
+      // Debounce the data refresh to avoid spamming RPC on multiple events
+      if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current);
+      refreshTimeoutRef.current = setTimeout(() => {
+        console.log('Refreshing data after spin result...');
+        refreshAllData();
+      }, 500);
+      
+      // Do not break; process all logs in the batch.
+    }
+  }, [address, refreshAllData]);
+  
+  // Set up event listener using wagmi hook
   useWatchContractEvent({
     address: CASINO_SLOT_ADDRESS,
     abi: CasinoSlotABI,
     eventName: 'SpinResult',
-    onLogs(logs) {
-      if (!pendingRequestId) return;
-
-      for (const log of logs) {
-        const { requestId, player, reelCount, reels, payoutType, payout } = log.args as any;
-        
-        if (player === address && requestId === pendingRequestId) {
-          console.log('Matching spin result from contract for current user:', log.args);
-          setLatestSpinResult({
-            requestId,
-            player,
-            reelCount,
-            symbols: (reels as readonly bigint[]).map((r: bigint) => Number(r)),
-            payoutType,
-            payout,
-          });
-          setPendingRequestId(null); // Mark as processed
-          break; // Stop processing further logs
-        }
-      }
-    },
+    onLogs: handleSpinResultEvents,
+    // Always enable the event listener when connected
+    enabled: !!address,
+    // Increase polling interval for better event detection
+    pollingInterval: 1000,
   });
   
   // Generic transaction executor (for non-spin transactions)
@@ -214,7 +255,7 @@ export function useCasinoContract() {
       
       const receipt = await publicClient?.waitForTransactionReceipt({ 
         hash,
-        timeout: 120_000 // 2 minutes timeout for Sepolia
+        timeout: 300_000 // Increased to 5 minutes to account for network delays
       });
       
       if (receipt?.status === 'success') {
@@ -266,10 +307,18 @@ export function useCasinoContract() {
   // Spin reels - custom logic to get requestId
   const spinReels = useCallback(async (reelCount: 3 | 4 | 5 | 6 | 7) => {
     if (!walletClient || !publicClient) return null;
+    
+    // Prevent multiple concurrent spins
+    if (spinState.status === 'pending') {
+      toast.error('A spin is already in progress. Please wait.');
+      return null;
+    }
 
     const functionName = `spin${reelCount}Reels` as const;
     setSpinState({ status: 'pending' });
     try {
+      console.log(`🎮 Sending ${functionName} transaction...`);
+      
       const hash = await walletClient.writeContract({
         address: CASINO_SLOT_ADDRESS,
         abi: CasinoSlotABI,
@@ -277,43 +326,54 @@ export function useCasinoContract() {
         // Let wallet handle gas estimation automatically
       });
       setSpinState({ status: 'pending', hash });
+      console.log(`📝 Transaction sent with hash: ${hash}`);
 
+      // Wait for transaction receipt to know it's submitted
+      console.log(`⏳ Waiting for transaction receipt...`);
       const receipt = await publicClient.waitForTransactionReceipt({ 
         hash,
-        timeout: 120_000 // 2 minutes timeout for Sepolia
+        timeout: 300_000 // 5 minutes for slower networks
       });
+      console.log(`✅ Transaction receipt received:`, receipt);
 
       if (receipt.status === 'success') {
-        setSpinState({ status: 'success', hash });
-        toast.success(`Started ${reelCount}-reel spin! Waiting for result...`);
+        // Keep state as 'pending' and hash. The event listener will handle the final 'success' state.
+        setSpinState({ status: 'pending', hash }); 
+        toast.success(`🚀 Spin submitted! Waiting for result...`);
 
-        // Find and decode the SpinRequested event to get the requestId
+        // Log the request ID from the event for debugging purposes
         for (const log of receipt.logs) {
           try {
             const decodedLog = decodeEventLog({ abi: CasinoSlotABI, data: log.data, topics: log.topics });
             if (decodedLog.eventName === 'SpinRequested') {
               const { requestId } = decodedLog.args as any;
-              setPendingRequestId(requestId);
-              console.log(`Spin request ID tracked: ${requestId}`);
-              return hash; // Return hash on success
+              console.log(`ℹ️ Spin requested with ID: ${requestId}`);
+              break; // Found it, no need to check other logs
             }
           } catch (e) {
-            // Not the event we're looking for, ignore
+            // Not the event we're looking for
           }
         }
-        console.error("Could not find SpinRequested event in transaction logs.");
+
         return hash;
       } else {
+        console.error(`❌ Transaction failed with status: ${receipt.status}`);
         throw new Error('Spin transaction failed on-chain');
       }
     } catch (error: any) {
-      console.error('Spin transaction error:', error);
+      console.error('❌ Spin transaction error:', error);
       const errorMessage = error.message || 'Spin failed';
+      
       setSpinState({ status: 'error', error: errorMessage });
-      toast.error(errorMessage);
+      
+      if (error.message?.includes('rejected')) {
+        toast.error('Transaction was rejected by wallet');
+      } else {
+        toast.error(`Spin failed: ${errorMessage}`);
+      }
       return null;
     }
-  }, [walletClient, publicClient]);
+  }, [walletClient, publicClient, spinState.status, CASINO_SLOT_ADDRESS]);
   
   // Withdraw winnings
   const withdrawWinnings = useCallback(async () => {
@@ -350,13 +410,7 @@ export function useCasinoContract() {
     }
   }, [gameStats.ethPrice]);
   
-  // This effect will reset the spin result after it has been handled.
-  useEffect(() => {
-    if (latestSpinResult) {
-      const timer = setTimeout(() => setLatestSpinResult(null), 500);
-      return () => clearTimeout(timer);
-    }
-  }, [latestSpinResult]);
+
   
   return {
     // Data states

@@ -24,7 +24,8 @@
     "typescript": "^5.8.3",
     "viem": "^2.30.5",
     "wagmi": "^2.15.4",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "zustand": "^5.0.6"
   },
   "scripts": {
     "start": "react-scripts start",

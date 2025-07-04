@@ -1,11 +1,12 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { formatEther } from 'viem';
 import toast from 'react-hot-toast';
-import { useReadContract } from 'wagmi';
 
 import SlotMachine, { SlotMachineRef } from './SlotMachine';
 import PhoneHelpLine from './PhoneHelpLine';
 import PoolStats from './PoolStats';
+import NetworkSwitcher from './NetworkSwitcher';
+import SmartConnectButton from './SmartConnectButton';
 
 import { useWallet } from '../hooks/useWallet';
 import { useNetworks } from '../hooks/useNetworks';
@@ -15,7 +16,7 @@ import { usePoolData } from '../hooks/usePoolData';
 
 import { QuoteManager } from '../utils/quotes';
 
-import { CasinoSlotABI } from '../config/contracts/CasinoSlotABI';
+
 
 const GameHeader: React.FC<{
   isConnected: boolean;
@@ -48,6 +49,8 @@ const GameHeader: React.FC<{
   currentChain,
   isSupported,
   onSwitchToLocal,
+  onSwitchToSepolia,
+  onSwitchToMainnet,
   isSwitchPending,
   poolData,
 }) => {
@@ -93,19 +96,15 @@ const GameHeader: React.FC<{
 
           {/* Right - Wallet & Network */}
           <div className="flex items-center space-x-3">
-            {/* Network (Connected only) */}
-            {isConnected && currentChain && (
-              <div className={`flex items-center space-x-2 px-2 py-1 rounded text-xs ${
-                isSupported ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-              }`}>
-                <span>{currentChain.name}</span>
-                {!isSupported && (
-                  <button onClick={onSwitchToLocal} disabled={isSwitchPending} className="ml-1 px-2 py-1 bg-blue-600 rounded text-white">
-                    Fix
-                  </button>
-                )}
-              </div>
-            )}
+            {/* Network Switcher */}
+                         <NetworkSwitcher
+               currentChain={currentChain}
+               isSupported={isSupported}
+               isSwitchPending={isSwitchPending}
+               onSwitchToLocal={onSwitchToLocal}
+               onSwitchToSepolia={onSwitchToSepolia}
+               isConnected={isConnected}
+             />
 
             {/* Wallet */}
             {isConnected && account ? (
@@ -117,20 +116,28 @@ const GameHeader: React.FC<{
                   {formatAddress(account)}
                 </div>
                 <button 
-                  onClick={onDisconnect}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Disconnect button clicked');
+                    // Confirm disconnect to prevent accidental clicks
+                    if (window.confirm('Are you sure you want to disconnect your wallet?')) {
+                      onDisconnect();
+                    }
+                  }}
                   className="bg-red-500/30 hover:bg-red-500/50 text-red-300 hover:text-white rounded-lg px-3 py-2 text-sm font-medium transition-all"
                 >
                   Disconnect
                 </button>
               </div>
             ) : (
-              <button
-                onClick={onConnect}
-                disabled={connecting}
-                className="bg-yellow-500 hover:bg-yellow-600 text-black font-bold rounded-lg px-4 py-2 text-sm transition-all duration-200 hover:scale-105 disabled:opacity-50"
-              >
-                {connecting ? 'Connecting...' : 'Connect Wallet'}
-              </button>
+              <SmartConnectButton
+                connecting={connecting}
+                onConnect={onConnect}
+                onSwitchToLocal={onSwitchToLocal}
+                onSwitchToSepolia={onSwitchToSepolia}
+                variant="default"
+              />
             )}
           </div>
         </div>
@@ -291,21 +298,21 @@ const GamePage: React.FC = () => {
     // Check if already approved
     if (currentAllowance >= cost) {
       setGamePhase('ready');
-      slotMachineRef.current?.lcd.setMessage("Ready to spin! Pull the lever!");
+      slotMachineRef.current?.lcd.setMessage(QuoteManager.getStateQuote('idle'));
       return;
     }
 
     // Need approval
     setGamePhase('approving');
-    slotMachineRef.current?.lcd.setMessage("Approving CHIPS spending...");
+    slotMachineRef.current?.lcd.setMessage(QuoteManager.getStateQuote('evaluating'));
     
     const hash = await approveChips(cost);
     if (hash) {
       setGamePhase('ready');
-      slotMachineRef.current?.lcd.setMessage("CHIPS approved! Pull the lever!");
+      slotMachineRef.current?.lcd.setMessage(QuoteManager.getStateQuote('idle'));
     } else {
       setGamePhase('selecting');
-      slotMachineRef.current?.lcd.setMessage("Approval failed. Try again.");
+      slotMachineRef.current?.lcd.setMessage(QuoteManager.getStateQuote('losing'));
     }
   }, [isConnected, getCurrentSpinCost, playerStats.chipBalance, currentAllowance, approveChips]);
 
@@ -316,11 +323,10 @@ const GamePage: React.FC = () => {
       return;
     }
 
-    setGamePhase('spinning');
-    slotMachineRef.current?.lcd.setMessage("Spinning... Waiting for VRF...");
-    
-    // Start slot machine animation
+    // Start the animation first
     slotMachineRef.current?.startSpin();
+    slotMachineRef.current?.lcd.setMessage(QuoteManager.getStateQuote('spinning'));
+    setGamePhase('spinning');
     
     // Execute blockchain transaction
     const hash = await spinReels(selectedReelCount);
@@ -330,8 +336,11 @@ const GamePage: React.FC = () => {
       // We no longer need the mock result timeout.
       console.log('Spin transaction sent:', hash);
     } else {
-      setGamePhase('selecting');
-      slotMachineRef.current?.lcd.setMessage("Spin failed. Try again.");
+      // Transaction failed - stop the slot machine and reset state
+      console.log('Spin transaction failed - stopping slot machine');
+      setGamePhase('idle');
+      slotMachineRef.current?.reset(); // Stop animation and reset to idle
+      slotMachineRef.current?.lcd.setMessage(QuoteManager.getStateQuote('losing'));
     }
   }, [canSpin, spinReels, selectedReelCount]);
 
@@ -364,8 +373,8 @@ const GamePage: React.FC = () => {
   const formatChipsAmount = (payout: bigint): string => {
     const amount = Number(formatEther(payout));
     
-    // If amount is very small (< 0.0001), round to 0
-    if (amount < 0.0001) {
+    // Only return 0 if amount is actually 0
+    if (amount === 0) {
       return "0";
     }
     
@@ -415,10 +424,21 @@ const GamePage: React.FC = () => {
   // This effect handles the spin result from the contract event
   useEffect(() => {
     if (latestSpinResult && gamePhase === 'spinning') {
-      console.log("New spin result from contract:", latestSpinResult);
+      console.log("🎰 New spin result received from contract:", latestSpinResult);
+      console.log(`Symbols: [${latestSpinResult.symbols.join(', ')}], Payout: ${formatEther(latestSpinResult.payout)} CHIPS`);
       handleSpinResult(latestSpinResult.symbols, latestSpinResult.payout, latestSpinResult.payoutType);
     }
   }, [latestSpinResult, gamePhase, handleSpinResult]);
+
+  // Handle spin state errors from the contract hook
+  useEffect(() => {
+    if (spinState.status === 'error' && gamePhase === 'spinning') {
+      console.log('Spin state error detected - stopping slot machine');
+      setGamePhase('idle');
+      slotMachineRef.current?.reset();
+      slotMachineRef.current?.lcd.setMessage(QuoteManager.getStateQuote('losing'));
+    }
+  }, [spinState.status, spinState.error, gamePhase]);
 
   // Event handlers for quotes
   const handleSlotResultWrapper = (symbols: number[], payout: number, payoutType: string) => {
@@ -479,6 +499,20 @@ const GamePage: React.FC = () => {
   const handleSwitchToSepolia = () => switchToNetwork('sepolia');
   const handleSwitchToMainnet = () => switchToNetwork('mainnet');
 
+  // Helper function to get block explorer URL for transaction
+  const getBlockExplorerUrl = (txHash: string) => {
+    if (chainId === 11155111) {
+      // Sepolia
+      return `https://sepolia.etherscan.io/tx/${txHash}`;
+    } else if (chainId === 1) {
+      // Mainnet
+      return `https://etherscan.io/tx/${txHash}`;
+    } else {
+      // For local/hardhat, just return a placeholder (could be local block explorer if available)
+      return `#${txHash}`;
+    }
+  };
+
   // Format player stats
   const playerBalance = formatEther(playerStats.chipBalance);
   const playerWinnings = formatEther(playerStats.winnings);
@@ -525,7 +559,7 @@ const GamePage: React.FC = () => {
         <main className="container mx-auto px-4 py-8">
           <div className="text-center space-y-6">
             {/* Pool info display integrated into main content */}
-            <div className="flex justify-center mb-6">
+            {/* <div className="flex justify-center mb-6">
               <PoolStats
                 poolETH={poolData.poolETH}
                 ethPrice={poolData.ethPrice}
@@ -536,7 +570,7 @@ const GamePage: React.FC = () => {
                 showLabels={true}
                 className="bg-black/40 rounded-xl px-6 py-3 border border-gray-600"
               />
-            </div>
+            </div> */}
 
             <h1 className="text-5xl font-bold text-white mb-4 bg-gradient-to-r from-yellow-400 via-red-500 to-pink-600 bg-clip-text text-transparent">
               🎰 The Leverage Lounge
@@ -581,13 +615,15 @@ const GamePage: React.FC = () => {
                 </div>
               </div>
               
-              <button
-                onClick={connectWallet}
-                disabled={connecting}
-                className="bg-gradient-to-r from-yellow-500 to-red-500 hover:from-yellow-600 hover:to-red-600 text-black font-bold text-lg px-8 py-3 rounded-lg transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:scale-100"
-              >
-                {connecting ? '🔄 Connecting...' : '🦊 Connect Wallet & Play!'}
-              </button>
+              <div className="flex justify-center">
+                <SmartConnectButton
+                  connecting={connecting}
+                  onConnect={connectWallet}
+                  onSwitchToLocal={handleSwitchToLocal}
+                  onSwitchToSepolia={handleSwitchToSepolia}
+                  variant="hero"
+                />
+              </div>
             </div>
 
             {/* Payout Information */}
@@ -827,9 +863,14 @@ const GamePage: React.FC = () => {
                     {buyChipsState.hash && (
                     <div className="flex justify-between items-center">
                       <span className="text-gray-300">Transaction:</span>
-                        <span className="text-blue-400 hover:text-blue-300 font-mono text-xs bg-gray-800/50 px-2 py-1 rounded">
+                        <a 
+                          href={getBlockExplorerUrl(buyChipsState.hash)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-400 hover:text-blue-300 font-mono text-xs bg-gray-800/50 px-2 py-1 rounded cursor-pointer transition-colors hover:bg-gray-700/50"
+                        >
                           {buyChipsState.hash.slice(0, 8)}...{buyChipsState.hash.slice(-6)}
-                        </span>
+                        </a>
                     </div>
                     )}
                   </div>
