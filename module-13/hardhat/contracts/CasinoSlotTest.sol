@@ -4,15 +4,14 @@ pragma solidity ^0.8.22;
 import "./CasinoSlot.sol";
 
 /**
- * @title CasinoSlotTest - Test version with mock swap for small amounts
- * @dev Inherits from CasinoSlot and overrides swap function for testing only
+ * @title CasinoSlotTest - Test version with mock VRF for testing
+ * @dev Inherits from CasinoSlot and overrides VRF function for testing only
  * @notice THIS CONTRACT IS FOR TESTING ONLY - NOT FOR PRODUCTION USE
  */
 contract CasinoSlotTest is CasinoSlot {
     
     // Testing variables
     uint256 public testETHPriceUSD; // Mock ETH price for testing (in cents)
-    uint256 public testLINKPriceUSD; // Mock LINK price for testing (in cents)
     
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() CasinoSlot() {
@@ -69,13 +68,7 @@ contract CasinoSlotTest is CasinoSlot {
         testETHPriceUSD = priceInCents;
     }
     
-    /**
-     * @dev Testing function to set mock LINK price - only for testing, only owner
-     */
-    function setTestLINKPrice(uint256 priceInCents) external onlyOwner {
-        require(block.chainid != 1, "Testing function disabled on mainnet");
-        testLINKPriceUSD = priceInCents;
-    }
+
     
     /**
      * @dev Mock getETHPrice function for testing (replaces real price feed functionality)
@@ -95,14 +88,11 @@ contract CasinoSlotTest is CasinoSlot {
     }
     
     /**
-     * @dev Override to use test LINK price if set
+     * @dev Override to use test ETH price for VRF cost calculations
      */
-    function _getLINKCostInUSD() internal view override returns (uint256) {
-        if (testLINKPriceUSD > 0) {
-            uint256 vrfCostUSDCents = (vrfCostLINK * testLINKPriceUSD * 110) / (1e18 * 100);
-            return vrfCostUSDCents;
-        }
-        return super._getLINKCostInUSD();
+    function _getVRFCostInUSD() internal view override returns (uint256) {
+        // Return the configured USD cost directly (same as parent)
+        return super._getVRFCostInUSD();
     }
     
     /**
@@ -121,26 +111,19 @@ contract CasinoSlotTest is CasinoSlot {
     }
     
     /**
-     * @dev Override swap function to handle small amounts in tests
-     * @param ethAmountToSpend Exact amount of ETH to spend
-     * @return linkReceived Amount of LINK tokens received
+     * @dev Override VRF request function for testing with mock functionality
      */
-    function _swapETHForLINK(uint256 ethAmountToSpend) internal override returns (uint256 linkReceived) {
-        require(address(this).balance >= ethAmountToSpend, "Insufficient ETH for LINK swap");
-        require(ethAmountToSpend > 0, "ETH amount must be positive");
+    function _requestRandomWordsWithETH() internal override returns (uint256 requestId, uint256 price) {
+        // For testing, calculate price dynamically from USD cost
+        price = _convertUSDCentsToETH(vrfCostUSD);
         
-        // For testing: if amount is too small (< 0.001 ETH), use mock calculation
-        if (ethAmountToSpend < 0.001 ether) {
-            // Calculate mock LINK received based on current prices
-            uint256 linkPriceETH = _getLINKPriceInETH();
-            linkReceived = (ethAmountToSpend * 1e18) / linkPriceETH;
-            
-            // Simulate receiving LINK (testing only)
-            emit LINKSwapped(0, ethAmountToSpend, linkReceived, 0);
-            return linkReceived;
-        }
+        // Check if we have enough ETH
+        require(address(this).balance >= price, "Insufficient ETH balance");
         
-        // For larger amounts, use real Uniswap swap
-        return super._swapETHForLINK(ethAmountToSpend);
+        // For testing purposes, generate a mock request ID
+        requestId = uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao, msg.sender))) % 1000000;
+        
+        emit VRFPayment(requestId, price);
+        return (requestId, price);
     }
 } 

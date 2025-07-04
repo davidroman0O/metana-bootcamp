@@ -1,106 +1,93 @@
 const { ethers, network } = require("hardhat");
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
 async function main() {
-    console.log("\n🔄 Testing VRF with Native ETH Payment (Upgradable)");
-    console.log("=============================================");
+    console.log("\n🔄 Testing VRF with Native ETH Payment");
+    console.log("=================================");
     
-    // Load tester deployment info
+    // Load deployment info
     const deploymentPath = path.join(__dirname, '../deployments', `upgradable-spin-tester-${network.name}.json`);
     
     if (!fs.existsSync(deploymentPath)) {
-        console.error(`❌ Upgradable SpinTester deployment not found at ${deploymentPath}`);
-        console.error("Please run upgradable-spin-test-deploy.js first");
+        console.error(`❌ Deployment file not found: ${deploymentPath}`);
+        console.error("Please run the deployment script first");
         process.exit(1);
     }
     
     const deployment = require(deploymentPath);
-    const TESTER_ADDRESS = deployment.proxy;
+    const CONTRACT_ADDRESS = deployment.spinTester.proxy;
     
-    console.log(`🧪 Upgradable SpinTester address: ${TESTER_ADDRESS}`);
+    console.log(`🧪 Contract address: ${CONTRACT_ADDRESS}`);
     
+    // Get signers
     const [signer] = await ethers.getSigners();
-    console.log(`🔑 Signer: ${signer.address}`);
+    console.log(`\n🔑 Signer: ${signer.address}`);
     
     // Get contract instance
-    const spinTester = await ethers.getContractAt("UpgradableSpinTester", TESTER_ADDRESS);
+    const tester = await ethers.getContractAt("UpgradableSpinTester", CONTRACT_ADDRESS);
     
     // Check ETH balance
-    const ethBalance = await ethers.provider.getBalance(TESTER_ADDRESS);
+    const ethBalance = await ethers.provider.getBalance(CONTRACT_ADDRESS);
     console.log(`\n💰 Contract ETH balance: ${ethers.utils.formatEther(ethBalance)} ETH`);
     
-    if (ethBalance.eq(0)) {
-        console.error("❌ Contract needs ETH to run this test.");
+    if (ethBalance.lt(ethers.utils.parseEther("0.05"))) {
+        console.error("❌ Contract needs at least 0.05 ETH to run this test.");
         console.error("Please fund the contract first using the funding script.");
         return;
     }
     
-    // Amount of ETH to send for VRF request
-    const vrfEthAmount = ethers.utils.parseEther("0.0001"); // 0.0001 ETH
-    console.log(`\n💸 Sending ${ethers.utils.formatEther(vrfEthAmount)} ETH for VRF request...`);
+    // Get VRF cost in ETH
+    const vrfCostETH = await tester.vrfCostETH();
+    console.log(`\n💸 VRF cost in ETH: ${ethers.utils.formatEther(vrfCostETH)} ETH`);
     
-    // Make VRF request with native ETH payment
-    console.log("🔄 Requesting random number with native ETH payment...");
-    const tx = await spinTester.test_VRFRequestWithETH({
-        value: vrfEthAmount,
-        gasLimit: 300000
-    });
+    // Test VRF with native ETH payment
+    console.log("\n🔄 Requesting random number with native ETH payment...");
     
-    console.log(`Transaction hash: ${tx.hash}`);
-    console.log("Waiting for confirmation...");
-    
-    const receipt = await tx.wait();
-    console.log(`✅ Transaction confirmed in block ${receipt.blockNumber}`);
-    
-    // Find the TestCompleted event
-    const testCompletedEvents = receipt.events.filter(e => 
-        e.event === "TestCompleted" && e.args && e.args.testName === "VRFRequestWithETH"
-    );
-    
-    if (testCompletedEvents.length > 0) {
-        const event = testCompletedEvents[0];
-        const success = event.args.success;
-        const details = event.args.details;
-        console.log(`\nTest Result: ${success ? "✅ SUCCESS" : "❌ FAILED"}`);
-        console.log(`Details: ${details}`);
+    try {
+        const tx = await tester.test_VRFRequestWithETH({
+            gasLimit: 500000 // Increased gas limit for safety
+        });
+        console.log(`Transaction hash: ${tx.hash}`);
+        console.log("Waiting for confirmation...");
         
-        // Extract request ID if successful
-        if (success) {
-            const requestIdMatch = details.match(/RequestId: (\d+)/);
-            if (requestIdMatch && requestIdMatch[1]) {
-                const requestId = requestIdMatch[1];
-                console.log(`\n🔢 Request ID: ${requestId}`);
-                console.log(`\n⏳ Waiting for VRF fulfillment...`);
-                console.log(`You can check the status later using:`);
-                console.log(`npx hardhat run scripts/upgradable-spin-test-check-vrf.js --network ${network.name} ${requestId}`);
-            }
+        const receipt = await tx.wait();
+        console.log(`✅ Transaction confirmed in block ${receipt.blockNumber}`);
+        
+        // Find the TestCompleted event
+        const testCompletedEvent = receipt.events.find(
+            (e) => e.event === "TestCompleted" && e.args[0] === "VRFRequestWithETH"
+        );
+        
+        if (testCompletedEvent) {
+            const [testName, success, details] = testCompletedEvent.args;
+            console.log(`\nTest Result: ${success ? "✅ PASSED" : "❌ FAILED"}`);
+            console.log(`Details: ${details}`);
         }
-    } else {
-        console.log("❌ No test result event found");
-    }
-    
-    // Find the RandomWordsRequested event
-    const vrfRequestedEvents = receipt.events.filter(e => 
-        e.event === "RandomWordsRequested"
-    );
-    
-    if (vrfRequestedEvents.length > 0) {
-        const event = vrfRequestedEvents[0];
-        const requestId = event.args.requestId.toString();
-        const paid = ethers.utils.formatEther(event.args.paid);
-        const nativePayment = event.args.nativePayment;
         
-        console.log(`\nVRF Request Details:`);
-        console.log(`Request ID: ${requestId}`);
-        console.log(`Amount paid: ${paid} ETH`);
-        console.log(`Native payment: ${nativePayment ? "Yes" : "No"}`);
+        // Find the RandomWordsRequested event
+        const randomWordsRequestedEvent = receipt.events.find(
+            (e) => e.event === "RandomWordsRequested"
+        );
+        
+        if (randomWordsRequestedEvent) {
+            const requestId = randomWordsRequestedEvent.args.requestId;
+            console.log(`\n📝 Request ID: ${requestId.toString()}`);
+            console.log(`To check the status: REQUEST_ID=${requestId.toString()} npx hardhat run scripts/upgradable-spin-test-check-vrf.js --network sepolia`);
+        }
+        
+        console.log("\n⏳ Waiting for VRF fulfillment...");
+        console.log("You can check the status later using:");
+        console.log(`npx hardhat run scripts/upgradable-spin-test-check-vrf.js --network sepolia ${randomWordsRequestedEvent ? randomWordsRequestedEvent.args.requestId.toString() : ''}`);
+        
+    } catch (error) {
+        console.error(`❌ Error: ${error.message}`);
     }
 }
 
 main()
     .then(() => process.exit(0))
-    .catch(error => {
+    .catch((error) => {
         console.error(error);
         process.exit(1);
     }); 

@@ -141,7 +141,7 @@ async function main() {
   }
   
   console.log(`\nNext step: Verify proxy contract`);
-  console.log(`npx hardhat run scripts/deployment/05-verify-proxy.js --network ${network.name}`);
+  console.log(`npx hardhat run scripts/deployment/04-verify-proxy.js --network ${network.name}`);
   console.log("=".repeat(60));
 }
 

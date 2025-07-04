@@ -1,14 +1,22 @@
 {
-  "network": "sepolia",
-  "proxy": "0xb87FbD55080db20c10A4146D1bb4eF94dA509424",
-  "implementation": "0xE23CC114e1eB7FD5E470E3AebD026731d43FD6C8",
-  "deployer": "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86",
-  "timestamp": "2025-07-03T14:09:26.658Z",
-  "constructorArgs": [
-    "0x694AA1769357215DE4FAC081bf1f309aDC325306",
-    "0xc59E3633BAAC79493d908e63626716e204A45EdF",
-    "0x779877A7B0D9E8603169DdbD7836e478b4624789",
-    "0x195f15F2d49d693cE265b4fB0fdDbE15b1850Cc1",
-    "0xC8CA6d96BB798FD960C4D11f65A55C19EdB17f1C"
-  ]
+  "network": {
+    "name": "sepolia",
+    "chainId": 11155111
+  },
+  "spinTester": {
+    "proxy": "0xFA3f777B3c3A1158Db8069daECA57eeE6ADC3252",
+    "implementation": "0xD23217343666d7db2DDfa130F9df77df38C0320F",
+    "deployer": "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86",
+    "deployedAt": "2025-07-03T20:53:13.918Z"
+  },
+  "parameters": {
+    "ethUsdPriceFeed": "0x694AA1769357215DE4FAC081bf1f309aDC325306",
+    "linkUsdPriceFeed": "0xc59E3633BAAC79493d908e63626716e204A45EdF",
+    "linkToken": "0x779877A7B0D9E8603169DdbD7836e478b4624789",
+    "vrfWrapper": "0x195f15F2d49d693cE265b4fB0fdDbE15b1850Cc1",
+    "uniswapRouter": "0xC8CA6d96BB798FD960C4D11f65A55C19EdB17f1C",
+    "vrfCostLINK": "1.0",
+    "vrfCostETH": "0.05"
+  },
+  "mainCasinoAddress": "0xB4194600b54F9FAfAdc75f4383691714010d421C"
 }

@@ -2,76 +2,24 @@
   "network": {
     "name": "sepolia",
     "chainId": 11155111,
-    "timestamp": "2025-01-21T10:30:00.000Z"
+    "timestamp": "2025-07-03T22:00:01.851Z"
   },
   "contracts": {
     "CasinoSlot": {
-      "address": "0x54905c57633E2d5d1D12268862D2dAc943D6C554",
-      "implementation": "0x9f7563D49f713dEa313523d37eeD5fBDD27C403f",
+      "address": "0xd7d43dfF132Aa68F9F05ECc3adD467A6aE9B7Da2",
+      "implementation": "0xaF6832D4068A3459aa66A0C678452da798618742",
       "admin": "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86",
       "constructor": {
-        "vrfCoordinator": "0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B",
-        "keyHash": "0x787d74caea10b2b357790d5b5247c2f63d1d91572a9846f780606e4d953677ae",
-        "subscriptionId": "106195847676443390684860443417147735595649188817034167026720023140712492995635",
+        "vrfWrapper": "0x195f15F2d49d693cE265b4fB0fdDbE15b1850Cc1",
         "ethUsdPriceFeed": "0x694AA1769357215DE4FAC081bf1f309aDC325306",
-        "linkUsdPriceFeed": "0xc59E3633BAAC79493d908e63626716e204A45EdF",
-        "linkToken": "0x779877A7B0D9E8603169DdbD7836e478b4624789",
-        "uniswapRouter": "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E",
-        "wethToken": "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14",
         "payoutTablesAddress": "0xffc2E8f0742b645759FEB1eD766238becEc34188"
       }
-    },
-    "PayoutTables": {
-      "address": "0xffc2E8f0742b645759FEB1eD766238becEc34188"
-    },
-    "PayoutTables3": {
-      "address": "0x1352dA24Bd2Bf4E96CAEF171342fCf271774426B"
-    },
-    "PayoutTables4": {
-      "address": "0x0c8126305aF012EE2616Ec471521F7c75D2b5226"
-    },
-    "PayoutTables5": {
-      "address": "0x56cBE79a59B02b1Dab898fA9f581d805930bE4a6"
-    },
-    "PayoutTables6": {
-      "address": "0xf760A220bB3862B01a5F7db2926675E32E6B8541"
-    },
-    "PayoutTables7Router": {
-      "address": "0xbd922712031186FD594Cd4682448F629DF0bedDa"
-    },
-    "PayoutTables7_Part1": {
-      "address": "0xee911c8bFb965b7BBacF272C98aBA69f934fD1Aa"
-    },
-    "PayoutTables7_Part2": {
-      "address": "0x5827b5F3e186b59820C490FB60616b4B4C3Dde70"
-    },
-    "PayoutTables7_Part3": {
-      "address": "0xDd3e415275ea010D9a72DCF9F0EB68dF5318f500"
-    },
-    "PayoutTables7_Part4": {
-      "address": "0xD1B8157d7c57D034cDBD07C07D9AF0e9e53DCAD2"
-    },
-    "PayoutTables7_Part5": {
-      "address": "0x88F2bAbB8Fc74Edb0aDFbC246d195d4A7CBF0D6A"
-    },
-    "PayoutTables7_Part6": {
-      "address": "0x931d4bAf147b3f2276AedF85333eCCdA60F54697"
-    },
-    "PayoutTables7_Part7": {
-      "address": "0x96B750fEc2ae195e555dd30Aa2fe9E6fE1Bb0B30"
-    },
-    "PayoutTables7_Part8": {
-      "address": "0x364716A5C45e0e7eC835D3Ee3697b1Bd5ce28956"
     }
   },
   "deployer": "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86",
-  "blockNumber": 7420000,
-  "vrfVersion": "v2.5",
+  "vrfVersion": "v2.5-DirectFunding-NativeETH",
+  "uniswapVersion": "v2-custom",
+  "swapMethod": "working-v2-swaps",
   "productionMode": true,
-  "totalContracts": 15,
-  "verification": {
-    "etherscan": true,
-    "sourcify": false,
-    "allContractsVerified": true
-  }
+  "lastUpdated": "2025-07-03T22:00:01.851Z"
 }
