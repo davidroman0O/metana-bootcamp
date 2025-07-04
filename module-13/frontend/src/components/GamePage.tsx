@@ -603,16 +603,16 @@ const GamePage: React.FC = () => {
             return null;
         }
         
-        const functionName = `spin${reelCount}Reels` as const;
         setSpinState({ status: 'pending' });
         
         try {
-            console.log(`🎮 Sending ${functionName} transaction...`);
+            console.log(`🎮 Sending spinReels(${reelCount}) transaction...`);
             
             const hash = await walletClient.writeContract({
                 address: CASINO_SLOT_ADDRESS,
                 abi: CasinoSlotABI,
-                functionName,
+                functionName: 'spinReels',
+                args: [reelCount],
             });
             
             setSpinState({ status: 'pending', hash });

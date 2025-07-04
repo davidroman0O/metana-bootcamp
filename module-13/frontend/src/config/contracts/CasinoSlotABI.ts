@@ -1295,60 +1295,14 @@ export const CasinoSlotABI = [
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "spin3Reels",
-    "outputs": [
+    "inputs": [
       {
-        "internalType": "uint256",
-        "name": "requestId",
-        "type": "uint256"
+        "internalType": "uint8",
+        "name": "_reel",
+        "type": "uint8"
       }
     ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "spin4Reels",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "requestId",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "spin5Reels",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "requestId",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "spin6Reels",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "requestId",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "spin7Reels",
+    "name": "spinReels",
     "outputs": [
       {
         "internalType": "uint256",
@@ -1375,14 +1329,14 @@ export const CasinoSlotABI = [
         "type": "address"
       },
       {
-        "internalType": "uint256",
-        "name": "betAmount",
-        "type": "uint256"
-      },
-      {
         "internalType": "uint8",
         "name": "reelCount",
         "type": "uint8"
+      },
+      {
+        "internalType": "bool",
+        "name": "settled",
+        "type": "bool"
       },
       {
         "internalType": "enum IPayoutTables.PayoutType",
@@ -1391,13 +1345,13 @@ export const CasinoSlotABI = [
       },
       {
         "internalType": "uint256",
-        "name": "payout",
+        "name": "betAmount",
         "type": "uint256"
       },
       {
-        "internalType": "bool",
-        "name": "settled",
-        "type": "bool"
+        "internalType": "uint256",
+        "name": "payout",
+        "type": "uint256"
       },
       {
         "internalType": "uint256",

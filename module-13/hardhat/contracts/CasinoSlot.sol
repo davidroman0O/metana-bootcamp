@@ -299,7 +299,6 @@ contract CasinoSlot is
         return (requestId, price);
     }
 
-
     /**
      * @dev Spin reels
      */
