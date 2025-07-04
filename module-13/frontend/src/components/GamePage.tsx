@@ -336,6 +336,92 @@ const GamePage: React.FC = () => {
         refetchSpinCost7();
     }, [refetchPlayerStats, refetchGameStats, refetchPoolStats, refetchAllowance, refetchSpinCost3, refetchSpinCost4, refetchSpinCost5, refetchSpinCost6, refetchSpinCost7]);
 
+    // Slot animation system for disconnected users
+    const {
+        slotMachineRef: animatedSlotRef,
+        stopAnimation,
+    } = useSlotAnimator({
+        reelCount: 3,
+        autoStart: true,
+        cyclePause: 4000
+    });
+
+    // Stop animation when user connects
+    useEffect(() => {
+        if (isConnected) {
+            stopAnimation();
+        }
+    }, [isConnected, stopAnimation]);
+
+    // Helper function to format CHIPS amount properly
+    const formatChipsAmount = useCallback((value: bigint | string): string => {
+        let amount: number;
+        
+        if (typeof value === 'string') {
+            amount = parseFloat(value);
+        } else {
+            amount = Number(formatEther(value));
+        }
+        
+        if (amount === 0) return "0";
+        
+        // For small amounts, show up to 4 decimals
+        if (amount < 1) {
+            return parseFloat(amount.toFixed(4)).toString();
+        }
+        // For larger amounts, show up to 2 decimals
+        return parseFloat(amount.toFixed(2)).toString();
+    }, []);
+
+    // Helper function to determine quote type based on payout amount
+    const getQuoteTypeForPayout = (payoutAmount: number, symbols: number[]) => {
+        if (payoutAmount === 0) {
+            return QuoteManager.getStateQuote('losing');
+        }
+        
+        const analysis = QuoteManager.analyzeResult(symbols);
+        
+        if (payoutAmount >= 10000) {
+            return QuoteManager.getCombinationQuote(selectedReelCount, 'jackpot');
+        } else if (payoutAmount >= 1000) {
+            return QuoteManager.getCombinationQuote(selectedReelCount, analysis.type === 'jackpot' ? 'jackpot' : 'matching');
+        } else if (payoutAmount >= 100) {
+            return QuoteManager.getCombinationQuote(selectedReelCount, 'matching');
+        } else {
+            return QuoteManager.getStateQuote('winning');
+        }
+    };
+
+    // Simplified spin result handler
+    const handleSpinResult = useCallback((symbols: number[], payout: bigint, payoutType: number) => {
+        console.log(`🎰 handleSpinResult called - Symbols: [${symbols.join(', ')}], Payout: ${formatEther(payout)} CHIPS`);
+        
+        // Update slot machine with result
+        slotMachineRef.current?.setAllReelTargets(symbols);
+        
+        const payoutAmount = Number(formatEther(payout));
+        
+        if (payout > 0n) {
+            const resultQuote = getQuoteTypeForPayout(payoutAmount, symbols);
+            slotMachineRef.current?.lcd.setMessage(resultQuote);
+            
+            if (isConnected) {
+                toast.success(`🎉 ${resultQuote} Won!`);
+            }
+        } else {
+            const loseQuote = QuoteManager.getStateQuote('losing');
+            slotMachineRef.current?.lcd.setMessage(loseQuote);
+        }
+        
+        // Auto-reset after showing result
+        setTimeout(() => {
+            slotMachineRef.current?.lcd.setIdlePattern();
+            if (isConnected) {
+                refreshAllData();
+            }
+        }, 3000);
+    }, [selectedReelCount, refreshAllData, isConnected, formatChipsAmount]);
+
     // Simplified spin result handler
     const handleSpinResultEvents = useCallback((logs: any[]) => {
         if (!account) {
@@ -391,7 +477,7 @@ const GamePage: React.FC = () => {
                 }, 500);
             }
         }
-    }, [account, spinTracker.isWaitingForResult, refreshAllData]);
+    }, [account, spinTracker.isWaitingForResult, refreshAllData, handleSpinResult]);
     
     useWatchContractEvent({
         address: CASINO_SLOT_ADDRESS,
@@ -462,9 +548,9 @@ const GamePage: React.FC = () => {
                 functionName: 'approve',
                 args: [CASINO_SLOT_ADDRESS, amount],
             }),
-            `Approved ${formatEther(amount)} CHIPS for spending`
+            `Approved ${formatChipsAmount(amount)} CHIPS for spending`
         );
-    }, [executeTransaction, walletClient, CASINO_SLOT_ADDRESS]);
+    }, [executeTransaction, walletClient, CASINO_SLOT_ADDRESS, formatChipsAmount]);
 
     const spinReels = useCallback(async (reelCount: 3 | 4 | 5 | 6 | 7) => {
         if (!walletClient || !publicClient || !CASINO_SLOT_ADDRESS) return null;
@@ -582,80 +668,6 @@ const GamePage: React.FC = () => {
         }
     }, [gameStats.ethPrice]);
 
-    // Slot animation system for disconnected users
-    const {
-        slotMachineRef: animatedSlotRef,
-        stopAnimation,
-    } = useSlotAnimator({
-        reelCount: 3,
-        autoStart: true,
-        cyclePause: 4000
-    });
-
-    // Stop animation when user connects
-    useEffect(() => {
-        if (isConnected) {
-            stopAnimation();
-        }
-    }, [isConnected, stopAnimation]);
-
-    // Helper function to determine quote type based on payout amount
-    const getQuoteTypeForPayout = (payoutAmount: number, symbols: number[]) => {
-        if (payoutAmount === 0) {
-            return QuoteManager.getStateQuote('losing');
-        }
-        
-        const analysis = QuoteManager.analyzeResult(symbols);
-        
-        if (payoutAmount >= 10000) {
-            return QuoteManager.getCombinationQuote(selectedReelCount, 'jackpot');
-        } else if (payoutAmount >= 1000) {
-            return QuoteManager.getCombinationQuote(selectedReelCount, analysis.type === 'jackpot' ? 'jackpot' : 'matching');
-        } else if (payoutAmount >= 100) {
-            return QuoteManager.getCombinationQuote(selectedReelCount, 'matching');
-        } else {
-            return QuoteManager.getStateQuote('winning');
-        }
-    };
-
-    // Helper function to format CHIPS amount properly
-    const formatChipsAmount = (payout: bigint): string => {
-        const amount = Number(formatEther(payout));
-        if (amount === 0) return "0";
-        return parseFloat(amount.toFixed(4)).toString();
-    };
-
-    // Simplified spin result handler
-    const handleSpinResult = useCallback((symbols: number[], payout: bigint, payoutType: number) => {
-        console.log(`🎰 handleSpinResult called - Symbols: [${symbols.join(', ')}], Payout: ${formatEther(payout)} CHIPS`);
-        
-        // Update slot machine with result
-        slotMachineRef.current?.setAllReelTargets(symbols);
-        
-        const payoutAmount = Number(formatEther(payout));
-        
-        if (payout > 0n) {
-            const resultQuote = getQuoteTypeForPayout(payoutAmount, symbols);
-            slotMachineRef.current?.lcd.setMessage(resultQuote);
-            
-            if (isConnected) {
-                const formattedPayout = formatChipsAmount(payout);
-                toast.success(`🎉 ${resultQuote} Won ${formattedPayout} CHIPS!`);
-            }
-        } else {
-            const loseQuote = QuoteManager.getStateQuote('losing');
-            slotMachineRef.current?.lcd.setMessage(loseQuote);
-        }
-        
-        // Auto-reset after showing result
-        setTimeout(() => {
-            slotMachineRef.current?.lcd.setIdlePattern();
-            if (isConnected) {
-                refreshAllData();
-            }
-        }, 3000);
-    }, [selectedReelCount, refreshAllData, isConnected]);
-
     // Handle chip insert when disconnected - show funny popup
     const handleChipInsertTease = () => {
         const teaseMessage = QuoteManager.getChipInsertTeaseQuote();
@@ -772,7 +784,7 @@ const GamePage: React.FC = () => {
     const handleWithdrawWinnings = useCallback(async () => {
         const hash = await withdrawWinnings();
         if (hash) {
-            toast.success('Winnings withdrawn successfully!');
+            // toast.success('Winnings withdrawn successfully!');
         }
     }, [withdrawWinnings]);
 
@@ -793,13 +805,13 @@ const GamePage: React.FC = () => {
     };
 
     // Format player stats
-    const playerBalance = formatEther(playerStats.chipBalance);
-    const playerWinnings = formatEther(playerStats.winnings);
+    const playerBalance = formatChipsAmount(playerStats.chipBalance);
+    const playerWinnings = formatChipsAmount(playerStats.winnings);
     const totalSpins = Number(playerStats.totalSpins);
-    const totalWon = formatEther(playerStats.totalWon);
+    const totalWon = formatChipsAmount(playerStats.totalWon);
 
     // Format game stats
-    const formattedPoolETH = isConnected ? formatEther(gameStats.prizePool) : poolData.poolETH;
+    const formattedPoolETH = isConnected ? formatChipsAmount(gameStats.prizePool) : poolData.poolETH;
     const ethPrice = isConnected ? gameStats.ethPrice : poolData.ethPrice;
     const chipRate = isConnected ? gameStats.chipRate : poolData.chipRate;
 
@@ -833,11 +845,11 @@ const GamePage: React.FC = () => {
 
     // Reel configs
     const reelConfigs = [
-        { count: 3, cost: formatEther(spinCosts.reels3), name: 'Classic', color: 'bg-green-600' },
-        { count: 4, cost: formatEther(spinCosts.reels4), name: 'Extended', color: 'bg-blue-600' },
-        { count: 5, cost: formatEther(spinCosts.reels5), name: 'Premium', color: 'bg-purple-600' },
-        { count: 6, cost: formatEther(spinCosts.reels6), name: 'High Roller', color: 'bg-red-600' },
-        { count: 7, cost: formatEther(spinCosts.reels7), name: 'Whale Mode', color: 'bg-yellow-600' },
+        { count: 3, cost: formatChipsAmount(spinCosts.reels3), name: 'Classic', color: 'bg-green-600' },
+        { count: 4, cost: formatChipsAmount(spinCosts.reels4), name: 'Extended', color: 'bg-blue-600' },
+        { count: 5, cost: formatChipsAmount(spinCosts.reels5), name: 'Premium', color: 'bg-purple-600' },
+        { count: 6, cost: formatChipsAmount(spinCosts.reels6), name: 'High Roller', color: 'bg-red-600' },
+        { count: 7, cost: formatChipsAmount(spinCosts.reels7), name: 'Whale Mode', color: 'bg-yellow-600' },
     ];
 
     // Simple game phase derivation from state
@@ -990,7 +1002,7 @@ const GamePage: React.FC = () => {
                                 <div className="text-center">
                                     <div className="text-sm text-gray-400">Selected:</div>
                                     <div className="text-lg font-bold text-yellow-400">
-                                        🪙 {formatEther(getCurrentSpinCost())} CHIPS
+                                        🪙 {formatChipsAmount(getCurrentSpinCost())} CHIPS
                                     </div>
                                 </div>
                             </div>
@@ -1212,7 +1224,7 @@ const GamePage: React.FC = () => {
                                         {selectedReelCount} Reels
                                     </div>
                                     <div className="text-xs text-gray-400">
-                                        Cost: {formatEther(getCurrentSpinCost())} CHIPS
+                                        Cost: {formatChipsAmount(getCurrentSpinCost())} CHIPS
                                     </div>
                                 </div>
                             </div>
@@ -1244,7 +1256,7 @@ const GamePage: React.FC = () => {
                                     <div className="text-center p-2 bg-gray-800/30 rounded">
                                         <div className="text-gray-400">Allowance</div>
                                         <div className="text-blue-400">
-                                            {formatEther(currentAllowance ?? 0n).slice(0, 6)}
+                                            {formatChipsAmount(currentAllowance ?? 0n)}
                                         </div>
                                     </div>
                                 </div>
