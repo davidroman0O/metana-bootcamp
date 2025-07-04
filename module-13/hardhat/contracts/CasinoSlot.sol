@@ -102,15 +102,15 @@ contract CasinoSlot is
     event VRFMarkupUpdated(uint256 newVrfMarkupBP);
     event ChipsSwapped(address indexed player, uint256 chipsAmount, uint256 ethValue);
     
-    struct Spin {
+     struct Spin {
         address player;
-        uint256 betAmount;
         uint8 reelCount;      // Number of reels for this spin
-        uint256[] reels;      // Dynamic array for reel results
-        IPayoutTables.PayoutType payoutType;
-        uint256 payout;
         bool settled;
+        IPayoutTables.PayoutType payoutType;
+        uint256 betAmount;
+        uint256 payout;
         uint256 timestamp;
+        uint256[] reels;      // Dynamic array for reel results
     }
     
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -298,45 +298,15 @@ contract CasinoSlot is
         
         return (requestId, price);
     }
-    
+
+
     /**
-     * @dev Spin 3 reels (classic mode) - Dynamic pricing
+     * @dev Spin reels
      */
-    function spin3Reels() external nonReentrant whenNotPaused returns (uint256 requestId) {
-        uint256 cost = getSpinCost(3);
-        return _executeSpin(3, cost);
-    }
-    
-    /**
-     * @dev Spin 4 reels (expanded mode) - Dynamic pricing  
-     */
-    function spin4Reels() external nonReentrant whenNotPaused returns (uint256 requestId) {
-        uint256 cost = getSpinCost(4);
-        return _executeSpin(4, cost);
-    }
-    
-    /**
-     * @dev Spin 5 reels (premium mode) - Dynamic pricing
-     */
-    function spin5Reels() external nonReentrant whenNotPaused returns (uint256 requestId) {
-        uint256 cost = getSpinCost(5);
-        return _executeSpin(5, cost);
-    }
-    
-    /**
-     * @dev Spin 6 reels (high roller mode) - Dynamic pricing
-     */
-    function spin6Reels() external nonReentrant whenNotPaused returns (uint256 requestId) {
-        uint256 cost = getSpinCost(6);
-        return _executeSpin(6, cost);
-    }
-    
-    /**
-     * @dev Spin 7 reels (whale mode) - Dynamic pricing
-     */
-    function spin7Reels() external nonReentrant whenNotPaused returns (uint256 requestId) {
-        uint256 cost = getSpinCost(7);
-        return _executeSpin(7, cost);
+    function spinReels(uint8 _reel) external nonReentrant whenNotPaused returns (uint256 requestId) {
+        require(_reel >= 3 && _reel <= 7, "Invalid reel count");
+        uint256 cost = getSpinCost(_reel);
+        return _executeSpin(_reel, cost);
     }
     
     /**
