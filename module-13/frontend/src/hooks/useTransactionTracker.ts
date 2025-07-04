@@ -16,7 +16,7 @@ export interface BuyChipTransaction {
 
 const STORAGE_KEY = 'casino-slot-buy-transactions';
 const MAX_RETRY_COUNT = 3;
-const TRANSACTION_TIMEOUT = 300000; // 5 minutes
+const TRANSACTION_TIMEOUT = 600000; // 10 minutes (increased for Sepolia)
 
 export function useTransactionTracker(account?: Address, chainId?: number) {
   const [transactions, setTransactions] = useState<BuyChipTransaction[]>([]);
@@ -52,7 +52,9 @@ export function useTransactionTracker(account?: Address, chainId?: number) {
     query: {
       enabled: !!currentTransaction?.hash,
       retry: MAX_RETRY_COUNT,
-    }
+      staleTime: 120_000, // 2 minutes before considering stale
+    },
+    timeout: 120_000, // 2 minutes timeout for Sepolia
   });
 
   // Handle transaction receipt

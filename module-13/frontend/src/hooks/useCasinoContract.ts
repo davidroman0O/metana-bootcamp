@@ -1,11 +1,22 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useAccount, usePublicClient, useWalletClient, useBalance, useWatchContractEvent, useReadContract } from 'wagmi';
+import { useAccount, usePublicClient, useWalletClient, useBalance, useWatchContractEvent, useReadContract, useChainId } from 'wagmi';
 import { formatEther, parseEther, type Address, decodeEventLog } from 'viem';
 import { CasinoSlotABI, getDeployment } from '../config/contracts';
 import toast from 'react-hot-toast';
 
-// Get contract address for hardhat dev environment
-const CASINO_SLOT_ADDRESS = getDeployment('hardhat', 'dev').addresses.CASINO_SLOT as Address;
+// Helper to get contract address based on current network
+function getContractAddress(chainId: number | undefined): Address {
+  if (chainId === 11155111) {
+    // Sepolia
+    return getDeployment('sepolia', 'dev').addresses.CASINO_SLOT as Address;
+  } else if (chainId === 31337) {
+    // Hardhat local
+    return getDeployment('hardhat', 'dev').addresses.CASINO_SLOT as Address;
+  } else {
+    // Default to hardhat for unsupported chains
+    return getDeployment('hardhat', 'dev').addresses.CASINO_SLOT as Address;
+  }
+}
 
 // Types
 interface TransactionState {
@@ -52,6 +63,8 @@ export function useCasinoContract() {
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
+  const chainId = useChainId();
+  const CASINO_SLOT_ADDRESS = getContractAddress(chainId);
   
   // Transaction states
   const [buyChipsState, setBuyChipsState] = useState<TransactionState>({ status: 'idle' });
@@ -199,7 +212,10 @@ export function useCasinoContract() {
       const hash = await operation();
       setTxState({ status: 'pending', hash });
       
-      const receipt = await publicClient?.waitForTransactionReceipt({ hash });
+      const receipt = await publicClient?.waitForTransactionReceipt({ 
+        hash,
+        timeout: 120_000 // 2 minutes timeout for Sepolia
+      });
       
       if (receipt?.status === 'success') {
         setTxState({ status: 'success', hash });
@@ -227,6 +243,7 @@ export function useCasinoContract() {
         abi: CasinoSlotABI,
         functionName: 'buyChips',
         value: ethValue,
+        // Let wallet handle gas estimation automatically
       }),
       `Successfully bought CHIPS with ${ethAmount} ETH`
     );
@@ -240,6 +257,7 @@ export function useCasinoContract() {
         abi: CasinoSlotABI,
         functionName: 'approve',
         args: [CASINO_SLOT_ADDRESS, amount],
+        // Let wallet handle gas estimation automatically
       }),
       `Approved ${formatEther(amount)} CHIPS for spending`
     );
@@ -256,10 +274,14 @@ export function useCasinoContract() {
         address: CASINO_SLOT_ADDRESS,
         abi: CasinoSlotABI,
         functionName,
+        // Let wallet handle gas estimation automatically
       });
       setSpinState({ status: 'pending', hash });
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      const receipt = await publicClient.waitForTransactionReceipt({ 
+        hash,
+        timeout: 120_000 // 2 minutes timeout for Sepolia
+      });
 
       if (receipt.status === 'success') {
         setSpinState({ status: 'success', hash });
@@ -300,6 +322,7 @@ export function useCasinoContract() {
         address: CASINO_SLOT_ADDRESS,
         abi: CasinoSlotABI,
         functionName: 'withdrawWinnings',
+        // Let wallet handle gas estimation automatically
       }),
       'Winnings withdrawn successfully'
     );

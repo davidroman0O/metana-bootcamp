@@ -261,13 +261,7 @@ export const CasinoSlotABI = [
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "vrfCostLINK",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "linkBuffer",
+        "name": "vrfCostUSD",
         "type": "uint256"
       }
     ],
@@ -329,56 +323,6 @@ export const CasinoSlotABI = [
       }
     ],
     "name": "Initialized",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "requestId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "ethIn",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "linkOut",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "remainingETH",
-        "type": "uint256"
-      }
-    ],
-    "name": "LINKSwapped",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "owner",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
-    ],
-    "name": "LINKWithdrawn",
     "type": "event"
   },
   {
@@ -586,25 +530,6 @@ export const CasinoSlotABI = [
     "inputs": [
       {
         "indexed": false,
-        "internalType": "uint256",
-        "name": "maxSlippageBPS",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint24",
-        "name": "uniswapFee",
-        "type": "uint24"
-      }
-    ],
-    "name": "UniswapParamsUpdated",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
         "internalType": "address",
         "name": "account",
         "type": "address"
@@ -632,11 +557,30 @@ export const CasinoSlotABI = [
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "newVrfCostLINK",
+        "name": "newVrfCostUSD",
         "type": "uint256"
       }
     ],
     "name": "VRFCostUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "requestId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "ethPaid",
+        "type": "uint256"
+      }
+    ],
+    "name": "VRFPayment",
     "type": "event"
   },
   {
@@ -908,6 +852,34 @@ export const CasinoSlotABI = [
   },
   {
     "inputs": [],
+    "name": "getETHStats",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "contractETHBalance",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "vrfRequestsAffordable",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "vrfCostETHTokens",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "vrfCostUSDCents",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "getGameStats",
     "outputs": [
       {
@@ -924,34 +896,6 @@ export const CasinoSlotABI = [
         "internalType": "address",
         "name": "payoutTablesAddress",
         "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getLINKStats",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "contractLINKBalance",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "vrfRequestsAffordable",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "vrfCostLINKTokens",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "vrfCostUSDCents",
-        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -1036,7 +980,7 @@ export const CasinoSlotABI = [
       },
       {
         "internalType": "uint256",
-        "name": "vrfCostUSD",
+        "name": "vrfCostInUSD",
         "type": "uint256"
       },
       {
@@ -1112,7 +1056,7 @@ export const CasinoSlotABI = [
       },
       {
         "internalType": "uint256",
-        "name": "vrfCostLINKTokens",
+        "name": "vrfCostETHTokens",
         "type": "uint256"
       },
       {
@@ -1122,7 +1066,7 @@ export const CasinoSlotABI = [
       },
       {
         "internalType": "uint256",
-        "name": "maxSlippage",
+        "name": "ethBalance",
         "type": "uint256"
       }
     ],
@@ -1145,23 +1089,8 @@ export const CasinoSlotABI = [
   {
     "inputs": [
       {
-        "internalType": "uint256",
-        "name": "subscriptionId",
-        "type": "uint256"
-      },
-      {
         "internalType": "address",
         "name": "ethUsdPriceFeedAddress",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "linkUsdPriceFeedAddress",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "linkTokenAddress",
         "type": "address"
       },
       {
@@ -1171,23 +1100,8 @@ export const CasinoSlotABI = [
       },
       {
         "internalType": "address",
-        "name": "vrfCoordinatorAddress",
+        "name": "wrapperAddress",
         "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "uniswapRouterAddress",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "wethTokenAddress",
-        "type": "address"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "vrfKeyHash",
-        "type": "bytes32"
       },
       {
         "internalType": "address",
@@ -1198,45 +1112,6 @@ export const CasinoSlotABI = [
     "name": "initialize",
     "outputs": [],
     "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "keyHash",
-    "outputs": [
-      {
-        "internalType": "bytes32",
-        "name": "",
-        "type": "bytes32"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "linkToken",
-    "outputs": [
-      {
-        "internalType": "contract IERC20",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "maxSlippageBPS",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -1376,32 +1251,6 @@ export const CasinoSlotABI = [
         "internalType": "uint16",
         "name": "",
         "type": "uint16"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "s_subscriptionId",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "s_vrfCoordinator",
-    "outputs": [
-      {
-        "internalType": "contract IVRFCoordinatorV2Plus",
-        "name": "",
-        "type": "address"
       }
     ],
     "stateMutability": "view",
@@ -1685,32 +1534,6 @@ export const CasinoSlotABI = [
   },
   {
     "inputs": [],
-    "name": "uniswapFee",
-    "outputs": [
-      {
-        "internalType": "uint24",
-        "name": "",
-        "type": "uint24"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "uniswapRouter",
-    "outputs": [
-      {
-        "internalType": "contract IUniswapV3Router",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "unpause",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -1725,7 +1548,7 @@ export const CasinoSlotABI = [
       },
       {
         "internalType": "uint256",
-        "name": "newVrfCostLINK",
+        "name": "newVrfCostUSD",
         "type": "uint256"
       }
     ],
@@ -1750,6 +1573,34 @@ export const CasinoSlotABI = [
   {
     "inputs": [
       {
+        "internalType": "uint32",
+        "name": "_callbackGasLimit",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint16",
+        "name": "_requestConfirmations",
+        "type": "uint16"
+      },
+      {
+        "internalType": "uint32",
+        "name": "_numWords",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_vrfCostUSD",
+        "type": "uint256"
+      }
+    ],
+    "name": "updateVRFParameters",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "address",
         "name": "newImplementation",
         "type": "address"
@@ -1767,7 +1618,7 @@ export const CasinoSlotABI = [
   },
   {
     "inputs": [],
-    "name": "vrfCostLINK",
+    "name": "vrfCostUSD",
     "outputs": [
       {
         "internalType": "uint256",
@@ -1780,10 +1631,10 @@ export const CasinoSlotABI = [
   },
   {
     "inputs": [],
-    "name": "wethToken",
+    "name": "vrfWrapper",
     "outputs": [
       {
-        "internalType": "contract IWETH9",
+        "internalType": "contract IVRFV2PlusWrapper",
         "name": "",
         "type": "address"
       }
@@ -1800,19 +1651,6 @@ export const CasinoSlotABI = [
       }
     ],
     "name": "withdrawETH",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
-    ],
-    "name": "withdrawLINK",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
