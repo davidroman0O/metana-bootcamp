@@ -1,6 +1,6 @@
 import { getContractAddresses, type ContractAddresses } from './contracts';
 import { createConfig, http } from '@wagmi/core';
-import { mainnet, localhost, sepolia } from '@wagmi/core/chains';
+import { sepolia } from '@wagmi/core/chains';
 import { injected, metaMask } from '@wagmi/connectors';
 import type { Address } from 'viem';
 
@@ -28,44 +28,34 @@ const hardhatLocal = {
 } as const;
 
 // Alchemy RPC URLs - use environment variables for better performance
-const ALCHEMY_MAINNET_KEY = process.env.REACT_APP_ALCHEMY_MAINNET_KEY || 'UlgUe5NUoeezq_0_AxTSKl0qpQQeHSKV';
-const ALCHEMY_SEPOLIA_KEY = process.env.REACT_APP_ALCHEMY_SEPOLIA_KEY || 'UlgUe5NUoeezq_0_AxTSKl0qpQQeHSKV';
-
-const ALCHEMY_MAINNET_URL = process.env.REACT_APP_CUSTOM_MAINNET_RPC || `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_MAINNET_KEY}`;
+const ALCHEMY_SEPOLIA_KEY = process.env.REACT_APP_ALCHEMY_SEPOLIA_KEY || 'v83-dLeu2iggxlm9foHin';
 const ALCHEMY_SEPOLIA_URL = process.env.REACT_APP_CUSTOM_SEPOLIA_RPC || `https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_SEPOLIA_KEY}`;
 
-// Configure wagmi without WalletConnect to avoid demo project ID issues
+// Configure wagmi - SEPOLIA FIRST as default, then hardhat
 export const config = createConfig({
-  chains: [mainnet, hardhatLocal, sepolia],
+  chains: [sepolia, hardhatLocal],
   connectors: [
     injected(),
     metaMask(),
   ],
   transports: {
-    [mainnet.id]: http(ALCHEMY_MAINNET_URL, {
-      timeout: 30000, // 30 second timeout
+    [sepolia.id]: http(ALCHEMY_SEPOLIA_URL, {
+      timeout: 120000, // 2 minute timeout for Sepolia (slower network)
     }),
     [hardhatLocal.id]: http('http://127.0.0.1:8545', {
       timeout: 10000, // 10 second timeout for local
-    }),
-    [sepolia.id]: http(ALCHEMY_SEPOLIA_URL, {
-      timeout: 120000, // 2 minute timeout for Sepolia (slower network)
     }),
   },
 });
 
 // Contract addresses with proper typing using new structure
 export const CONTRACT_ADDRESSES: Record<number, ContractAddresses> = {
-  [mainnet.id]: {
-    CASINO_SLOT: process.env.REACT_APP_CASINO_SLOT_MAINNET as Address || "0x" as Address,
-  },
   [hardhatLocal.id]: getContractAddresses('hardhat', 'dev'),
   [sepolia.id]: getContractAddresses('sepolia', 'dev'),
 };
 
 // Export the chain IDs for easy reference
 export const SUPPORTED_CHAINS = {
-  MAINNET: mainnet.id,
   HARDHAT_LOCAL: hardhatLocal.id,
   SEPOLIA: sepolia.id,
 } as const;

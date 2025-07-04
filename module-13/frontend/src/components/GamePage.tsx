@@ -29,7 +29,6 @@ const GameHeader: React.FC<{
   currentChain: any;
   isSupported: boolean;
   onSwitchToLocal: () => void;
-  onSwitchToMainnet: () => void;
   onSwitchToSepolia: () => void;
   isSwitchPending: boolean;
   poolData: {
@@ -50,7 +49,6 @@ const GameHeader: React.FC<{
   isSupported,
   onSwitchToLocal,
   onSwitchToSepolia,
-  onSwitchToMainnet,
   isSwitchPending,
   poolData,
 }) => {
@@ -223,6 +221,8 @@ const GamePage: React.FC = () => {
     const publicClient = usePublicClient();
     const { data: walletClient } = useWalletClient();
     const poolData = usePoolData(chainId);
+
+
 
     function getContractAddress(chainId: number | undefined): Address | undefined {
         if (!chainId) return undefined;
@@ -916,7 +916,6 @@ const GamePage: React.FC = () => {
     // Network switching handlers
     const handleSwitchToLocal = () => switchToNetwork('hardhat');
     const handleSwitchToSepolia = () => switchToNetwork('sepolia');
-    const handleSwitchToMainnet = () => switchToNetwork('mainnet');
 
     // Helper function to get block explorer URL for transaction
     const getBlockExplorerUrl = (txHash: string) => {
@@ -1086,7 +1085,6 @@ const GamePage: React.FC = () => {
                 onConnect={connectWallet} onDisconnect={disconnectWallet} chainId={chainId}
                 currentChain={currentNetwork} isSupported={isNetworkSupported} 
                 onSwitchToLocal={handleSwitchToLocal}
-                onSwitchToMainnet={handleSwitchToMainnet} 
                 onSwitchToSepolia={handleSwitchToSepolia}
                 isSwitchPending={switchingNetwork}
                 poolData={poolData}

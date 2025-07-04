@@ -1,5 +1,6 @@
 import React from 'react';
 import { Network, ChevronDown } from 'lucide-react';
+import { isDevelopment } from '../config/environment';
 
 interface NetworkSwitcherProps {
   currentChain: any;
@@ -9,11 +10,6 @@ interface NetworkSwitcherProps {
   onSwitchToSepolia: () => void;
   isConnected: boolean;
 }
-
-// Environment detection
-const isDevelopment = process.env.NODE_ENV === 'development' || 
-                    window.location.hostname === 'localhost' ||
-                    window.location.hostname === '127.0.0.1';
 
 interface NetworkOption {
   id: string;

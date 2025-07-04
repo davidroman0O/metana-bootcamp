@@ -26,15 +26,14 @@ export interface NetworkDeployment {
 
 // Network identification
 export const SUPPORTED_CHAINS = {
-  HARDHAT: 31337,
+  HARDHAT_LOCAL: 31337,
   SEPOLIA: 11155111,
-  MAINNET: 1,
 } as const;
 
 export type SupportedChainId = typeof SUPPORTED_CHAINS[keyof typeof SUPPORTED_CHAINS];
 
 // Network and Environment types
-export type NetworkName = 'hardhat' | 'sepolia' | 'mainnet';
+export type NetworkName = 'hardhat' | 'sepolia';
 export type Environment = 'dev' | 'test' | 'staging' | 'prod';
 
 // Deployment structure: Network -> Environment -> Deployment

@@ -7,27 +7,22 @@ import {
   SUPPORTED_CHAINS,
   type NetworkName 
 } from '../config/contracts';
+import { isDevelopment } from '../config/environment';
 
 // Network metadata
 const NETWORK_CONFIG = {
   hardhat: {
     name: 'Hardhat Local',
-    chainId: SUPPORTED_CHAINS.HARDHAT,
+    chainId: SUPPORTED_CHAINS.HARDHAT_LOCAL,
     isDev: true,
     rpcUrl: 'http://127.0.0.1:8545',
-    priority: 1,
+    priority: 2,
   },
   sepolia: {
     name: 'Sepolia Testnet', 
     chainId: SUPPORTED_CHAINS.SEPOLIA,
     isDev: false,
-    priority: 2,
-  },
-  mainnet: {
-    name: 'Ethereum Mainnet',
-    chainId: SUPPORTED_CHAINS.MAINNET,
-    isDev: false,
-    priority: 3,
+    priority: 1,
   },
 } as const;
 
@@ -45,10 +40,8 @@ export function useNetworks() {
   const { switchChain, isPending: isSwitchPending } = useSwitchChain();
   const [pendingNetworkId, setPendingNetworkId] = useState<NetworkName>();
 
-  // Determine if we're in production
-  const isProduction = useMemo(() => {
-    return process.env.NODE_ENV === 'production' || !window.location.hostname.includes('localhost');
-  }, []);
+  // Use centralized environment detection from environment.ts
+  const isProduction = !isDevelopment;
 
   // Get available networks
   const availableNetworks = useMemo((): NetworkInfo[] => {
