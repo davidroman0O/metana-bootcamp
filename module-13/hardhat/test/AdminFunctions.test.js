@@ -20,7 +20,7 @@ describe("🔧 Admin Functions", function () {
     [owner, player1] = await ethers.getSigners();
 
     // Deploy Mock VRF Coordinator (real mainnet fork + mock VRF for testing)
-    const MockVRFCoordinator = await ethers.getContractFactory("MockVRFCoordinator");
+    const MockVRFCoordinator = await ethers.getContractFactory("contracts/MockVRFCoordinator.sol:MockVRFCoordinator");
     const mockVRFCoordinator = await MockVRFCoordinator.deploy();
     await mockVRFCoordinator.deployed();
 
@@ -44,21 +44,15 @@ describe("🔧 Admin Functions", function () {
     );
     await payoutTables.deployed();
 
-    // Deploy with upgradeable proxy on mainnet fork
+    // Deploy with upgradeable proxy with new 4-parameter constructor
     const CasinoSlotTest = await ethers.getContractFactory("CasinoSlotTest");
     casinoSlot = await upgrades.deployProxy(
       CasinoSlotTest,
       [
-        ethers.BigNumber.from("123456789"), // VRF v2.5 subscription ID (uint256)
-        ETH_USD_PRICE_FEED, // Real mainnet Chainlink ETH/USD feed
-        LINK_USD_PRICE_FEED, // Real mainnet Chainlink LINK/USD feed
-        LINK_TOKEN, // Real mainnet LINK token
-        payoutTables.address,
-        mockVRFCoordinator.address,
-        UNISWAP_V3_ROUTER, // Real mainnet Uniswap V3 router
-        WETH_TOKEN, // Real mainnet WETH
-        CHAINLINK_KEY_HASH,
-        owner.address
+        ETH_USD_PRICE_FEED, // address ethUsdPriceFeedAddress
+        payoutTables.address, // address payoutTablesAddress
+        mockVRFCoordinator.address, // address wrapperAddress (VRF wrapper)
+        owner.address // address initialOwner
       ],
       { kind: "uups" }
     );
@@ -121,20 +115,20 @@ describe("🔧 Admin Functions", function () {
     it("Should allow owner to pause and unpause", async function () {
       // Initially unpaused
       await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-      const tx1 = await casinoSlot.connect(player1).spin3Reels();
+      const tx1 = await casinoSlot.connect(player1).spinReels(3);
       expect(tx1).to.not.be.undefined;
       
       // Pause
       await casinoSlot.pause();
       
       await expect(
-        casinoSlot.connect(player1).spin3Reels()
+        casinoSlot.connect(player1).spinReels(3)
       ).to.be.revertedWith("EnforcedPause");
       
       // Unpause
       await casinoSlot.unpause();
       await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-      const tx2 = await casinoSlot.connect(player1).spin3Reels();
+      const tx2 = await casinoSlot.connect(player1).spinReels(3);
       expect(tx2).to.not.be.undefined;
     });
 
@@ -221,9 +215,9 @@ describe("🔧 Admin Functions", function () {
     it("Should allow owner to test VRF fulfillment", async function () {
       // Execute a spin first
       await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-      const tx = await casinoSlot.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spinReels(3);
       const receipt = await tx.wait();
-      const requestId = receipt.events.find(e => e.event === "SpinRequested").args.requestId;
+      const requestId = receipt.events.find(e => e.event === "SpinInitiated").args.requestId;
       
       // Test VRF fulfillment
       await casinoSlot.testFulfillRandomWords(requestId, [ethers.BigNumber.from("0x123456")]);
@@ -242,9 +236,9 @@ describe("🔧 Admin Functions", function () {
       // This would fail if actually on mainnet (chainId 1)
       // On hardhat fork, chainId is 31337, so test should work
       await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-      const tx = await casinoSlot.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spinReels(3);
       const receipt = await tx.wait();
-      const requestId = receipt.events.find(e => e.event === "SpinRequested").args.requestId;
+      const requestId = receipt.events.find(e => e.event === "SpinInitiated").args.requestId;
       
       // Should work on testnet (hardhat fork)
       await casinoSlot.testFulfillRandomWords(requestId, [ethers.BigNumber.from("0x123456")]);
