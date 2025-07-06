@@ -1,0 +1,9 @@
+# Generated files
+generated/
+build/
+
+# Dependencies
+node_modules/
+
+# Coverage
+coverage/

@@ -16,52 +16,101 @@ dataSources:
       apiVersion: 0.0.9
       language: wasm/assemblyscript
       entities:
-        - SpinRequested
-        - SpinResult
-        - WinningsWithdrawn
-        - PrizePoolStateChanged
-        - ChipsPurchased
-        - EthWithdrawn
-        - HouseFeeCollected
-        - PlayerStatsUpdated
-        - ContractInitialized
-        - WinningsCredited
-        - PayoutTablesUpdated
-        - Player
-        - DailyStat
+        # Event Entities
+        - SpinInitiated
+        - SpinCompleted
+        - VRFTransaction
+        - PlayerActivityEvent
+        - ChipsTransaction
+        - GameSession
+        - PrizePoolChange
+        - JackpotWin
+        - SystemConfigUpdate
         - Transfer
-        - Paused
-        - Unpaused
+        - Approval
+        # Analytics Entities
+        - Player
+        - Spin
+        - CasinoMetrics
+        - ReelStats
+        - DailySnapshot
+        - HourlySnapshot
+        - VRFAnalytics
+        - LeaderboardEntry
+        - SystemState
       abis:
         - name: CasinoSlot
           file: ./abis/CasinoSlot.json
       eventHandlers:
+        # Core Game Events (based on actual ABI)
         - event: SpinRequested(indexed uint256,indexed address,uint8,uint256)
           handler: handleSpinRequested
         - event: SpinResult(indexed uint256,indexed address,uint8,uint256[],uint8,uint256)
           handler: handleSpinResult
-        - event: WinningsWithdrawn(indexed address,uint256)
-          handler: handleWinningsWithdrawn
+        - event: SpinAnalytics(indexed uint256,indexed address,uint256,uint256,uint256)
+          handler: handleSpinAnalytics
+          
+        # Player Activity Events
+        - event: PlayerStatsUpdated(indexed address,uint256,uint256,uint256)
+          handler: handlePlayerStatsUpdated
+        - event: PlayerMilestoneReached(indexed address,string,uint256,uint256)
+          handler: handlePlayerMilestoneReached
+        - event: GameSessionStarted(indexed address,indexed uint256,uint256)
+          handler: handleGameSessionStarted
+        - event: GameSessionEnded(indexed address,indexed uint256,uint256,uint256,uint256,uint256,string)
+          handler: handleGameSessionEnded
+        - event: JackpotHit(indexed address,indexed uint256,uint8,uint256,uint256,uint256)
+          handler: handleJackpotHit
+          
+        # Financial Events
         - event: PrizePoolStateChanged(uint256,int256,indexed uint8)
           handler: handlePrizePoolStateChanged
         - event: ChipsPurchased(indexed address,uint256,uint256)
           handler: handleChipsPurchased
+        - event: ChipsSwapped(indexed address,uint256,uint256)
+          handler: handleChipsSwapped
+        - event: WinningsWithdrawn(indexed address,uint256)
+          handler: handleWinningsWithdrawn
+        - event: WinningsCredited(indexed address,uint256)
+          handler: handleWinningsCredited
+          
+        # VRF Events
+        - event: VRFPayment(indexed uint256,uint256)
+          handler: handleVRFPayment
+        - event: VRFCostUpdated(uint256)
+          handler: handleVRFCostUpdated
+        - event: VRFMarkupUpdated(uint256)
+          handler: handleVRFMarkupUpdated
+          
+        # System Events
+        - event: DynamicPricingUpdated(uint256,uint256)
+          handler: handleDynamicPricingUpdated
+        - event: PayoutTablesUpdated(indexed address)
+          handler: handlePayoutTablesUpdated
+        - event: ContractInitialized(uint8)
+          handler: handleContractInitialized
         - event: EthWithdrawn(indexed address,uint256)
           handler: handleEthWithdrawn
         - event: HouseFeeCollected(indexed uint256,indexed address,uint256)
           handler: handleHouseFeeCollected
-        - event: PlayerStatsUpdated(indexed address,uint256,uint256,uint256)
-          handler: handlePlayerStatsUpdated
-        - event: ContractInitialized(uint8)
-          handler: handleContractInitialized
-        - event: WinningsCredited(indexed address,uint256)
-          handler: handleWinningsCredited
-        - event: PayoutTablesUpdated(indexed address)
-          handler: handlePayoutTablesUpdated
+        - event: ReelSpinCompleted(indexed uint8,indexed address,bool,uint256,uint256)
+          handler: handleReelSpinCompleted
+          
+        # ERC20 Events
         - event: Transfer(indexed address,indexed address,uint256)
           handler: handleTransfer
+        - event: Approval(indexed address,indexed address,uint256)
+          handler: handleApproval
+          
+        # OpenZeppelin Events
+        - event: OwnershipTransferred(indexed address,indexed address)
+          handler: handleOwnershipTransferred
         - event: Paused(address)
           handler: handlePaused
         - event: Unpaused(address)
           handler: handleUnpaused
+        - event: Upgraded(indexed address)
+          handler: handleUpgraded
+        - event: Initialized(uint64)
+          handler: handleInitialized
       file: ./src/casino-slot.ts

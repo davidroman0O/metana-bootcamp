@@ -1,197 +1,464 @@
-type Approval @entity(immutable: true) {
-  id: Bytes!
-  owner: Bytes! # address
-  spender: Bytes! # address
-  value: BigInt! # uint256
+# =====================================================
+# EVENT ENTITIES (Immutable - Direct from Blockchain)
+# =====================================================
+
+type SpinInitiated @entity(immutable: true) {
+  id: ID! # requestId-txHash
+  requestId: BigInt!
+  player: Player!
+  reelCount: Int!
+  betAmount: BigInt!
+  vrfCostETH: BigInt!
+  houseFeeETH: BigInt!
+  prizePoolContribution: BigInt!
+  timestamp: BigInt!
   blockNumber: BigInt!
-  blockTimestamp: BigInt!
   transactionHash: Bytes!
 }
 
-type ChipsPurchased @entity(immutable: true) {
-  id: Bytes!
-  player: Bytes! # address
-  ethAmount: BigInt! # uint256
-  chipsAmount: BigInt! # uint256
+type SpinCompleted @entity(immutable: true) {
+  id: ID! # requestId-txHash
+  requestId: BigInt!
+  player: Player!
+  reelCount: Int!
+  reels: [Int!]!
+  reelCombination: String! # e.g., "3-3-3" for easy querying
+  payoutType: Int! # 0-7 mapping to PayoutType enum
+  payoutTypeName: String! # LOSE, SMALL_WIN, etc.
+  payout: BigInt!
+  isJackpot: Boolean!
+  timestamp: BigInt!
   blockNumber: BigInt!
-  blockTimestamp: BigInt!
   transactionHash: Bytes!
 }
 
-type Initialized @entity(immutable: true) {
-  id: Bytes!
-  version: BigInt! # uint64
+type VRFTransaction @entity(immutable: true) {
+  id: ID! # requestId-txHash
+  requestId: BigInt!
+  estimatedCost: BigInt!
+  actualCost: BigInt!
+  markup: BigInt!
+  ethPriceUSD: BigInt!
+  timestamp: BigInt!
   blockNumber: BigInt!
-  blockTimestamp: BigInt!
   transactionHash: Bytes!
 }
 
-type OwnershipTransferred @entity(immutable: true) {
-  id: Bytes!
-  previousOwner: Bytes! # address
-  newOwner: Bytes! # address
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type Paused @entity(immutable: true) {
-  id: Bytes!
-  account: Bytes! # address
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type PayoutTablesUpdated @entity(immutable: true) {
-  id: Bytes!
-  newPayoutTables: Bytes! # address
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type PrizePoolUpdated @entity(immutable: true) {
-  id: Bytes!
-  newTotal: BigInt! # uint256
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type SpinRequested @entity(immutable: true) {
-  id: Bytes!
-  requestId: BigInt! # uint256
-  player: Bytes! # address
-  reelCount: Int! # uint8
-  betAmount: BigInt! # uint256
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type SpinResult @entity(immutable: true) {
-  id: Bytes!
-  requestId: BigInt! # uint256
-  player: Bytes! # address
-  reelCount: Int! # uint8
-  reels: [BigInt!]! # uint256[]
-  payoutType: Int! # uint8
-  payout: BigInt! # uint256
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type Transfer @entity(immutable: true) {
-  id: Bytes!
-  from: Bytes! # address
-  to: Bytes! # address
-  value: BigInt! # uint256
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type Unpaused @entity(immutable: true) {
-  id: Bytes!
-  account: Bytes! # address
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type Upgraded @entity(immutable: true) {
-  id: Bytes!
-  implementation: Bytes! # address
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type WinningsWithdrawn @entity(immutable: true) {
-  id: Bytes!
-  player: Bytes! # address
-  amount: BigInt! # uint256
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type PrizePoolStateChanged @entity(immutable: true) {
-  id: Bytes!
-  newTotalPrizePool: BigInt! # uint256
-  amount: BigInt! # int256
-  reason: Int! # uint8 (0: SPIN_CONTRIBUTION, 1: JACKPOT_PAYOUT, 2: ETH_DEPOSIT)
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type EthWithdrawn @entity(immutable: true) {
-  id: Bytes!
-  owner: Bytes! # address
-  amount: BigInt! # uint256
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type HouseFeeCollected @entity(immutable: true) {
-  id: Bytes!
-  requestId: BigInt! # uint256
-  player: Bytes! # address
-  amount: BigInt! # uint256
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type PlayerStatsUpdated @entity(immutable: true) {
-  id: Bytes!
-  player: Bytes! # address
-  totalSpins: BigInt! # uint256
-  totalWinnings: BigInt! # uint256
-  totalBet: BigInt! # uint256
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type ContractInitialized @entity(immutable: true) {
-  id: Bytes!
-  version: Int! # uint8
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type WinningsCredited @entity(immutable: true) {
-  id: Bytes!
-  player: Bytes! # address
-  amount: BigInt! # uint256
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-# Additional entities for better analytics
-type Player @entity(immutable: false) {
-  id: Bytes! # player address
+type PlayerActivityEvent @entity(immutable: true) {
+  id: ID! # player-milestone-txHash
+  player: Player!
   totalSpins: BigInt!
   totalBet: BigInt!
-  totalWinnings: BigInt!
-  currentBalance: BigInt! # winnings available for withdrawal
-  firstSpin: BigInt! # timestamp
-  lastSpin: BigInt! # timestamp
+  totalWon: BigInt!
+  sessionSpins: BigInt!
+  sessionBet: BigInt!
+  sessionWon: BigInt!
+  milestone: String!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
 }
 
-type DailyStat @entity(immutable: false) {
-  id: Bytes! # date in YYYY-MM-DD format
-  date: BigInt! # timestamp
+type ChipsTransaction @entity(immutable: true) {
+  id: ID! # txHash-logIndex
+  player: Player!
+  transactionType: String! # purchase, swap, win, withdraw, emergency
+  chipsAmount: BigInt!
+  ethValue: BigInt!
+  exchangeRate: BigInt!
+  ethPriceUSD: BigInt!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+}
+
+type GameSession @entity(immutable: false) {
+  id: ID! # player-sessionId
+  player: Player!
+  sessionId: BigInt!
+  startTime: BigInt!
+  endTime: BigInt
+  duration: BigInt
+  spinsCount: BigInt!
+  totalBet: BigInt!
+  totalWon: BigInt!
+  netResult: BigInt! # won - bet
+  endReason: String # timeout, withdrawal, manual, insufficient_balance
+  isActive: Boolean!
+  spins: [Spin!]! @derivedFrom(field: "session")
+}
+
+type PrizePoolChange @entity(immutable: true) {
+  id: ID! # txHash-logIndex
+  newTotalPrizePool: BigInt!
+  amount: BigInt! # can be negative
+  reason: Int! # 0: SPIN_CONTRIBUTION, 1: JACKPOT_PAYOUT, 2: ETH_DEPOSIT, 3: VRF_PAYMENT
+  reasonName: String!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+}
+
+type JackpotWin @entity(immutable: true) {
+  id: ID! # requestId-txHash
+  player: Player!
+  requestId: BigInt!
+  amount: BigInt!
+  prizePoolBefore: BigInt!
+  prizePoolAfter: BigInt!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+}
+
+type SystemConfigUpdate @entity(immutable: true) {
+  id: ID! # parameter-blockNumber
+  parameter: String!
+  oldValue: BigInt!
+  newValue: BigInt!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+}
+
+# Standard ERC20 Events
+type Transfer @entity(immutable: true) {
+  id: ID! # txHash-logIndex
+  from: Bytes!
+  to: Bytes!
+  value: BigInt!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+}
+
+type Approval @entity(immutable: true) {
+  id: ID! # txHash-logIndex
+  owner: Bytes!
+  spender: Bytes!
+  value: BigInt!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+}
+
+# =====================================================
+# ANALYTICS ENTITIES (Mutable - Derived Data)
+# =====================================================
+
+type Player @entity(immutable: false) {
+  id: ID! # player address
+  address: Bytes!
+  
+  # Lifetime Statistics
+  totalSpins: BigInt!
+  totalBet: BigInt!
+  totalWon: BigInt!
+  totalLost: BigInt! # totalBet - totalWon
+  netProfit: BigInt! # totalWon - totalBet
+  roi: BigDecimal! # (totalWon - totalBet) / totalBet * 100
+  
+  # Current State
+  currentChipsBalance: BigInt!
+  pendingWinnings: BigInt!
+  totalWithdrawn: BigInt!
+  
+  # Performance Metrics
+  winRate: BigDecimal! # wins / totalSpins
+  avgBetSize: BigDecimal! # totalBet / totalSpins
+  avgWinSize: BigDecimal! # totalWon / winCount
+  biggestWin: BigInt!
+  biggestBet: BigInt!
+  
+  # Streak Tracking
+  currentStreak: Int! # positive for wins, negative for losses
+  longestWinStreak: Int!
+  longestLossStreak: Int!
+  
+  # Reel Preferences
+  favoriteReelCount: Int!
+  reel3Spins: BigInt!
+  reel4Spins: BigInt!
+  reel5Spins: BigInt!
+  reel6Spins: BigInt!
+  reel7Spins: BigInt!
+  
+  # Payout Distribution
+  lossCount: BigInt!
+  smallWinCount: BigInt!
+  mediumWinCount: BigInt!
+  bigWinCount: BigInt!
+  megaWinCount: BigInt!
+  ultraWinCount: BigInt!
+  specialComboCount: BigInt!
+  jackpotCount: BigInt!
+  
+  # Time Tracking
+  firstSpinTimestamp: BigInt!
+  lastSpinTimestamp: BigInt!
+  totalSessionCount: BigInt!
+  totalSessionDuration: BigInt!
+  avgSessionDuration: BigDecimal!
+  
+  # Milestones
+  milestonesAchieved: [String!]!
+  
+  # Financial Activity
+  totalChipsPurchased: BigInt!
+  totalChipsSwapped: BigInt!
+  totalETHSpent: BigInt!
+  totalETHReceived: BigInt!
+  
+  # Relations
+  spins: [Spin!]! @derivedFrom(field: "player")
+  sessions: [GameSession!]! @derivedFrom(field: "player")
+  chipsTransactions: [ChipsTransaction!]! @derivedFrom(field: "player")
+  jackpotWins: [JackpotWin!]! @derivedFrom(field: "player")
+}
+
+type Spin @entity(immutable: false) {
+  id: ID! # requestId
+  requestId: BigInt!
+  player: Player!
+  session: GameSession
+  
+  # Spin Details
+  reelCount: Int!
+  reels: [Int!]!
+  reelCombination: String!
+  betAmount: BigInt!
+  payout: BigInt!
+  payoutType: Int!
+  payoutTypeName: String!
+  netResult: BigInt! # payout - betAmount
+  
+  # Costs
+  vrfCostETH: BigInt!
+  houseFeeETH: BigInt!
+  prizePoolContribution: BigInt!
+  
+  # Timing
+  initiatedTimestamp: BigInt!
+  completedTimestamp: BigInt
+  responseTime: BigInt # completedTimestamp - initiatedTimestamp
+  
+  # Status
+  settled: Boolean!
+  isJackpot: Boolean!
+  
+  # Block Info
+  initiatedBlockNumber: BigInt!
+  completedBlockNumber: BigInt
+  initiatedTxHash: Bytes!
+  completedTxHash: Bytes
+}
+
+type CasinoMetrics @entity(immutable: false) {
+  id: ID! # "global"
+  
+  # Volume Metrics
+  totalSpins: BigInt!
+  totalBetsVolume: BigInt!
+  totalPayoutsVolume: BigInt!
+  
+  # Revenue Streams
+  totalHouseFees: BigInt!
+  totalVRFMarkup: BigInt!
+  totalSwapFees: BigInt!
+  totalRevenue: BigInt!
+  
+  # Costs
+  totalVRFCostsPaid: BigInt!
+  totalJackpotsPaid: BigInt!
+  totalCosts: BigInt!
+  
+  # Profitability
+  grossProfit: BigInt!
+  netProfit: BigInt!
+  profitMargin: BigDecimal! # netProfit / totalRevenue
+  
+  # Treasury
+  currentPrizePool: BigInt!
+  contractETHBalance: BigInt!
+  totalChipsSupply: BigInt!
+  
+  # Player Metrics
+  uniquePlayers: BigInt!
+  activePlayers24h: BigInt!
+  
+  # Economic Parameters
+  currentBaseChipPriceUSD: BigInt!
+  currentVRFCostUSD: BigInt!
+  currentVRFMarkupBP: BigInt!
+  currentHouseEdgeBP: BigInt!
+  
+  # Last Updated
+  lastUpdateTimestamp: BigInt!
+  lastUpdateBlock: BigInt!
+}
+
+type ReelStats @entity(immutable: false) {
+  id: ID! # reelCount (3-7)
+  reelCount: Int!
+  
+  # Usage Statistics
   totalSpins: BigInt!
   totalBets: BigInt!
   totalPayouts: BigInt!
   uniquePlayers: BigInt!
-  houseFeesCollected: BigInt!
+  
+  # Performance Metrics
+  winRate: BigDecimal!
+  avgBetSize: BigDecimal!
+  avgPayout: BigDecimal!
+  actualHouseEdge: BigDecimal! # (totalBets - totalPayouts) / totalBets
+  
+  # Payout Distribution
+  lossCount: BigInt!
+  smallWinCount: BigInt!
+  mediumWinCount: BigInt!
+  bigWinCount: BigInt!
+  megaWinCount: BigInt!
+  ultraWinCount: BigInt!
+  specialComboCount: BigInt!
+  jackpotCount: BigInt!
+  
+  # Jackpot Tracking
+  lastJackpotTimestamp: BigInt!
+  lastJackpotPlayer: Bytes
+  lastJackpotAmount: BigInt!
+  
+  # Popular Combinations
+  mostFrequentWin: String
+  mostFrequentLoss: String
+}
+
+type DailySnapshot @entity(immutable: false) {
+  id: ID! # timestamp at start of day
+  date: BigInt!
+  
+  # Volume Metrics
+  spinsCount: BigInt!
+  betsVolume: BigInt!
+  payoutsVolume: BigInt!
+  
+  # Player Metrics  
+  uniquePlayers: BigInt!
+  newPlayers: BigInt!
+  returningPlayers: BigInt!
+  
+  # Financial Metrics
+  houseFees: BigInt!
+  vrfMarkup: BigInt!
+  vrfCosts: BigInt!
+  jackpotsPaid: BigInt!
+  netProfit: BigInt!
+  
+  # Token Metrics
+  chipsPurchased: BigInt!
+  chipsSwapped: BigInt!
+  ethIn: BigInt!
+  ethOut: BigInt!
+  
+  # Game Performance
+  avgWinRate: BigDecimal!
+  avgBetSize: BigDecimal!
+  biggestWin: BigInt!
+  biggestWinPlayer: Bytes
+  
+  # Reel Distribution
+  reel3Spins: BigInt!
+  reel4Spins: BigInt!
+  reel5Spins: BigInt!
+  reel6Spins: BigInt!
+  reel7Spins: BigInt!
+  
+  # System State
+  endingPrizePool: BigInt!
+  endingETHBalance: BigInt!
+  endingChipsSupply: BigInt!
+}
+
+type HourlySnapshot @entity(immutable: false) {
+  id: ID! # timestamp at start of hour
+  timestamp: BigInt!
+  hour: Int! # 0-23
+  dayOfWeek: Int! # 0-6
+  
+  # Core Metrics
+  spinsCount: BigInt!
+  betsVolume: BigInt!
+  payoutsVolume: BigInt!
+  uniquePlayers: BigInt!
+  
+  # Performance
+  winRate: BigDecimal!
+  avgBetSize: BigDecimal!
+  netProfit: BigInt!
+}
+
+type VRFAnalytics @entity(immutable: false) {
+  id: ID! # "global"
+  
+  # Request Statistics
+  totalRequests: BigInt!
+  pendingRequests: BigInt!
+  fulfilledRequests: BigInt!
+  failedRequests: BigInt!
+  
+  # Cost Analysis
+  totalVRFCostETH: BigInt!
+  totalMarkupCollected: BigInt!
+  avgCostPerRequest: BigDecimal!
+  minCost: BigInt!
+  maxCost: BigInt!
+  
+  # Performance Metrics
+  avgResponseTime: BigInt!
+  minResponseTime: BigInt!
+  maxResponseTime: BigInt!
+  
+  # Current Configuration
+  currentCallbackGasLimit: BigInt!
+  currentRequestConfirmations: Int!
+  
+  # Last Request Info
+  lastRequestTimestamp: BigInt!
+  lastFulfillmentTimestamp: BigInt!
+}
+
+type LeaderboardEntry @entity(immutable: false) {
+  id: ID! # player-category-period
+  player: Player!
+  category: String! # volume, profit, winRate, streak, jackpots
+  period: String! # daily, weekly, monthly, allTime
+  rank: Int!
+  value: BigInt!
+  lastUpdated: BigInt!
+}
+
+# =====================================================
+# HELPER ENTITIES
+# =====================================================
+
+type SystemState @entity(immutable: false) {
+  id: ID! # "current"
+  
+  # Contract State
+  isPaused: Boolean!
+  owner: Bytes!
+  implementation: Bytes!
+  
+  # Configuration
+  payoutTablesAddress: Bytes!
+  vrfWrapperAddress: Bytes!
+  ethPriceFeedAddress: Bytes!
+  
+  # Last Activity
+  lastSpinTimestamp: BigInt!
+  lastConfigUpdateTimestamp: BigInt!
+  
+  # Contract Deployment
+  deploymentBlock: BigInt!
+  deploymentTimestamp: BigInt!
 }

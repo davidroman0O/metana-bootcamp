@@ -1,0 +1,22 @@
+{
+  "files.watcherExclude": {
+    "**/generated/**": true,
+    "**/build/**": true,
+    "**/node_modules/**": true
+  },
+  "search.exclude": {
+    "**/generated": true,
+    "**/build": true
+  },
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "eslint.workingDirectories": [
+    {
+      "pattern": "./src/*"
+    }
+  ],
+  "typescript.validate.enable": true,
+  "typescript.preferences.includePackageJsonAutoImports": "off",
+  "problems.exclude": {
+    "**/generated/**": true
+  }
+}
