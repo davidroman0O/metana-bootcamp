@@ -8,7 +8,7 @@ dataSources:
     name: CasinoSlot
     network: localhost
     source:
-      address: "0x8B342f4Ddcc71Af65e4D2dA9CD00cc0E945cFD12"
+      address: "0xF8b299F87EBb62E0b625eAF440B73Cc6b7717dbd"
       abi: CasinoSlot
       startBlock: 0
     mapping:

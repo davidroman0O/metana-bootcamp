@@ -1,18 +1,26 @@
 # Casino Slot Subgraph Makefile
 # Automates common development tasks for M1 MacBook Pro
 
-.PHONY: help update-abi codegen build deploy-local create-local clean setup-m1 build-m1 dev-full
+.PHONY: help update-abi codegen build deploy-local create-local clean setup-m1 build-m1 dev-full dev-start dev-stop dev-clean deploy-contracts fund-contract deploy-subgraph deploy-all reset-contracts reset-subgraph reset-all wait-for-hardhat hardhat-status
 
 # Default target
 help:
 	@echo "Available commands:"
 	@echo ""
-	@echo "🍎 M1 MacBook Pro Setup:"
-	@echo "  setup-m1       - One-time M1 setup (build graph-node, check Docker)"
-	@echo "  build-m1       - Build M1-compatible graph-node image"
-	@echo "  dev-full       - Start complete development environment"
-	@echo "  refresh-all    - Refresh contracts and subgraph"
-	@echo "  watch-dev      - Watch files and auto-refresh on changes"
+	@echo "🚀 Developer Workflow (Recommended):"
+	@echo "  dev-start      - Start infrastructure (Docker containers)"
+	@echo "  wait-for-hardhat - Wait for hardhat node to be ready"
+	@echo "  deploy-all     - Deploy contracts and subgraph (includes wait)"
+	@echo "  reset-all      - Redeploy everything (contracts + subgraph)"
+	@echo "  dev-stop       - Stop infrastructure"
+	@echo "  dev-clean      - Clean everything for fresh start"
+	@echo ""
+	@echo "📦 Deployment Control:"
+	@echo "  deploy-contracts - Deploy smart contracts to hardhat"
+	@echo "  fund-contract    - Send ETH to contract for VRF"
+	@echo "  deploy-subgraph  - Deploy subgraph to graph-node"
+	@echo "  reset-contracts  - Redeploy contracts only"
+	@echo "  reset-subgraph   - Remove and redeploy subgraph"
 	@echo ""
 	@echo "📋 Core Commands:"
 	@echo "  update-abi     - Auto-compile Hardhat & copy latest ABI"
@@ -27,17 +35,9 @@ help:
 	@echo "  switch-network NETWORK=localhost|sepolia - Switch target network"
 	@echo "  deploy-to NETWORK=localhost|sepolia - Deploy to specific network"
 	@echo ""
-	@echo "🚀 Local Development:"
-	@echo "  start-node     - Start local Graph node with Docker"
-	@echo "  create-local   - Create subgraph on local Graph node"
-	@echo "  deploy-local   - Deploy to local Graph node"
-	@echo "  dev            - Complete dev setup (start node + deploy)"
-	@echo "  smart-dev      - Quick localhost development deployment"
-	@echo ""
 	@echo "🛠️  Utilities:"
 	@echo "  clean          - Clean generated files"
 	@echo "  logs           - Show local Graph node logs"
-	@echo "  stop-node      - Stop local Graph node"
 	@echo "  remove-local   - Remove subgraph from local Graph node"
 	@echo "  check-config   - Check current configuration"
 	@echo ""
@@ -47,9 +47,11 @@ help:
 	@echo "  logs-graph     - Show Graph node logs"
 	@echo "  test-all-services - Test all service connections"
 	@echo "  debug-containers - Show container status and resource usage"
-	@echo "  start-individual - Start services one by one for debugging"
-	@echo "  clean-all      - Clean everything (containers, volumes, data)"
-	@echo "  clean-npm      - Clean npm cache only (when npm issues occur)"
+	@echo "  hardhat-status - Detailed hardhat node health check"
+	@echo ""
+	@echo "🍎 M1 MacBook Pro Setup:"
+	@echo "  setup-m1       - One-time M1 setup (build graph-node, check Docker)"
+	@echo "  build-m1       - Build M1-compatible graph-node image"
 
 # Paths
 HARDHAT_ARTIFACTS = ../../hardhat/artifacts/contracts/CasinoSlot.sol/CasinoSlot.json
@@ -221,8 +223,115 @@ deploy-to:
 		echo "🚀 Ready for $(NETWORK) deployment. Run: graph deploy --studio casino-slot-subgraph"; \
 	fi
 
+# Infrastructure Management Commands
+dev-start:
+	@echo "🚀 Starting development infrastructure..."
+	@docker-compose up -d
+	@echo ""
+	@echo "⏳ Waiting for basic services to start..."
+	@sleep 10
+	@echo ""
+	@echo "🧪 Testing service availability:"
+	@printf "   PostgreSQL: " && (docker-compose exec -T postgres pg_isready -h localhost -U graph-node > /dev/null 2>&1 && echo "✅ Ready" || echo "❌ Not ready")
+	@printf "   IPFS: " && (curl -s --max-time 2 -X POST http://localhost:5001/api/v0/version > /dev/null 2>&1 && echo "✅ Ready" || echo "❌ Not ready")
+	@printf "   Graph Node: " && (curl -s --max-time 2 -f http://localhost:8000 > /dev/null 2>&1 && echo "✅ Ready" || echo "❌ Not ready")
+	@printf "   Hardhat Node: " && (./scripts/check-hardhat-quick.sh > /dev/null 2>&1 && echo "⏳ Starting (forking mainnet...)" || echo "❌ Not started")
+	@echo ""
+	@echo "📍 Service URLs:"
+	@echo "   - Hardhat Node: http://localhost:8545"
+	@echo "   - Graph Node: http://localhost:8000"
+	@echo "   - GraphiQL: http://localhost:8000/subgraphs/name/casino-slot-subgraph/graphql"
+	@echo "   - IPFS: http://localhost:5001"
+	@echo "   - PostgreSQL: localhost:5432"
+	@echo ""
+	@echo "💡 Next steps:"
+	@echo "   - If Hardhat shows '⏳ Starting', run 'make wait-for-hardhat' to wait for it"
+	@echo "   - Once ready, run 'make deploy-all' to deploy contracts and subgraph"
+	@echo "   - Or run 'make test-hardhat' to check Hardhat status"
+
+dev-stop:
+	@echo "🛑 Stopping development infrastructure..."
+	@docker-compose down
+	@echo "✅ Infrastructure stopped"
+
+wait-for-hardhat:
+	@echo "⏳ Waiting for Hardhat node to be ready..."
+	@echo "   This can take 2-3 minutes as it forks mainnet at block 19000000..."
+	@count=0; \
+	while ! ./scripts/check-hardhat-health.sh > /dev/null 2>&1; do \
+		count=$$((count + 1)); \
+		if [ $$((count % 15)) -eq 0 ]; then \
+			echo "   Still waiting... ($$count seconds)"; \
+			if [ $$((count % 30)) -eq 0 ]; then \
+				echo "   Checking status..."; \
+				./scripts/check-hardhat-health.sh 2>/dev/null || true; \
+			fi; \
+		fi; \
+		sleep 1; \
+	done
+	@echo ""
+	@./scripts/check-hardhat-health.sh
+	@echo ""
+	@echo "🎉 Hardhat node is ready for deployments!"
+
+hardhat-status:
+	@echo "📊 Hardhat Node Status:"
+	@echo ""
+	@./scripts/check-hardhat-health.sh || echo -e "\n❌ Hardhat node is not fully ready yet"
+
+dev-clean:
+	@echo "🧹 Cleaning development environment..."
+	@docker-compose down -v --remove-orphans
+	@rm -rf data/postgres/* data/ipfs/* 2>/dev/null || true
+	@echo "✅ Environment cleaned"
+
+# Deployment Control Commands
+deploy-contracts:
+	@echo "📦 Deploying contracts to local hardhat node..."
+	@cd ../../hardhat && npm run compile
+	@cd ../../hardhat && npm run deploy:local
+	@echo "✅ Contracts deployed"
+
+fund-contract:
+	@echo "💰 Funding contract with ETH for VRF..."
+	@cd ../../hardhat && npx hardhat run scripts/fund-contract.js --network localhost 2>/dev/null || echo "Note: Contract funding script not found, skipping..."
+	@echo "✅ Contract funding complete"
+
+deploy-subgraph:
+	@echo "📊 Deploying subgraph..."
+	@make update-addresses NETWORK=localhost
+	@make smart-rebuild
+	@make create-local 2>/dev/null || true
+	@make deploy-local
+	@echo "✅ Subgraph deployed"
+	@echo "   - GraphiQL: http://localhost:8000/subgraphs/name/$(SUBGRAPH_NAME)/graphql"
+
+deploy-all: wait-for-hardhat deploy-contracts fund-contract deploy-subgraph
+	@echo "🎉 Full deployment completed!"
+	@echo "You can now query the subgraph at:"
+	@echo "http://localhost:8000/subgraphs/name/$(SUBGRAPH_NAME)/graphql"
+
+# Reset Commands
+reset-contracts:
+	@echo "🔄 Resetting contracts..."
+	@make deploy-contracts
+	@make fund-contract
+	@echo "✅ Contracts reset"
+
+reset-subgraph:
+	@echo "🔄 Resetting subgraph..."
+	@make remove-local 2>/dev/null || true
+	@make deploy-subgraph
+	@echo "✅ Subgraph reset"
+
+reset-all:
+	@echo "🔄 Resetting entire deployment..."
+	@make reset-contracts
+	@make reset-subgraph
+	@echo "✅ Full reset completed!"
+
 # Development workflow shortcuts
-dev: start-node create-local smart-rebuild deploy-local
+dev: dev-start deploy-all
 	@echo "🎉 Development environment ready!"
 	@echo "   - Graph node: http://localhost:8000"
 	@echo "   - GraphiQL: http://localhost:8000/subgraphs/name/$(SUBGRAPH_NAME)/graphql"
@@ -281,36 +390,11 @@ build-m1:
 	docker tag graph-node graphprotocol/graph-node:latest
 	@echo "✅ M1 graph-node image built successfully"
 
-dev-full:
-	@echo "🚀 Starting complete development environment..."
-	@echo "This will start: Hardhat node, Graph node, IPFS, PostgreSQL, and development utilities"
-	@docker-compose up -d
-	@echo "⏳ Waiting for services to start..."
-	@echo "⏳ This may take 2-3 minutes on first run (installing dependencies)..."
-	@sleep 60
-	@echo "🎉 Development environment ready!"
-	@echo "   - Hardhat Node: http://localhost:8545"
-	@echo "   - Graph Node: http://localhost:8000"
-	@echo "   - GraphiQL: http://localhost:8000/subgraphs/name/$(SUBGRAPH_NAME)/graphql"
-	@echo "   - Graph Admin: http://localhost:8020"
-	@echo "   - IPFS: http://localhost:5001"
-	@echo ""
-	@echo "🔄 Next steps:"
-	@echo "  1. Deploy contracts: make refresh-all"
-	@echo "  2. Access GraphiQL for queries"
+dev-full: dev-start
+	@echo "✅ Use 'make deploy-all' to deploy contracts and subgraph"
 
-refresh-all:
-	@echo "🔄 Refreshing contracts and subgraph..."
-	@echo "1️⃣ Compiling and deploying contracts on host machine..."
-	@cd ../../hardhat && npm run compile
-	@cd ../../hardhat && npm run deploy:local
-	@echo "2️⃣ Updating subgraph with new contract address..."
-	@make update-addresses NETWORK=localhost
-	@echo "3️⃣ Rebuilding subgraph..."
-	@make smart-rebuild
-	@echo "4️⃣ Deploying subgraph..."
-	@make deploy-local
-	@echo "✅ Refresh completed!"
+refresh-all: reset-all
+	@echo "✅ Refresh completed! (using reset-all)"
 
 refresh-contracts:
 	@echo "🔄 Refreshing contracts only..."
@@ -340,13 +424,13 @@ dev-status:
 	@docker-compose ps
 	@echo ""
 	@echo "🌐 Service health:"
-	@echo -n "  Hardhat Node: "
+	@printf "  Hardhat Node: "
 	@curl -s http://localhost:8545 > /dev/null && echo "✅ Running" || echo "❌ Down"
-	@echo -n "  Graph Node: "
+	@printf "  Graph Node: "
 	@curl -s http://localhost:8000 > /dev/null && echo "✅ Running" || echo "❌ Down"
-	@echo -n "  IPFS: "
+	@printf "  IPFS: "
 	@curl -s http://localhost:5001 > /dev/null && echo "✅ Running" || echo "❌ Down"
-	@echo -n "  PostgreSQL: "
+	@printf "  PostgreSQL: "
 	@docker-compose exec -T postgres pg_isready -h localhost -U graph-node > /dev/null 2>&1 && echo "✅ Running" || echo "❌ Down"
 
 stop-all:
@@ -386,18 +470,16 @@ logs-dev:
 	@docker-compose logs -f subgraph-dev
 
 test-hardhat:
-	@echo "🧪 Testing Hardhat node connection..."
-	@curl -X POST -H "Content-Type: application/json" \
-		--data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
-		http://localhost:8545 && echo "\n✅ Hardhat node is responding" || echo "\n❌ Hardhat node is not responding"
+	@echo "🧪 Testing Hardhat node health..."
+	@./scripts/check-hardhat-health.sh || true
 
 test-graph:
 	@echo "🧪 Testing Graph node connection..."
-	@curl -f http://localhost:8000 > /dev/null && echo "✅ Graph node is responding" || echo "❌ Graph node is not responding"
+	@curl -s --max-time 5 -f http://localhost:8000 > /dev/null 2>&1 && echo "✅ Graph node is responding" || echo "❌ Graph node is not responding"
 
 test-ipfs:
 	@echo "🧪 Testing IPFS connection..."
-	@curl -X POST http://localhost:5001/api/v0/version > /dev/null 2>&1 && echo "✅ IPFS is responding" || echo "❌ IPFS is not responding"
+	@curl -s --max-time 5 -X POST http://localhost:5001/api/v0/version > /dev/null 2>&1 && echo "✅ IPFS is responding" || echo "❌ IPFS is not responding"
 
 test-postgres:
 	@echo "🧪 Testing PostgreSQL connection..."
@@ -443,12 +525,9 @@ start-individual:
 	@docker-compose up -d subgraph-dev
 	@echo "✅ All services started individually"
 
-clean-all:
-	@echo "🧹 Cleaning up everything..."
-	@docker-compose down --volumes --remove-orphans
+clean-all: dev-clean
 	@docker system prune -f
-	@rm -rf data/postgres/* data/ipfs/* 2>/dev/null || true
-	@echo "✅ Cleanup completed"
+	@echo "✅ Deep cleanup completed"
 
 clean-npm:
 	@echo "🧹 Cleaning npm cache and node_modules..."

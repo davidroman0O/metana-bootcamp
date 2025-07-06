@@ -47,9 +47,9 @@ async function main() {
   let payoutAddresses = getAddresses(network.name, "payouts") || {};
   
   if (!payoutAddresses.payoutTablesAPI) {
-    console.log("\n🔨 PayoutTables not found, deploying simplified version...");
+    console.log("\n🔨 PayoutTables not found, deploying complete system...");
     
-    // Deploy basic payout tables for testing
+    // Deploy all individual payout tables (3-6)
     console.log("   -> Deploying PayoutTables3...");
     const PayoutTables3 = await ethers.getContractFactory("PayoutTables3");
     const payoutTables3 = await withRetry(async () => await PayoutTables3.deploy());
@@ -62,25 +62,65 @@ async function main() {
     await payoutTables4.deployed();
     console.log(`   ✅ PayoutTables4: ${payoutTables4.address}`);
     
-    // Deploy main PayoutTables API (using 3-reel tables as placeholders for testing)
-    console.log("   -> Deploying PayoutTables API...");
+    console.log("   -> Deploying PayoutTables5...");
+    const PayoutTables5 = await ethers.getContractFactory("PayoutTables5");
+    const payoutTables5 = await withRetry(async () => await PayoutTables5.deploy());
+    await payoutTables5.deployed();
+    console.log(`   ✅ PayoutTables5: ${payoutTables5.address}`);
+    
+    console.log("   -> Deploying PayoutTables6...");
+    const PayoutTables6 = await ethers.getContractFactory("PayoutTables6");
+    const payoutTables6 = await withRetry(async () => await PayoutTables6.deploy());
+    await payoutTables6.deployed();
+    console.log(`   ✅ PayoutTables6: ${payoutTables6.address}`);
+    
+    // Deploy all 8 PayoutTables7 chunks
+    console.log("\n   -> Deploying PayoutTables7 chunks (1-8)...");
+    const payoutTables7Chunks = [];
+    for (let i = 1; i <= 8; i++) {
+      console.log(`   -> Deploying PayoutTables7_Part${i}...`);
+      const ChunkFactory = await ethers.getContractFactory(`PayoutTables7_Part${i}`);
+      const chunk = await withRetry(async () => await ChunkFactory.deploy());
+      await chunk.deployed();
+      console.log(`   ✅ PayoutTables7_Part${i}: ${chunk.address}`);
+      payoutTables7Chunks.push(chunk.address);
+    }
+    
+    // Deploy PayoutTables7 router with all chunks
+    console.log("\n   -> Deploying PayoutTables7 router...");
+    const PayoutTables7 = await ethers.getContractFactory("PayoutTables7");
+    const payoutTables7 = await withRetry(async () => await PayoutTables7.deploy(...payoutTables7Chunks));
+    await payoutTables7.deployed();
+    console.log(`   ✅ PayoutTables7: ${payoutTables7.address}`);
+    
+    // Deploy main PayoutTables API with all tables
+    console.log("\n   -> Deploying PayoutTables API...");
     const PayoutTables = await ethers.getContractFactory("PayoutTables");
     const payoutTables = await withRetry(async () => await PayoutTables.deploy(
       payoutTables3.address,
       payoutTables4.address,
-      payoutTables3.address, // Placeholder for 5-reel
-      payoutTables3.address, // Placeholder for 6-reel
-      payoutTables3.address  // Placeholder for 7-reel
+      payoutTables5.address,
+      payoutTables6.address,
+      payoutTables7.address
     ));
     await payoutTables.deployed();
     console.log(`   ✅ PayoutTables API: ${payoutTables.address}`);
     
-    // Save addresses
+    // Save all addresses
     payoutAddresses = {
       payoutTables3: payoutTables3.address,
       payoutTables4: payoutTables4.address,
+      payoutTables5: payoutTables5.address,
+      payoutTables6: payoutTables6.address,
+      payoutTables7Router: payoutTables7.address,
       payoutTablesAPI: payoutTables.address
     };
+    
+    // Save chunk addresses
+    for (let i = 0; i < 8; i++) {
+      payoutAddresses[`payoutTables7_Part${i + 1}`] = payoutTables7Chunks[i];
+    }
+    
     saveAddresses(network.name, "payouts", payoutAddresses);
   } else {
     console.log("   ⏭️  PayoutTables system already deployed");
@@ -232,7 +272,18 @@ async function main() {
       PayoutTables: {
         api: payoutAddresses.payoutTablesAPI,
         tables3: payoutAddresses.payoutTables3,
-        tables4: payoutAddresses.payoutTables4
+        tables4: payoutAddresses.payoutTables4,
+        tables5: payoutAddresses.payoutTables5,
+        tables6: payoutAddresses.payoutTables6,
+        tables7Router: payoutAddresses.payoutTables7Router,
+        tables7_Part1: payoutAddresses.payoutTables7_Part1,
+        tables7_Part2: payoutAddresses.payoutTables7_Part2,
+        tables7_Part3: payoutAddresses.payoutTables7_Part3,
+        tables7_Part4: payoutAddresses.payoutTables7_Part4,
+        tables7_Part5: payoutAddresses.payoutTables7_Part5,
+        tables7_Part6: payoutAddresses.payoutTables7_Part6,
+        tables7_Part7: payoutAddresses.payoutTables7_Part7,
+        tables7_Part8: payoutAddresses.payoutTables7_Part8
       },
       MockVRFCoordinator: {
         address: mockAddresses.vrfCoordinator
@@ -262,6 +313,7 @@ async function main() {
   console.log("\n📋 Contract Addresses:");
   console.log(`   🎰 CasinoSlotTest: ${casinoAddresses.proxy}`);
   console.log(`   🎲 PayoutTables API: ${payoutAddresses.payoutTablesAPI}`);
+  console.log(`   📊 PayoutTables (3-7): All deployed`);
   console.log(`   🎯 Mock VRF Coordinator: ${mockAddresses.vrfCoordinator}`);
   
   console.log("\n🛠️  Next Steps:");
@@ -284,7 +336,7 @@ async function main() {
 }
 
 main()
-  .then((addresses) => {
+  .then(() => {
     console.log("\n✅ All deployments completed successfully!");
     process.exit(0);
   })

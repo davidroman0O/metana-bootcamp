@@ -1,40 +1,43 @@
 # M1 MacBook Pro Development Environment Setup
 
-This guide provides step-by-step instructions for setting up the TheGraph + Hardhat development environment on Apple M1 MacBook Pro.
+This guide provides step-by-step instructions for setting up the TheGraph + Hardhat development environment on Apple M1 MacBook Pro with a developer-controlled workflow.
 
-## ✨ What's New (Latest Updates)
+## ✨ Key Features
 
-### 🎯 **Zero Platform Warnings**
-- All containers now use `platform: linux/arm64`
-- No more annoying "platform mismatch" messages in logs
+### 🎯 **Developer-Controlled Workflow**
+- All services exposed to host ports - no hidden Docker networks
+- Manual control over deployment timing
+- Easy reset and redeploy for rapid iteration
+- Clean separation between infrastructure and deployment
 
-### 🚀 **Efficient npm Management**
-- Persistent npm volumes - no more reinstalling node_modules 
-- 90% faster startup times
-- Host machine handles contract development (more reliable)
+### 🚀 **Optimized for M1**
+- All containers use `platform: linux/arm64`
+- No platform mismatch warnings
+- Persistent volumes for faster restarts
+- Host-based command orchestration
 
 ### 🛠️ **Enhanced Commands**
-- `make clean-npm` - Only clean npm when needed
-- `make test-all-services` - Verify everything works
-- `make dev-status` - Quick health check
+- `make dev-start` - Start infrastructure with intelligent service checks
+- `make deploy-all` - Deploy contracts and subgraph (with automatic wait)
+- `make reset-all` - Redeploy everything quickly
+- `make wait-for-hardhat` - Wait with progress updates
+- `make hardhat-status` - Detailed health check showing RPC readiness
 
 ## Quick Start
 
 1. **Start development environment:**
    ```bash
-   make dev-full
+   make dev-start
    ```
 
-2. **Deploy and refresh everything:**
+2. **Deploy everything (waits for hardhat automatically):**
    ```bash
-   make refresh-all
+   make deploy-all
    ```
 
 3. **Access your subgraph:**
    - GraphiQL: http://localhost:8000/subgraphs/name/casino-slot-subgraph/graphql
    - Graph Admin: http://localhost:8020
-
-**Note**: No special M1 setup required! ARM64 platform specifications are built-in.
 
 ## Prerequisites
 
@@ -52,132 +55,159 @@ This guide provides step-by-step instructions for setting up the TheGraph + Hard
 3. Set **Memory** to at least **8GB** (recommended: 12GB+)
 4. Click **Apply & Restart**
 
-**Note**: With our optimized setup, memory requirements are lower than before due to efficient npm management.
+## Architecture Overview
 
-## M1-Specific Setup
-
-### Why M1 Requires Special Setup
-
-M1 MacBook Pros require ARM64-compatible images and configuration, so we:
-1. Use `platform: linux/arm64` specification for all containers
-2. Use persistent npm volumes to avoid reinstalling dependencies  
-3. Use hybrid architecture: containers for services, host machine for contract development
-4. Configure proper networking for container-to-host communication
-
-### Architecture Overview
-
+### Developer-Controlled Design
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Hardhat Node  │    │   Graph Node    │    │     IPFS        │
-│   (localhost:   │◄──►│   (M1 Native)   │◄──►│   (Storage)     │
-│     8545)       │    │                 │    │                 │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         ▲                        ▲                        ▲
-         │                        │                        │
-         ▼                        ▼                        ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│  Your Contract  │    │   PostgreSQL    │    │ Subgraph Dev    │
-│   Development   │    │   (Database)    │    │   Utilities     │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
+┌─────────────────┐                      ┌─────────────────┐
+│   Host Machine  │                      │ Docker Containers│
+│                 │                      │                 │
+│  make commands  │─────controls────────►│  - Hardhat Node │
+│  npm/yarn       │                      │  - Graph Node   │
+│  Contract dev   │◄────exposes ports────│  - IPFS         │
+│                 │     (all on host)    │  - PostgreSQL   │
+└─────────────────┘                      └─────────────────┘
+
+All services communicate via localhost ports:
+- Hardhat: 8545
+- Graph Node: 8000, 8020, 8030, 8040  
+- IPFS: 5001, 8080
+- PostgreSQL: 5432
 ```
 
-## Setup Commands
+### Key Design Principles
+1. **No Hidden Networks** - All services accessible from host
+2. **Manual Control** - Deploy when you want, not automatically
+3. **Easy Reset** - Single command to redeploy everything
+4. **Host Commands** - All control via Makefile from host machine
 
-### 1. Start Development Environment
+## Developer Workflow
+
+### Initial Setup
 ```bash
-# Start all services
-make dev-full
+# 1. Start infrastructure
+make dev-start
+
+# You'll see output like:
+# 🧪 Testing service availability:
+#    PostgreSQL: ✅ Ready
+#    IPFS: ✅ Ready
+#    Graph Node: ✅ Ready
+#    Hardhat Node: ⏳ Starting (forking mainnet...)
+
+# 2. Check hardhat readiness (optional)
+make hardhat-status
+
+# 3. Deploy everything (includes automatic wait)
+make deploy-all
+
+# 4. Start developing!
 ```
 
-Services started:
-- **Hardhat Node** (localhost:8545) - Local Ethereum blockchain with ARM64 compatibility
-- **Graph Node** (localhost:8000) - TheGraph indexing service
-- **IPFS** (localhost:5001) - Distributed storage with ARM64 support
-- **PostgreSQL** (localhost:5432) - Database with ARM64 optimization
-- **Subgraph Dev** - Auto-refresh utilities with file watching (optional, see below)
-
-**First run**: Takes 2-3 minutes for npm dependencies installation with persistent volumes.
-
-### 2. Deploy Everything
+### Daily Development Cycle
 ```bash
-# Complete deployment workflow
-make refresh-all
+# Morning: Start services
+make dev-start
+
+# Deploy latest code
+make deploy-all
+
+# Make changes to contracts/subgraph...
+
+# Quick reset after changes
+make reset-all
+
+# End of day: Stop services
+make dev-stop
 ```
 
-This command:
-1. Compiles smart contracts (on host machine)
-2. Deploys contracts to local Hardhat node
-3. Updates subgraph with new contract address
-4. Rebuilds subgraph with latest ABI
-5. Deploys subgraph to Graph Node
-
-## Available Make Commands
-
-### 🚀 Core Commands
-- `make dev-full` - Start complete development environment
-- `make refresh-all` - Deploy contracts + rebuild/deploy subgraph
-- `make stop-all` - Stop all services
-- `make test-all-services` - Test all service connections
-
-### 🔄 Targeted Refresh Commands  
-- `make refresh-contracts` - Only redeploy contracts
-- `make refresh-subgraph` - Only rebuild/deploy subgraph
-- `make update-addresses NETWORK=localhost` - Update contract addresses
-
-### 🧹 Maintenance Commands
-- `make clean-npm` - Clean npm cache when corruption occurs
-- `make clean-all` - Clean everything (containers, volumes, data)
-- `make dev-status` - Check health of all services
-
-### 📋 Debugging Commands
-- `make logs-all` - Show logs for all services
-- `make logs-hardhat` / `make logs-graph` - Individual service logs
-- `make debug-containers` - Container status and resource usage
-
-### 👀 Development Utilities
-- `make watch-dev` - Auto-refresh on file changes (requires fswatch)
-- `make create-local` - Create subgraph on Graph node
-- `make deploy-local` - Deploy subgraph to Graph node
-
-## 🛠️ Subgraph Dev Service (Optional)
-
-The `subgraph-dev` container provides advanced development automation:
-
-### **What it does:**
-- **File watching**: Monitors contracts, schema, handlers for changes
-- **Auto-refresh**: Automatically runs appropriate refresh commands
-- **Tool provision**: Includes Graph CLI, Docker CLI, development tools
-- **Cooldown protection**: Prevents spam refreshes (5-second cooldown)
-
-### **When changes are detected:**
-- **Smart contracts** → `make refresh-contracts`
-- **Schema/handlers** → `make refresh-subgraph`
-
-### **To use:**
+### Clean Slate Start
 ```bash
-# Start file watcher (on host machine)
-make watch-dev
-
-# Or run the container manually
-docker-compose up -d subgraph-dev
+# Remove everything and start fresh
+make dev-clean
+make dev-start
+make deploy-all
 ```
 
-**Note**: Most developers prefer manual commands (`make refresh-all`) over auto-refresh.
+## Available Commands
 
-## Development Workflow
+### 🚀 Infrastructure Management
+| Command | Description |
+|---------|-------------|
+| `make dev-start` | Start all Docker containers |
+| `make dev-stop` | Stop all containers |
+| `make dev-clean` | Remove containers and volumes |
+| `make wait-for-hardhat` | Wait for hardhat node to be ready |
 
-### Daily Development
-1. **Start environment:** `make dev-full`
-2. **Deploy/refresh:** `make refresh-all`
-3. **Generate test data:** See "Generating Test Data" below
-4. **Watch for changes:** `make watch-dev`
-5. **Check status:** `make dev-status`
+### 📦 Deployment Control
+| Command | Description |
+|---------|-------------|
+| `make deploy-contracts` | Deploy smart contracts to hardhat |
+| `make fund-contract` | Send ETH to contract for VRF |
+| `make deploy-subgraph` | Deploy subgraph to graph-node |
+| `make deploy-all` | Deploy everything (includes wait) |
+
+### 🔄 Reset Commands
+| Command | Description |
+|---------|-------------|
+| `make reset-contracts` | Redeploy contracts only |
+| `make reset-subgraph` | Remove and redeploy subgraph |
+| `make reset-all` | Complete reset (contracts + subgraph) |
+
+### 🔍 Debugging Commands
+| Command | Description |
+|---------|-------------|
+| `make logs-all` | View all container logs |
+| `make logs-hardhat` | View hardhat node logs |
+| `make logs-graph` | View graph-node logs |
+| `make test-all-services` | Test service connectivity |
+| `make debug-containers` | Show container status |
+| `make hardhat-status` | Detailed hardhat health check |
+| `make test-hardhat` | Quick hardhat connectivity test |
+
+## Service URLs
+
+Once running, access your development environment:
+
+| Service | URL | Description |
+|---------|-----|-------------|
+| **Hardhat RPC** | http://localhost:8545 | Local Ethereum node |
+| **GraphiQL** | http://localhost:8000/subgraphs/name/casino-slot-subgraph/graphql | Query your subgraph |
+| **Graph Status** | http://localhost:8000 | Graph node status |
+| **Graph Admin** | http://localhost:8020 | Administration interface |
+| **IPFS API** | http://localhost:5001 | IPFS node API |
+| **IPFS Gateway** | http://localhost:8080 | IPFS web gateway |
+| **PostgreSQL** | localhost:5432 | Database (user: graph-node, pass: let-me-in) |
+
+## Common Workflows
+
+### Making Contract Changes
+```bash
+# 1. Edit contracts in /hardhat/contracts/
+# 2. Redeploy contracts
+make reset-contracts
+
+# Subgraph automatically picks up new address
+```
+
+### Making Subgraph Changes
+```bash
+# 1. Edit schema.graphql or mappings in /src/
+# 2. Rebuild and redeploy subgraph
+make reset-subgraph
+```
+
+### Complete Reset (Most Common)
+```bash
+# Redeploy everything - contracts and subgraph
+make reset-all
+```
 
 ### Generating Test Data
-After deploying contracts, generate casino activity to test your subgraph:
+After deploying, generate casino activity:
 
 ```bash
-# Terminal 1: Start VRF fulfiller (handles random number generation)
+# Terminal 1: Start VRF fulfiller
 cd ../../hardhat
 npm run vrf:fulfiller
 
@@ -186,208 +216,206 @@ cd ../../hardhat
 npm run test-player
 ```
 
-This will create spins, wins, and other casino events that your subgraph can index.
+## Health Checks and Monitoring
 
-### When You Change Smart Contracts
+### Intelligent Health Checks
+The setup includes sophisticated health checks that go beyond simple port connectivity:
+
+#### Quick Status Check
 ```bash
-make refresh-contracts
+make dev-start
+# Shows immediate status of all services
+# Hardhat will show "⏳ Starting" while forking mainnet
 ```
 
-### When You Change Subgraph (schema/handlers)
+#### Detailed Hardhat Health Check
 ```bash
-make refresh-subgraph
+make hardhat-status
+# Tests multiple RPC methods:
+# ✓ Chain ID - Basic connectivity
+# ✓ Block number - Sync status  
+# ✓ Accounts - Transaction readiness
+# ✓ Gas estimation - Full functionality
+# ✓ Network version - Network readiness
 ```
 
-### Auto-Refresh on File Changes
+#### Wait with Progress
 ```bash
-make watch-dev
+make wait-for-hardhat
+# Shows progress every 15 seconds
+# Displays detailed status every 30 seconds
+# Automatically continues when ready
 ```
 
-Watches for changes in:
-- Smart contracts (`../../hardhat/contracts/`)
-- Subgraph schema (`./schema.graphql`)
-- Subgraph handlers (`./src/`)
-- Subgraph config (`./subgraph.yaml`)
+### Understanding Hardhat Startup
+When forking mainnet, Hardhat must:
+1. Connect to the Alchemy RPC endpoint
+2. Fetch state from block 19000000
+3. Build local state database
+4. Initialize accounts and contracts
 
-## Service URLs
-
-Once running, access your development environment:
-
-| Service | URL | Description |
-|---------|-----|-------------|
-| **GraphiQL** | http://localhost:8000 | Query interface |
-| **Subgraph GraphiQL** | http://localhost:8000/subgraphs/name/casino-slot-subgraph/graphql | Your subgraph queries |
-| **Graph Admin** | http://localhost:8020 | Graph Node administration |
-| **IPFS Gateway** | http://localhost:5001 | IPFS API |
-| **Hardhat Node** | http://localhost:8545 | Local Ethereum RPC |
+This process typically takes 2-3 minutes on first start, faster on subsequent starts.
 
 ## Troubleshooting
 
-### Common Issues
+### Hardhat Node Issues
 
-#### 1. Platform Warnings (Fixed ✅)
-**Previous Error:** "The requested image's platform (linux/amd64) does not match the detected host platform (linux/arm64/v8)"
-**Solution:** All containers now specify `platform: linux/arm64` - no more warnings!
+#### Slow to Start
+**Issue:** Hardhat takes 2-3 minutes to start (forking mainnet)
+**Solution:** This is normal. Use `make wait-for-hardhat` to check status:
+```bash
+make wait-for-hardhat
+```
 
-#### 2. Services Won't Start
-**Error:** "Port already in use"
+#### Deployment Timeouts
+**Issue:** Contract deployment times out
+**Solution:** Wait for hardhat to fully sync:
+```bash
+# Check if hardhat is ready
+make test-hardhat
+
+# If not ready, wait then retry
+make wait-for-hardhat
+make deploy-contracts
+```
+
+### Subgraph Issues
+
+#### Not Syncing
+**Issue:** "Subgraph has not started syncing yet"
 **Solution:** 
-```bash
-make stop-all
-# Wait a few seconds
-make dev-full
-```
+1. Check contract is deployed: `make test-hardhat`
+2. Redeploy everything: `make reset-all`
+3. Generate test data (see above)
 
-#### 3. Contract Address Not Updating
-**Error:** Subgraph references old contract
-**Solution:**
-```bash
-make update-addresses NETWORK=localhost
-make refresh-subgraph
-```
-
-#### 4. File Watcher Not Working
-**Error:** "fswatch not found"
-**Solution (macOS):**
-```bash
-brew install fswatch
-```
-
-#### 5. npm Corruption Issues (Fixed ✅)
-**Previous Error:** "You installed Hardhat with a corrupted lockfile due to the NPM bug #4828"
-**Solution:** Now uses persistent npm volumes + host machine for contracts - no more corruption!
-
-If you still encounter npm issues:
-```bash
-make clean-npm
-make dev-full
-```
-
-#### 6. Subgraph Not Syncing (No Data)
-**Error:** "Subgraph has not started syncing yet. Wait for it to ingest a few blocks"
-**Solution:** Generate blockchain activity to trigger subgraph indexing:
-```bash
-# Terminal 1: Start VRF fulfiller (for handling spins)
-cd ../../hardhat
-npm run vrf:fulfiller
-
-# Terminal 2: Generate test activity 
-cd ../../hardhat
-npm run test-player
-```
-
-#### 7. Subgraph Deployment Fails
-**Error:** "Subgraph already exists"
+#### Already Exists Error
+**Issue:** "Subgraph already exists"
 **Solution:**
 ```bash
 make remove-local
-make create-local
-make deploy-local
+make deploy-subgraph
 ```
 
-### Checking Service Health
+### Service Connection Issues
+
+#### Graph Node Can't Connect to Hardhat
+**Issue:** Graph node shows RPC timeout errors
+**Solution:** Services use `host.docker.internal` to reach host ports. If this fails:
+1. Check Docker Desktop is updated
+2. Restart Docker Desktop
+3. Use `make dev-clean` and start fresh
+
+#### Port Already in Use
+**Issue:** "Port already allocated"
+**Solution:**
 ```bash
-make dev-status
+# Find and kill process using port (example for 8545)
+lsof -i :8545
+kill -9 <PID>
+
+# Or just clean everything
+make dev-clean
+make dev-start
 ```
 
-### Viewing Logs
+### Clean Restart Procedure
+When things go wrong:
 ```bash
-# All services
-docker-compose logs -f
+# 1. Stop everything
+make dev-stop
 
-# Specific service
-docker-compose logs -f graph-node
-docker-compose logs -f hardhat-node
-```
+# 2. Clean all data
+make dev-clean
 
-### Clean Restart
-```bash
-make stop-all
-make clean
-make dev-full
-make refresh-all
-```
+# 3. Start fresh
+make dev-start
 
-## File Structure
-
-```
-thegraph/casino-slot-subgraph/
-├── scripts/
-│   ├── setup-m1-env.sh          # M1 setup script
-│   ├── watch-files.sh           # File watcher
-│   └── deploy-and-refresh.sh    # Complete deployment
-├── docker-compose.yml           # M1-optimized services
-├── Makefile                     # Enhanced with M1 commands
-├── data/                        # Persistent data
-│   ├── ipfs/                    # IPFS storage
-│   └── postgres/                # Database storage
-└── README-M1-SETUP.md          # This file
+# 4. Deploy
+make deploy-all
 ```
 
 ## Performance Tips
 
 ### M1 Optimization
-1. **Use native ARM64 images** - All containers specify `platform: linux/arm64`
-2. **Persistent npm volumes** - No more reinstalling node_modules every restart
-3. **Hybrid architecture** - Host machine for contracts, containers for services
-4. **Increase Docker memory** for faster builds
-5. **Use volume mounts** for live development
-6. **Enable file watching** for auto-refresh
+1. **Increase Docker memory** to 12GB+ for best performance
+2. **Keep containers running** between sessions (just use `make reset-all`)
+3. **Use targeted resets** (`reset-contracts` vs `reset-all`)
+4. **Monitor resources** with `docker stats`
 
-### Development Workflow  
-1. **Keep services running** between development sessions
-2. **Use targeted refresh** commands (`refresh-contracts` vs `refresh-all`)
-3. **Only clean npm when needed** with `make clean-npm`
-4. **Monitor resource usage** with `docker stats`
+### Faster Development
+1. **Hardhat startup**: First start takes 2-3 minutes, subsequent starts are faster
+2. **Parallel operations**: Graph node, IPFS, and PostgreSQL start while waiting for hardhat
+3. **Persistent volumes**: Contract deployments and npm modules persist across restarts
 
-### Efficient npm Management
-- **Problem**: Reinstalling node_modules on every container restart
-- **Solution**: Dedicated npm volume + host machine for contract development
-- **Result**: 90% faster startup, no npm corruption issues
+## File Structure
+
+```
+thegraph/casino-slot-subgraph/
+├── docker-compose.yml          # Service definitions (no networks!)
+├── Makefile                    # All control commands
+├── scripts/
+│   ├── check-hardhat-health.sh # Comprehensive RPC health check
+│   └── check-hardhat-quick.sh  # Quick port connectivity check
+├── abis/                       # Contract ABIs (auto-updated)
+├── build/                      # Compiled subgraph
+├── generated/                  # Generated TypeScript
+├── src/                        # Subgraph mappings
+├── schema.graphql              # GraphQL schema
+├── subgraph.yaml              # Subgraph manifest
+├── networks.json              # Network configuration
+├── DEVELOPER-WORKFLOW.md      # Detailed workflow guide
+└── README-M1-SETUP.md         # This file
+```
 
 ## Advanced Configuration
 
-### Custom Hardhat Commands
-The Hardhat node service can be customized in `docker-compose.yml`:
-
+### Custom RPC Endpoint
+To use a different RPC endpoint, modify hardhat's docker-compose service:
 ```yaml
-hardhat-node:
-  command: >
-    sh -c "
-      npm install &&
-      npm run node:fork  # or npm run node for local-only
-    "
+command: bash -c "... && npx hardhat node --fork YOUR_RPC_URL"
 ```
 
-### Graph Node Environment Variables
-Customize Graph Node behavior:
-
+### Graph Node Settings
+Adjust in docker-compose.yml:
 ```yaml
-graph-node:
-  environment:
-    GRAPH_LOG: debug          # Increase logging
-    GRAPH_LOG_QUERY_TIMING: gql
-    ETHEREUM_POLLING_INTERVAL: 1000
+environment:
+  ETHEREUM_POLLING_INTERVAL: 500  # Faster polling
+  GRAPH_LOG: info                 # Less verbose logging
 ```
 
-### Volume Mount Customization
-Adjust volume mounts for your setup:
+### Using Real Networks
+To deploy to Sepolia:
+```bash
+# Update addresses from Sepolia deployment
+make update-addresses NETWORK=sepolia
 
-```yaml
-volumes:
-  - ./:/subgraph              # Current directory as subgraph
-  - ../../hardhat:/hardhat    # Hardhat project
-  - ~/.ethereum:/root/.ethereum  # Ethereum data
+# Deploy to Graph Studio
+graph deploy --studio your-subgraph-name
 ```
 
 ## Support
 
-For issues specific to this M1 setup:
-1. Check the troubleshooting section above
-2. Verify Docker memory allocation
-3. Ensure all scripts are executable (`chmod +x scripts/*.sh`)
-4. Check service logs with `docker-compose logs`
+For issues:
+1. Check logs: `make logs-all`
+2. Verify services: `make test-all-services`
+3. Clean restart: `make dev-clean && make dev-start`
+4. Check this guide's troubleshooting section
 
-For general TheGraph issues:
-- [TheGraph Documentation](https://thegraph.com/docs/)
-- [Graph Node GitHub](https://github.com/graphprotocol/graph-node)
+## Summary
+
+This setup provides:
+- **Full control** over deployment timing
+- **All services on host ports** - no hidden networks
+- **Easy reset** for rapid iteration
+- **M1 optimized** with ARM64 containers
+- **Clear commands** for every operation
+- **Intelligent health checks** that show real readiness, not just port availability
+- **Progressive feedback** during hardhat startup process
+
+### Key Improvements
+1. **Smart Service Checks**: `dev-start` shows immediate status of all services
+2. **Detailed Health Monitoring**: `hardhat-status` tests actual RPC functionality
+3. **Patient Waiting**: `wait-for-hardhat` shows progress while mainnet fork completes
+4. **Clear Feedback**: No more guessing if services are ready - you get specific status
+
+The architecture separates infrastructure (docker-compose) from deployment (make commands), giving developers full control while providing excellent visibility into service readiness.

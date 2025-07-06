@@ -2,7 +2,7 @@
   "network": {
     "name": "localhost",
     "chainId": 31337,
-    "timestamp": "2025-07-06T18:40:58.922Z"
+    "timestamp": "2025-07-06T22:37:39.457Z"
   },
   "contracts": {
     "CasinoSlotTest": {

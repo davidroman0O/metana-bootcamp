@@ -9,7 +9,7 @@ services:
     volumes:
       - ../../hardhat:/hardhat
       - hardhat-node-modules:/hardhat/node_modules
-      - hardhat-node-data:/data
+      - hardhat-deployments:/hardhat/deployments
     working_dir: /hardhat
     environment:
       - NODE_ENV=development
@@ -22,8 +22,6 @@ services:
       retries: 10
       start_period: 120s
     restart: unless-stopped
-    networks:
-      - dev-network
 
   # Graph Node - M1 compatible
   graph-node:
@@ -44,37 +42,35 @@ services:
     extra_hosts:
       - host.docker.internal:host-gateway
     environment:
-      postgres_host: postgres
+      postgres_host: host.docker.internal
       postgres_user: graph-node
       postgres_pass: let-me-in
       postgres_db: graph-node
-      ipfs: 'ipfs:5001'
-      ethereum: 'localhost:http://hardhat-node:8545'
+      ipfs: 'host.docker.internal:5001'
+      ethereum: 'localhost:http://host.docker.internal:8545'
       GRAPH_LOG: debug
       GRAPH_LOG_QUERY_TIMING: 'gql'
       GRAPH_ALLOW_NON_DETERMINISTIC_FULLTEXT_SEARCH: 'true'
       ETHEREUM_POLLING_INTERVAL: 1000
     volumes:
       - ./:/subgraph
+      - hardhat-deployments:/deployments:ro
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/", "||", "exit", "1"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 90s
     restart: unless-stopped
-    networks:
-      - dev-network
   # IPFS storage
   ipfs:
     image: ipfs/kubo:latest
     platform: linux/arm64
     ports:
       - '5001:5001'
+      - '8080:8080'
     volumes:
       - ./data/ipfs:/data/ipfs:Z
-    networks:
-      - dev-network
 
   # PostgreSQL database
   postgres:
@@ -95,42 +91,12 @@ services:
       PGDATA: "/var/lib/postgresql/data"
       POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
     volumes:
-      - ./data/postgres:/var/lib/postgresql/data:Z
-    networks:
-      - dev-network
+      - postgres-data:/var/lib/postgresql/data:Z
 
-  # Development utilities service
-  subgraph-dev:
-    image: node:18-bullseye
-    platform: linux/arm64
-    volumes:
-      - ./:/subgraph
-      - ../../hardhat:/hardhat
-      - /var/run/docker.sock:/var/run/docker.sock
-    working_dir: /subgraph
-    environment:
-      - DEBIAN_FRONTEND=noninteractive
-    command: >
-      bash -c "
-        apt-get update &&
-        apt-get install -y --no-install-recommends curl docker.io git &&
-        npm install -g @graphprotocol/graph-cli &&
-        echo 'Development utilities ready. Run make watch-dev to start file watcher.' &&
-        tail -f /dev/null
-      "
-    depends_on:
-      graph-node:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - dev-network
+  # Development utilities service (removed - not needed with host-based control)
 
 # Named volumes for persistent data
 volumes:
-  hardhat-node-data:
   hardhat-node-modules:
-
-# Custom network for service communication
-networks:
-  dev-network:
-    driver: bridge
+  hardhat-deployments:
+  postgres-data:
