@@ -1,7 +1,21 @@
 {
-  "mainnet": {
+  "localhost": {
+    "CasinoSlot": {
+      "address": "0x8B342f4Ddcc71Af65e4D2dA9CD00cc0E945cFD12",
+      "startBlock": 0
+    }
+  }
+,
+  "sepolia": {
     "CasinoSlot": {
       "address": "0xf3E8C83f889a2935db2a54F5e82d2dDFF536156D",
+      "startBlock": 0
+    }
+  }
+,
+  "mainnet": {
+    "CasinoSlot": {
+      "address": "0x0000000000000000000000000000000000000000",
       "startBlock": 0
     }
   }

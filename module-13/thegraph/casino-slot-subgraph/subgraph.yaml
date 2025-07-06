@@ -8,7 +8,7 @@ dataSources:
     name: CasinoSlot
     network: localhost
     source:
-      address: "0x0000000000000000000000000000000000000000"
+      address: "0x8B342f4Ddcc71Af65e4D2dA9CD00cc0E945cFD12"
       abi: CasinoSlot
       startBlock: 0
     mapping:
@@ -42,59 +42,41 @@ dataSources:
         - name: CasinoSlot
           file: ./abis/CasinoSlot.json
       eventHandlers:
-        # Core Game Events (based on actual ABI)
-        - event: SpinRequested(indexed uint256,indexed address,uint8,uint256)
-          handler: handleSpinRequested
-        - event: SpinResult(indexed uint256,indexed address,uint8,uint256[],uint8,uint256)
-          handler: handleSpinResult
-        - event: SpinAnalytics(indexed uint256,indexed address,uint256,uint256,uint256)
-          handler: handleSpinAnalytics
+        # Core Game Events (matching actual contract events)
+        - event: SpinInitiated(indexed uint256,indexed address,uint8,uint256,uint256,uint256,uint256,uint256)
+          handler: handleSpinInitiated
+        - event: SpinCompleted(indexed uint256,indexed address,uint8,uint256[],uint8,uint256,bool)
+          handler: handleSpinCompleted
+        - event: VRFTransaction(indexed uint256,uint256,uint256,uint256,uint256)
+          handler: handleVRFTransaction
           
         # Player Activity Events
-        - event: PlayerStatsUpdated(indexed address,uint256,uint256,uint256)
-          handler: handlePlayerStatsUpdated
-        - event: PlayerMilestoneReached(indexed address,string,uint256,uint256)
-          handler: handlePlayerMilestoneReached
+        - event: PlayerActivity(indexed address,uint256,uint256,uint256,uint256,uint256,uint256,string)
+          handler: handlePlayerActivity
         - event: GameSessionStarted(indexed address,indexed uint256,uint256)
           handler: handleGameSessionStarted
         - event: GameSessionEnded(indexed address,indexed uint256,uint256,uint256,uint256,uint256,string)
           handler: handleGameSessionEnded
-        - event: JackpotHit(indexed address,indexed uint256,uint8,uint256,uint256,uint256)
+        - event: JackpotHit(indexed address,indexed uint256,uint256,uint256,uint256)
           handler: handleJackpotHit
           
         # Financial Events
         - event: PrizePoolStateChanged(uint256,int256,indexed uint8)
           handler: handlePrizePoolStateChanged
-        - event: ChipsPurchased(indexed address,uint256,uint256)
-          handler: handleChipsPurchased
-        - event: ChipsSwapped(indexed address,uint256,uint256)
-          handler: handleChipsSwapped
-        - event: WinningsWithdrawn(indexed address,uint256)
-          handler: handleWinningsWithdrawn
-        - event: WinningsCredited(indexed address,uint256)
-          handler: handleWinningsCredited
-          
-        # VRF Events
-        - event: VRFPayment(indexed uint256,uint256)
-          handler: handleVRFPayment
-        - event: VRFCostUpdated(uint256)
-          handler: handleVRFCostUpdated
-        - event: VRFMarkupUpdated(uint256)
-          handler: handleVRFMarkupUpdated
+        - event: ChipsTransacted(indexed address,string,uint256,uint256,uint256,uint256)
+          handler: handleChipsTransacted
+        - event: EmergencyWithdrawal(indexed address,uint256,string)
+          handler: handleEmergencyWithdrawal
           
         # System Events
-        - event: DynamicPricingUpdated(uint256,uint256)
-          handler: handleDynamicPricingUpdated
+        - event: SystemConfigUpdated(string,uint256,uint256)
+          handler: handleSystemConfigUpdated
         - event: PayoutTablesUpdated(indexed address)
           handler: handlePayoutTablesUpdated
         - event: ContractInitialized(uint8)
           handler: handleContractInitialized
         - event: EthWithdrawn(indexed address,uint256)
           handler: handleEthWithdrawn
-        - event: HouseFeeCollected(indexed uint256,indexed address,uint256)
-          handler: handleHouseFeeCollected
-        - event: ReelSpinCompleted(indexed uint8,indexed address,bool,uint256,uint256)
-          handler: handleReelSpinCompleted
           
         # ERC20 Events
         - event: Transfer(indexed address,indexed address,uint256)

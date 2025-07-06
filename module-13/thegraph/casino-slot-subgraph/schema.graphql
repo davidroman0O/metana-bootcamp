@@ -44,7 +44,7 @@ type VRFTransaction @entity(immutable: true) {
   transactionHash: Bytes!
 }
 
-type PlayerActivityEvent @entity(immutable: true) {
+type PlayerActivity @entity(immutable: true) {
   id: ID! # player-milestone-txHash
   player: Player!
   totalSpins: BigInt!
@@ -59,7 +59,7 @@ type PlayerActivityEvent @entity(immutable: true) {
   transactionHash: Bytes!
 }
 
-type ChipsTransaction @entity(immutable: true) {
+type ChipsTransacted @entity(immutable: true) {
   id: ID! # txHash-logIndex
   player: Player!
   transactionType: String! # purchase, swap, win, withdraw, emergency
@@ -67,6 +67,16 @@ type ChipsTransaction @entity(immutable: true) {
   ethValue: BigInt!
   exchangeRate: BigInt!
   ethPriceUSD: BigInt!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+}
+
+type EmergencyWithdrawal @entity(immutable: true) {
+  id: ID! # txHash-logIndex
+  player: Player!
+  amount: BigInt!
+  reason: String!
   timestamp: BigInt!
   blockNumber: BigInt!
   transactionHash: Bytes!
@@ -212,7 +222,7 @@ type Player @entity(immutable: false) {
   # Relations
   spins: [Spin!]! @derivedFrom(field: "player")
   sessions: [GameSession!]! @derivedFrom(field: "player")
-  chipsTransactions: [ChipsTransaction!]! @derivedFrom(field: "player")
+  chipsTransactions: [ChipsTransacted!]! @derivedFrom(field: "player")
   jackpotWins: [JackpotWin!]! @derivedFrom(field: "player")
 }
 

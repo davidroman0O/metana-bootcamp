@@ -1,7 +1,33 @@
 version: '3'
 services:
+  # Hardhat local Ethereum node
+  hardhat-node:
+    image: node:18-bullseye
+    platform: linux/arm64
+    ports:
+      - '8545:8545'
+    volumes:
+      - ../../hardhat:/hardhat
+      - hardhat-node-modules:/hardhat/node_modules
+      - hardhat-node-data:/data
+    working_dir: /hardhat
+    environment:
+      - NODE_ENV=development
+      - DEBIAN_FRONTEND=noninteractive
+    command: bash -c "apt-get update && apt-get install -y --no-install-recommends curl && if [ ! -d 'node_modules' ] || [ ! -f 'node_modules/.package-lock.json' ]; then npm install --production; fi && npm run node:fork"
+    healthcheck:
+      test: ["CMD", "curl", "-X", "POST", "-H", "Content-Type: application/json", "--data", '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}', "http://localhost:8545"]
+      interval: 30s
+      timeout: 15s
+      retries: 10
+      start_period: 120s
+    restart: unless-stopped
+    networks:
+      - dev-network
+
+  # Graph Node - M1 compatible
   graph-node:
-    image: graphprotocol/graph-node
+    image: graphprotocol/graph-node:latest
     ports:
       - '8000:8000'
       - '8001:8001'
@@ -9,8 +35,12 @@ services:
       - '8030:8030'
       - '8040:8040'
     depends_on:
-      - ipfs
-      - postgres
+      ipfs:
+        condition: service_started
+      postgres:
+        condition: service_started
+      hardhat-node:
+        condition: service_healthy
     extra_hosts:
       - host.docker.internal:host-gateway
     environment:
@@ -19,16 +49,37 @@ services:
       postgres_pass: let-me-in
       postgres_db: graph-node
       ipfs: 'ipfs:5001'
-      ethereum: 'mainnet:http://host.docker.internal:8545'
-      GRAPH_LOG: info
+      ethereum: 'localhost:http://hardhat-node:8545'
+      GRAPH_LOG: debug
+      GRAPH_LOG_QUERY_TIMING: 'gql'
+      GRAPH_ALLOW_NON_DETERMINISTIC_FULLTEXT_SEARCH: 'true'
+      ETHEREUM_POLLING_INTERVAL: 1000
+    volumes:
+      - ./:/subgraph
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/", "||", "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
+    networks:
+      - dev-network
+  # IPFS storage
   ipfs:
-    image: ipfs/kubo:v0.17.0
+    image: ipfs/kubo:latest
+    platform: linux/arm64
     ports:
       - '5001:5001'
     volumes:
       - ./data/ipfs:/data/ipfs:Z
+    networks:
+      - dev-network
+
+  # PostgreSQL database
   postgres:
-    image: postgres
+    image: postgres:15-alpine
+    platform: linux/arm64
     ports:
       - '5432:5432'
     command:
@@ -41,10 +92,45 @@ services:
       POSTGRES_USER: graph-node
       POSTGRES_PASSWORD: let-me-in
       POSTGRES_DB: graph-node
-      # FIXME: remove this env. var. which we shouldn't need. Introduced by
-      # <https://github.com/graphprotocol/graph-node/pull/3511>, maybe as a
-      # workaround for https://github.com/docker/for-mac/issues/6270?
       PGDATA: "/var/lib/postgresql/data"
       POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
     volumes:
       - ./data/postgres:/var/lib/postgresql/data:Z
+    networks:
+      - dev-network
+
+  # Development utilities service
+  subgraph-dev:
+    image: node:18-bullseye
+    platform: linux/arm64
+    volumes:
+      - ./:/subgraph
+      - ../../hardhat:/hardhat
+      - /var/run/docker.sock:/var/run/docker.sock
+    working_dir: /subgraph
+    environment:
+      - DEBIAN_FRONTEND=noninteractive
+    command: >
+      bash -c "
+        apt-get update &&
+        apt-get install -y --no-install-recommends curl docker.io git &&
+        npm install -g @graphprotocol/graph-cli &&
+        echo 'Development utilities ready. Run make watch-dev to start file watcher.' &&
+        tail -f /dev/null
+      "
+    depends_on:
+      graph-node:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - dev-network
+
+# Named volumes for persistent data
+volumes:
+  hardhat-node-data:
+  hardhat-node-modules:
+
+# Custom network for service communication
+networks:
+  dev-network:
+    driver: bridge

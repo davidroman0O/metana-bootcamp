@@ -1,27 +1,19 @@
 import { BigInt, Bytes, log } from "@graphprotocol/graph-ts"
 import {
-  SpinRequested,
-  SpinResult,
-  SpinAnalytics,
-  PlayerStatsUpdated,
-  PlayerMilestoneReached,
+  SpinInitiated,
+  SpinCompleted,
+  VRFTransaction,
+  PlayerActivity,
   GameSessionStarted,
   GameSessionEnded,
   JackpotHit,
   PrizePoolStateChanged,
-  ChipsPurchased,
-  ChipsSwapped,
-  WinningsWithdrawn,
-  WinningsCredited,
-  VRFPayment,
-  VRFCostUpdated,
-  VRFMarkupUpdated,
-  DynamicPricingUpdated,
+  ChipsTransacted,
+  EmergencyWithdrawal,
+  SystemConfigUpdated,
   PayoutTablesUpdated,
   ContractInitialized,
   EthWithdrawn,
-  HouseFeeCollected,
-  ReelSpinCompleted,
   Transfer,
   Approval,
   OwnershipTransferred,
@@ -32,11 +24,12 @@ import {
 } from "../generated/CasinoSlot/CasinoSlot"
 
 import {
-  SpinInitiated,
-  SpinCompleted,
-  VRFTransaction,
-  PlayerActivityEvent,
-  ChipsTransaction,
+  SpinInitiated as SpinInitiatedEntity,
+  SpinCompleted as SpinCompletedEntity,
+  VRFTransaction as VRFTransactionEntity,
+  PlayerActivity as PlayerActivityEntity,
+  ChipsTransacted as ChipsTransactedEntity,
+  EmergencyWithdrawal as EmergencyWithdrawalEntity,
   GameSession,
   PrizePoolChange,
   JackpotWin,
@@ -146,7 +139,7 @@ function getOrCreateCasinoMetrics(): CasinoMetrics {
 
 // Event Handlers
 
-export function handleSpinRequested(event: SpinRequested): void {
+export function handleSpinInitiated(event: SpinInitiated): void {
   let player = getOrCreatePlayer(event.params.player)
   let spin = new Spin(event.params.requestId.toString())
   
@@ -161,10 +154,10 @@ export function handleSpinRequested(event: SpinRequested): void {
   spin.payoutType = 0
   spin.payoutTypeName = "PENDING"
   spin.netResult = ZERO_BI.minus(event.params.betAmount)
-  spin.vrfCostETH = ZERO_BI
-  spin.houseFeeETH = ZERO_BI
-  spin.prizePoolContribution = ZERO_BI
-  spin.initiatedTimestamp = event.block.timestamp
+  spin.vrfCostETH = event.params.vrfCostETH
+  spin.houseFeeETH = event.params.houseFeeETH
+  spin.prizePoolContribution = event.params.prizePoolContribution
+  spin.initiatedTimestamp = event.params.timestamp
   spin.completedTimestamp = null
   spin.responseTime = null
   spin.settled = false
@@ -175,13 +168,27 @@ export function handleSpinRequested(event: SpinRequested): void {
   spin.completedTxHash = null
   spin.save()
   
+  // Create SpinInitiated event entity
+  let spinInitiatedEntity = new SpinInitiatedEntity(event.params.requestId.toString() + "-" + event.transaction.hash.toHex())
+  spinInitiatedEntity.requestId = event.params.requestId
+  spinInitiatedEntity.player = player.id
+  spinInitiatedEntity.reelCount = event.params.reelCount
+  spinInitiatedEntity.betAmount = event.params.betAmount
+  spinInitiatedEntity.vrfCostETH = event.params.vrfCostETH
+  spinInitiatedEntity.houseFeeETH = event.params.houseFeeETH
+  spinInitiatedEntity.prizePoolContribution = event.params.prizePoolContribution
+  spinInitiatedEntity.timestamp = event.params.timestamp
+  spinInitiatedEntity.blockNumber = event.block.number
+  spinInitiatedEntity.transactionHash = event.transaction.hash
+  spinInitiatedEntity.save()
+  
   // Update player stats
   player.totalSpins = player.totalSpins.plus(ONE_BI)
   player.totalBet = player.totalBet.plus(event.params.betAmount)
-  player.lastSpinTimestamp = event.block.timestamp
+  player.lastSpinTimestamp = event.params.timestamp
   
   if (player.firstSpinTimestamp.equals(ZERO_BI)) {
-    player.firstSpinTimestamp = event.block.timestamp
+    player.firstSpinTimestamp = event.params.timestamp
   }
   
   player.save()
@@ -190,7 +197,7 @@ export function handleSpinRequested(event: SpinRequested): void {
   let metrics = getOrCreateCasinoMetrics()
   metrics.totalSpins = metrics.totalSpins.plus(ONE_BI)
   metrics.totalBetsVolume = metrics.totalBetsVolume.plus(event.params.betAmount)
-  metrics.lastUpdateTimestamp = event.block.timestamp
+  metrics.lastUpdateTimestamp = event.params.timestamp
   metrics.lastUpdateBlock = event.block.number
   
   // Check if this is a new player
@@ -201,7 +208,7 @@ export function handleSpinRequested(event: SpinRequested): void {
   metrics.save()
 }
 
-export function handleSpinResult(event: SpinResult): void {
+export function handleSpinCompleted(event: SpinCompleted): void {
   let spin = Spin.load(event.params.requestId.toString())
   if (spin == null) {
     log.error("Spin not found for requestId: {}", [event.params.requestId.toString()])
@@ -231,10 +238,26 @@ export function handleSpinResult(event: SpinResult): void {
   spin.completedTimestamp = event.block.timestamp
   spin.responseTime = event.block.timestamp.minus(spin.initiatedTimestamp)
   spin.settled = true
-  spin.isJackpot = event.params.payoutType == 7
+  spin.isJackpot = event.params.isJackpot
   spin.completedBlockNumber = event.block.number
   spin.completedTxHash = event.transaction.hash
   spin.save()
+  
+  // Create SpinCompleted event entity
+  let spinCompletedEntity = new SpinCompletedEntity(event.params.requestId.toString() + "-" + event.transaction.hash.toHex())
+  spinCompletedEntity.requestId = event.params.requestId
+  spinCompletedEntity.player = player.id
+  spinCompletedEntity.reelCount = event.params.reelCount
+  spinCompletedEntity.reels = reels
+  spinCompletedEntity.reelCombination = reelStrings.join("-")
+  spinCompletedEntity.payoutType = event.params.payoutType
+  spinCompletedEntity.payoutTypeName = getPayoutTypeName(event.params.payoutType)
+  spinCompletedEntity.payout = event.params.payout
+  spinCompletedEntity.isJackpot = event.params.isJackpot
+  spinCompletedEntity.timestamp = event.block.timestamp
+  spinCompletedEntity.blockNumber = event.block.number
+  spinCompletedEntity.transactionHash = event.transaction.hash
+  spinCompletedEntity.save()
   
   // Update player stats
   if (event.params.payout.gt(ZERO_BI)) {
@@ -250,26 +273,32 @@ export function handleSpinResult(event: SpinResult): void {
   metrics.save()
 }
 
-export function handleChipsPurchased(event: ChipsPurchased): void {
+export function handleChipsTransacted(event: ChipsTransacted): void {
   let player = getOrCreatePlayer(event.params.player)
   
-  // Create ChipsTransaction entity
-  let transaction = new ChipsTransaction(event.transaction.hash.toHex() + "-" + event.logIndex.toString())
+  // Create ChipsTransacted entity
+  let transaction = new ChipsTransactedEntity(event.transaction.hash.toHex() + "-" + event.logIndex.toString())
   transaction.player = player.id
-  transaction.transactionType = "purchase"
+  transaction.transactionType = event.params.transactionType
   transaction.chipsAmount = event.params.chipsAmount
-  transaction.ethValue = event.params.ethAmount
-  transaction.exchangeRate = ZERO_BI
-  transaction.ethPriceUSD = ZERO_BI
+  transaction.ethValue = event.params.ethValue
+  transaction.exchangeRate = event.params.exchangeRate
+  transaction.ethPriceUSD = event.params.ethPriceUSD
   transaction.timestamp = event.block.timestamp
   transaction.blockNumber = event.block.number
   transaction.transactionHash = event.transaction.hash
   transaction.save()
   
-  // Update player stats
-  player.totalChipsPurchased = player.totalChipsPurchased.plus(event.params.chipsAmount)
-  player.totalETHSpent = player.totalETHSpent.plus(event.params.ethAmount)
-  player.currentChipsBalance = player.currentChipsBalance.plus(event.params.chipsAmount)
+  // Update player stats based on transaction type
+  if (event.params.transactionType == "purchase") {
+    player.totalChipsPurchased = player.totalChipsPurchased.plus(event.params.chipsAmount)
+    player.totalETHSpent = player.totalETHSpent.plus(event.params.ethValue)
+    player.currentChipsBalance = player.currentChipsBalance.plus(event.params.chipsAmount)
+  } else if (event.params.transactionType == "withdraw") {
+    player.totalETHReceived = player.totalETHReceived.plus(event.params.ethValue)
+    player.currentChipsBalance = player.currentChipsBalance.minus(event.params.chipsAmount)
+  }
+  
   player.save()
 }
 
@@ -299,26 +328,76 @@ export function handleTransfer(event: Transfer): void {
   }
 }
 
-// Simple stub handlers for other events
-export function handleSpinAnalytics(event: SpinAnalytics): void {}
-export function handlePlayerStatsUpdated(event: PlayerStatsUpdated): void {}
-export function handlePlayerMilestoneReached(event: PlayerMilestoneReached): void {}
+// New event handlers for updated contract events
+export function handleVRFTransaction(event: VRFTransaction): void {
+  let vrfEntity = new VRFTransactionEntity(event.params.requestId.toString() + "-" + event.transaction.hash.toHex())
+  vrfEntity.requestId = event.params.requestId
+  vrfEntity.estimatedCost = event.params.estimatedCost
+  vrfEntity.actualCost = event.params.actualCost
+  vrfEntity.markup = event.params.markup
+  vrfEntity.ethPriceUSD = event.params.ethPriceUSD
+  vrfEntity.timestamp = event.block.timestamp
+  vrfEntity.blockNumber = event.block.number
+  vrfEntity.transactionHash = event.transaction.hash
+  vrfEntity.save()
+}
+
+export function handlePlayerActivity(event: PlayerActivity): void {
+  let player = getOrCreatePlayer(event.params.player)
+  
+  let activityEntity = new PlayerActivityEntity(event.params.player.toHex() + "-" + event.params.milestone + "-" + event.transaction.hash.toHex())
+  activityEntity.player = player.id
+  activityEntity.totalSpins = event.params.totalSpins
+  activityEntity.totalBet = event.params.totalBet
+  activityEntity.totalWon = event.params.totalWon
+  activityEntity.sessionSpins = event.params.sessionSpins
+  activityEntity.sessionBet = event.params.sessionBet
+  activityEntity.sessionWon = event.params.sessionWon
+  activityEntity.milestone = event.params.milestone
+  activityEntity.timestamp = event.block.timestamp
+  activityEntity.blockNumber = event.block.number
+  activityEntity.transactionHash = event.transaction.hash
+  activityEntity.save()
+  
+  // Update player milestone tracking
+  let milestones = player.milestonesAchieved
+  milestones.push(event.params.milestone)
+  player.milestonesAchieved = milestones
+  player.save()
+}
+
+export function handleEmergencyWithdrawal(event: EmergencyWithdrawal): void {
+  let player = getOrCreatePlayer(event.params.player)
+  
+  let emergencyEntity = new EmergencyWithdrawalEntity(event.transaction.hash.toHex() + "-" + event.logIndex.toString())
+  emergencyEntity.player = player.id
+  emergencyEntity.amount = event.params.amount
+  emergencyEntity.reason = event.params.reason
+  emergencyEntity.timestamp = event.block.timestamp
+  emergencyEntity.blockNumber = event.block.number
+  emergencyEntity.transactionHash = event.transaction.hash
+  emergencyEntity.save()
+}
+
+export function handleSystemConfigUpdated(event: SystemConfigUpdated): void {
+  let configEntity = new SystemConfigUpdate(event.params.parameter + "-" + event.block.number.toString())
+  configEntity.parameter = event.params.parameter
+  configEntity.oldValue = event.params.oldValue
+  configEntity.newValue = event.params.newValue
+  configEntity.timestamp = event.block.timestamp
+  configEntity.blockNumber = event.block.number
+  configEntity.transactionHash = event.transaction.hash
+  configEntity.save()
+}
+
+// Simple stub handlers for other events that need minimal processing
 export function handleGameSessionStarted(event: GameSessionStarted): void {}
 export function handleGameSessionEnded(event: GameSessionEnded): void {}
 export function handleJackpotHit(event: JackpotHit): void {}
 export function handlePrizePoolStateChanged(event: PrizePoolStateChanged): void {}
-export function handleChipsSwapped(event: ChipsSwapped): void {}
-export function handleWinningsWithdrawn(event: WinningsWithdrawn): void {}
-export function handleWinningsCredited(event: WinningsCredited): void {}
-export function handleVRFPayment(event: VRFPayment): void {}
-export function handleVRFCostUpdated(event: VRFCostUpdated): void {}
-export function handleVRFMarkupUpdated(event: VRFMarkupUpdated): void {}
-export function handleDynamicPricingUpdated(event: DynamicPricingUpdated): void {}
 export function handlePayoutTablesUpdated(event: PayoutTablesUpdated): void {}
 export function handleContractInitialized(event: ContractInitialized): void {}
 export function handleEthWithdrawn(event: EthWithdrawn): void {}
-export function handleHouseFeeCollected(event: HouseFeeCollected): void {}
-export function handleReelSpinCompleted(event: ReelSpinCompleted): void {}
 export function handleApproval(event: Approval): void {}
 export function handleOwnershipTransferred(event: OwnershipTransferred): void {}
 export function handlePaused(event: Paused): void {}
