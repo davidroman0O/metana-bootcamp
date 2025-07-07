@@ -8,14 +8,14 @@
 ,
   "sepolia": {
     "CasinoSlot": {
-      "address": "0xEC7cb8C3EBE77BA6d284F13296bb1372A8522c5F",
+      "address": "0xf3E8C83f889a2935db2a54F5e82d2dDFF536156D",
       "startBlock": 0
     }
   }
 ,
   "mainnet": {
     "CasinoSlot": {
-      "address": "0xEC7cb8C3EBE77BA6d284F13296bb1372A8522c5F",
+      "address": "0x0000000000000000000000000000000000000000",
       "startBlock": 0
     }
   }
