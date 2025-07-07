@@ -1,21 +1,21 @@
 {
   "localhost": {
     "CasinoSlot": {
-      "address": "0xF8b299F87EBb62E0b625eAF440B73Cc6b7717dbd",
+      "address": "0xEC7cb8C3EBE77BA6d284F13296bb1372A8522c5F",
       "startBlock": 0
     }
   }
 ,
   "sepolia": {
     "CasinoSlot": {
-      "address": "0xf3E8C83f889a2935db2a54F5e82d2dDFF536156D",
+      "address": "0xEC7cb8C3EBE77BA6d284F13296bb1372A8522c5F",
       "startBlock": 0
     }
   }
 ,
   "mainnet": {
     "CasinoSlot": {
-      "address": "0x0000000000000000000000000000000000000000",
+      "address": "0xEC7cb8C3EBE77BA6d284F13296bb1372A8522c5F",
       "startBlock": 0
     }
   }

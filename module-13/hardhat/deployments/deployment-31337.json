@@ -2,21 +2,32 @@
   "network": {
     "name": "localhost",
     "chainId": 31337,
-    "timestamp": "2025-07-06T22:37:39.457Z"
+    "timestamp": "2025-07-06T23:07:38.211Z"
   },
   "contracts": {
     "CasinoSlotTest": {
-      "proxy": "0xF8b299F87EBb62E0b625eAF440B73Cc6b7717dbd",
-      "implementation": "0x9DBb24B10502aD166c198Dbeb5AB54d2d13AfcFd",
+      "proxy": "0xEC7cb8C3EBE77BA6d284F13296bb1372A8522c5F",
+      "implementation": "0xD56e6F296352B03C3c3386543185E9B8c2e5Fd0b",
       "admin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
     },
     "PayoutTables": {
-      "api": "0x9abb5861e3a1eDF19C51F8Ac74A81782e94F8FdC",
-      "tables3": "0x02e8910B3B89690d4aeC9fcC0Ae2cD16fB6A4828",
-      "tables4": "0x564Db7a11653228164FD03BcA60465270E67b3d7"
+      "api": "0x24EcC5E6EaA700368B8FAC259d3fBD045f695A08",
+      "tables3": "0x8B342f4Ddcc71Af65e4D2dA9CD00cc0E945cFD12",
+      "tables4": "0xE2307e3710d108ceC7a4722a020a050681c835b3",
+      "tables5": "0xD28F3246f047Efd4059B24FA1fa587eD9fa3e77F",
+      "tables6": "0x15F2ea83eB97ede71d84Bd04fFF29444f6b7cd52",
+      "tables7Router": "0x0D92d35D311E54aB8EEA0394d7E773Fc5144491a",
+      "tables7_Part1": "0x0B32a3F8f5b7E5d315b9E52E640a49A89d89c820",
+      "tables7_Part2": "0xF357118EBd576f3C812c7875B1A1651a7f140E9C",
+      "tables7_Part3": "0x519b05b3655F4b89731B677d64CEcf761f4076f6",
+      "tables7_Part4": "0x057cD3082EfED32d5C907801BF3628B27D88fD80",
+      "tables7_Part5": "0xb6057e08a11da09a998985874FE2119e98dB3D5D",
+      "tables7_Part6": "0xad203b3144f8c09a20532957174fc0366291643c",
+      "tables7_Part7": "0x31403b1e52051883f2Ce1B1b4C89f36034e1221D",
+      "tables7_Part8": "0x4278C5d322aB92F1D876Dd7Bd9b44d1748b88af2"
     },
     "MockVRFCoordinator": {
-      "address": "0x484242986F57dFcA98EeC2C78427931C63F1C4ce"
+      "address": "0x876939152C56362e17D508B9DEA77a3fDF9e4083"
     }
   },
   "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",

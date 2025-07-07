@@ -23,6 +23,7 @@
     "node:fork": "hardhat node --fork https://eth-mainnet.g.alchemy.com/v2/UlgUe5NUoeezq_0_AxTSKl0qpQQeHSKV",
     "vrf:fulfiller": "hardhat run scripts/vrf-fulfiller.js --network localhost",
     "test-player": "hardhat run scripts/test-player.js --network localhost",
+    "test:multi-player": "hardhat run scripts/test-multi-player.js --network localhost",
     "clean": "hardhat clean",
     "size": "hardhat size-contracts",
     "coverage": "hardhat coverage",

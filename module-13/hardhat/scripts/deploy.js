@@ -46,7 +46,17 @@ async function main() {
   
   let payoutAddresses = getAddresses(network.name, "payouts") || {};
   
-  if (!payoutAddresses.payoutTablesAPI) {
+  // Check if payout tables actually exist on blockchain
+  let payoutTablesExist = false;
+  if (payoutAddresses.payoutTablesAPI) {
+    const code = await ethers.provider.getCode(payoutAddresses.payoutTablesAPI);
+    payoutTablesExist = code !== "0x";
+    if (!payoutTablesExist) {
+      console.log("   ⚠️  PayoutTables address found but contract doesn't exist on chain");
+    }
+  }
+  
+  if (!payoutAddresses.payoutTablesAPI || !payoutTablesExist) {
     console.log("\n🔨 PayoutTables not found, deploying complete system...");
     
     // Deploy all individual payout tables (3-6)
@@ -134,7 +144,17 @@ async function main() {
   
   let mockAddresses = getAddresses(network.name, "mock") || {};
   
-  if (!mockAddresses.vrfCoordinator) {
+  // Check if VRF coordinator actually exists on blockchain
+  let vrfExists = false;
+  if (mockAddresses.vrfCoordinator) {
+    const code = await ethers.provider.getCode(mockAddresses.vrfCoordinator);
+    vrfExists = code !== "0x";
+    if (!vrfExists) {
+      console.log("   ⚠️  VRF Coordinator address found but contract doesn't exist on chain");
+    }
+  }
+  
+  if (!mockAddresses.vrfCoordinator || !vrfExists) {
     console.log("\n🔨 Deploying Mock VRF Coordinator...");
     const MockVRFCoordinator = await ethers.getContractFactory("contracts/MockVRFCoordinator.sol:MockVRFCoordinator");
     const mockVRFCoordinator = await withRetry(async () => await MockVRFCoordinator.deploy());
@@ -158,7 +178,17 @@ async function main() {
   
   let casinoAddresses = getAddresses(network.name, "casino") || {};
   
-  if (!casinoAddresses.proxy) {
+  // Check if contract actually exists on blockchain
+  let contractExists = false;
+  if (casinoAddresses.proxy) {
+    const code = await ethers.provider.getCode(casinoAddresses.proxy);
+    contractExists = code !== "0x";
+    if (!contractExists) {
+      console.log("   ⚠️  Proxy address found but contract doesn't exist on chain");
+    }
+  }
+  
+  if (!casinoAddresses.proxy || !contractExists) {
     console.log("\n🔨 Deploying CasinoSlotTest (UUPS Proxy)...");
     const CasinoSlotTest = await ethers.getContractFactory("CasinoSlotTest");
     const casinoSlot = await withRetry(async () => 
