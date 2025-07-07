@@ -2,13 +2,18 @@
   "network": {
     "name": "localhost",
     "chainId": 31337,
-    "timestamp": "2025-07-07T00:33:12.758Z"
+    "timestamp": "2025-07-07T03:15:01.916Z"
   },
   "contracts": {
     "CasinoSlotTest": {
-      "proxy": "0xEC7cb8C3EBE77BA6d284F13296bb1372A8522c5F",
+      "address": "0xEC7cb8C3EBE77BA6d284F13296bb1372A8522c5F",
       "implementation": "0xD56e6F296352B03C3c3386543185E9B8c2e5Fd0b",
-      "admin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+      "admin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "constructor": {
+        "vrfWrapper": "0x876939152C56362e17D508B9DEA77a3fDF9e4083",
+        "ethUsdPriceFeed": "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+        "payoutTablesAddress": "0x24EcC5E6EaA700368B8FAC259d3fBD045f695A08"
+      }
     },
     "PayoutTables": {
       "api": "0x24EcC5E6EaA700368B8FAC259d3fBD045f695A08",
@@ -31,7 +36,9 @@
     }
   },
   "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-  "deploymentType": "local-development",
-  "vrfMode": "mock",
-  "funded": true
+  "vrfVersion": "mock-coordinator",
+  "uniswapVersion": "not-applicable",
+  "swapMethod": "not-applicable",
+  "productionMode": false,
+  "lastUpdated": "2025-07-07T03:15:01.916Z"
 }

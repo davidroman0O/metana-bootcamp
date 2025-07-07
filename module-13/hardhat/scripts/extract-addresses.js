@@ -69,8 +69,15 @@ async function extractAddresses() {
 }
 
 async function processDeployment(deploymentData, networkName) {
-  // Extract contract addresses
-  const casinoSlotAddress = deploymentData.contracts.CasinoSlot.address;
+  // Extract contract addresses (handle both CasinoSlot and CasinoSlotTest)
+  let casinoSlotAddress;
+  if (deploymentData.contracts.CasinoSlot) {
+    casinoSlotAddress = deploymentData.contracts.CasinoSlot.address;
+  } else if (deploymentData.contracts.CasinoSlotTest) {
+    casinoSlotAddress = deploymentData.contracts.CasinoSlotTest.address;
+  } else {
+    throw new Error("No CasinoSlot or CasinoSlotTest contract found in deployment");
+  }
   console.log(`   CasinoSlot address: ${casinoSlotAddress}`);
 
   // Frontend config directory

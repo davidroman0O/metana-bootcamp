@@ -50,9 +50,9 @@ async function startVRFListenerService() {
         // Handle different deployment structures (CasinoSlot vs CasinoSlotTest)
         let casinoSlotAddress;
         if (deploymentData.contracts.CasinoSlot) {
-            casinoSlotAddress = deploymentData.contracts.CasinoSlot.address || deploymentData.contracts.CasinoSlot.proxy;
+            casinoSlotAddress = deploymentData.contracts.CasinoSlot.address;
         } else if (deploymentData.contracts.CasinoSlotTest) {
-            casinoSlotAddress = deploymentData.contracts.CasinoSlotTest.proxy || deploymentData.contracts.CasinoSlotTest.address;
+            casinoSlotAddress = deploymentData.contracts.CasinoSlotTest.address;
         } else {
             throw new Error("No CasinoSlot or CasinoSlotTest contract found in deployment");
         }

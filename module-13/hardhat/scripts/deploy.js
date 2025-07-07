@@ -295,9 +295,14 @@ async function main() {
     },
     contracts: {
       CasinoSlotTest: {
-        proxy: casinoAddresses.proxy,
+        address: casinoAddresses.proxy,
         implementation: casinoAddresses.implementation,
-        admin: casinoAddresses.admin
+        admin: casinoAddresses.admin,
+        constructor: {
+          vrfWrapper: mockAddresses.vrfCoordinator,
+          ethUsdPriceFeed: config.ethUsdPriceFeed,
+          payoutTablesAddress: payoutAddresses.payoutTablesAPI
+        }
       },
       PayoutTables: {
         api: payoutAddresses.payoutTablesAPI,
@@ -320,9 +325,11 @@ async function main() {
       }
     },
     deployer: deployer.address,
-    deploymentType: "local-development",
-    vrfMode: "mock",
-    funded: true
+    vrfVersion: "mock-coordinator",
+    uniswapVersion: "not-applicable",
+    swapMethod: "not-applicable",
+    productionMode: false,
+    lastUpdated: new Date().toISOString()
   };
   
   // Save to deployments directory
