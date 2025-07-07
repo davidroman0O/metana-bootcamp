@@ -13,7 +13,7 @@ import { isDevelopment } from '../config/environment';
 const NETWORK_CONFIG = {
   hardhat: {
     name: 'Hardhat Local',
-    chainId: SUPPORTED_CHAINS.HARDHAT_LOCAL,
+    chainId: SUPPORTED_CHAINS.HARDHAT,
     isDev: true,
     rpcUrl: 'http://127.0.0.1:8545',
     priority: 2,
@@ -23,6 +23,12 @@ const NETWORK_CONFIG = {
     chainId: SUPPORTED_CHAINS.SEPOLIA,
     isDev: false,
     priority: 1,
+  },
+  mainnet: {
+    name: 'Ethereum Mainnet',
+    chainId: SUPPORTED_CHAINS.MAINNET,
+    isDev: false,
+    priority: 0,
   },
 } as const;
 

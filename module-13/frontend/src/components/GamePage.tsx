@@ -484,26 +484,27 @@ const GamePage: React.FC = () => {
     useWatchContractEvent({
         address: CASINO_SLOT_ADDRESS,
         abi: CasinoSlotABI,
-        eventName: 'SpinResult',
+        eventName: 'SpinCompleted',
         onLogs: handleSpinResultEvents,
         enabled: !!account && !!CASINO_SLOT_ADDRESS,
         pollingInterval: 1000,
     });
 
-    // Watch for ChipsSwapped events
-    const handleChipsSwappedEvents = useCallback((logs: any[]) => {
+    // Watch for ChipsTransacted events (specifically swaps)
+    const handleChipsTransactedEvents = useCallback((logs: any[]) => {
         if (!account) {
-            console.log('No address available, ignoring ChipsSwapped events');
+            console.log('No address available, ignoring ChipsTransacted events');
             return;
         }
         
-        console.log(`ChipsSwapped event(s) received: ${logs.length} logs`);
+        console.log(`ChipsTransacted event(s) received: ${logs.length} logs`);
         
         for (const log of logs) {
             if (!log.args) continue;
-            const { player, chipsAmount, ethValue } = log.args as any;
+            const { player, transactionType, chipsAmount, ethValue } = log.args as any;
             
-            if (player?.toLowerCase() !== account.toLowerCase()) {
+            // Only process swap transactions for the current user
+            if (player?.toLowerCase() !== account.toLowerCase() || transactionType !== 'swap') {
                 continue;
             }
             
@@ -525,8 +526,8 @@ const GamePage: React.FC = () => {
     useWatchContractEvent({
         address: CASINO_SLOT_ADDRESS,
         abi: CasinoSlotABI,
-        eventName: 'ChipsSwapped',
-        onLogs: handleChipsSwappedEvents,
+        eventName: 'ChipsTransacted',
+        onLogs: handleChipsTransactedEvents,
         enabled: !!account && !!CASINO_SLOT_ADDRESS,
         pollingInterval: 1000,
     });
@@ -633,10 +634,10 @@ const GamePage: React.FC = () => {
                 for (const log of receipt.logs) {
                     try {
                         const decodedLog = decodeEventLog({ abi: CasinoSlotABI, data: log.data, topics: log.topics });
-                        if (decodedLog.eventName === 'SpinRequested') {
+                        if (decodedLog.eventName === 'SpinInitiated') {
                             const { requestId: id } = decodedLog.args as any;
                             requestId = id.toString();
-                            console.log(`ℹ️ Spin requested with ID: ${requestId}`);
+                            console.log(`ℹ️ Spin initiated with ID: ${requestId}`);
                             break;
                         }
                     } catch (e) {
