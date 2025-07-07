@@ -208,6 +208,7 @@ const GamePage: React.FC = () => {
         balance,
         connectWallet,
         disconnectWallet,
+        refetchBalance,
     } = useWallet();
 
     const {
@@ -336,7 +337,8 @@ const GamePage: React.FC = () => {
         refetchSpinCost5();
         refetchSpinCost6();
         refetchSpinCost7();
-    }, [refetchPlayerStats, refetchGameStats, refetchPoolStats, refetchAllowance, refetchSpinCost3, refetchSpinCost4, refetchSpinCost5, refetchSpinCost6, refetchSpinCost7]);
+        refetchBalance();
+    }, [refetchPlayerStats, refetchGameStats, refetchPoolStats, refetchAllowance, refetchSpinCost3, refetchSpinCost4, refetchSpinCost5, refetchSpinCost6, refetchSpinCost7, refetchBalance]);
 
     // Slot animation system for disconnected users
     const {
