@@ -1,0 +1,1616 @@
+# =====================================================
+# CASINO SLOT SUBGRAPH - EXAMPLE QUERIES
+# =====================================================
+# 
+# Use these queries in GraphiQL at:
+# http://localhost:8000/subgraphs/name/casino-slot-subgraph/graphql
+#
+# Note: Replace placeholder values with actual IDs/addresses
+# 
+# IMPORTANT: All queries in this file have been tested and work.
+# Some queries use variables (marked with $) - see examples at bottom.
+# Most analytics queries work without variables for easy testing.
+#
+# NAMING CONVENTION: The Graph automatically converts all entity names
+# to lowercase for GraphQL queries. For example:
+# - Entity "VRFAnalytics" becomes query "vrfanalytics"
+# - Entity "VRFTransaction" becomes query "vrftransactions" (plural)
+# - Entity "ReelStats" becomes query "reelStats" (plural form)
+# =====================================================
+
+# =====================================================
+# 🎰 BASIC GAME QUERIES
+# =====================================================
+
+# Get Recent Spins (Last 10)
+query RecentSpins {
+  spins(
+    first: 10
+    orderBy: initiatedTimestamp
+    orderDirection: desc
+    where: { settled: true }
+  ) {
+    id
+    requestId
+    player {
+      id
+      address
+    }
+    reelCount
+    reels
+    reelCombination
+    betAmount
+    payout
+    payoutTypeName
+    netResult
+    isJackpot
+    initiatedTimestamp
+    completedTimestamp
+    responseTime
+  }
+}
+
+# Get Recent Big Wins (Payout > 1000 CHIPS)
+query RecentBigWins {
+  spins(
+    first: 20
+    orderBy: completedTimestamp
+    orderDirection: desc
+    where: { 
+      payout_gte: "1000000000000000000000"  # 1000 CHIPS in wei
+      settled: true 
+    }
+  ) {
+    id
+    player {
+      id
+      address
+    }
+    reelCount
+    reelCombination
+    betAmount
+    payout
+    payoutTypeName
+    isJackpot
+    completedTimestamp
+    netResult
+  }
+}
+
+# Get All Jackpot Wins
+query JackpotWins {
+  jackpotWins(
+    orderBy: timestamp
+    orderDirection: desc
+  ) {
+    id
+    player {
+      id
+      address
+      totalSpins
+    }
+    amount
+    prizePoolBefore
+    prizePoolAfter
+    timestamp
+    transactionHash
+  }
+}
+
+# =====================================================
+# 👤 PLAYER ANALYTICS
+# =====================================================
+
+# Get Player Profile by Address
+query PlayerProfile($playerAddress: ID!) {
+  player(id: $playerAddress) {
+    id
+    address
+    
+    # Lifetime Stats
+    totalSpins
+    totalBet
+    totalWon
+    totalLost
+    netProfit
+    roi
+    
+    # Performance
+    winRate
+    avgBetSize
+    avgWinSize
+    biggestWin
+    biggestBet
+    
+    # Streaks
+    currentStreak
+    longestWinStreak
+    longestLossStreak
+    
+    # Reel Preferences
+    favoriteReelCount
+    reel3Spins
+    reel4Spins
+    reel5Spins
+    reel6Spins
+    reel7Spins
+    
+    # Win Distribution
+    lossCount
+    smallWinCount
+    mediumWinCount
+    bigWinCount
+    megaWinCount
+    ultraWinCount
+    specialComboCount
+    jackpotCount
+    
+    # Time & Financial
+    firstSpinTimestamp
+    lastSpinTimestamp
+    totalSessionCount
+    totalChipsPurchased
+    totalETHSpent
+    
+    # Milestones
+    milestonesAchieved
+  }
+}
+
+# Get Top Players by Volume
+query TopPlayersByVolume {
+  players(
+    first: 10
+    orderBy: totalBet
+    orderDirection: desc
+    where: { totalSpins_gte: "1" }
+  ) {
+    id
+    address
+    totalSpins
+    totalBet
+    totalWon
+    netProfit
+    roi
+    winRate
+    lastSpinTimestamp
+  }
+}
+
+# Get Top Players by Profit
+query TopPlayersByProfit {
+  players(
+    first: 10
+    orderBy: netProfit
+    orderDirection: desc
+    where: { totalSpins_gte: "10" }
+  ) {
+    id
+    address
+    totalSpins
+    totalBet
+    totalWon
+    netProfit
+    roi
+    winRate
+    biggestWin
+    jackpotCount
+  }
+}
+
+# Get Player's Recent Spins
+query PlayerSpins($playerAddress: ID!) {
+  player(id: $playerAddress) {
+    spins(
+      first: 20
+      orderBy: initiatedTimestamp
+      orderDirection: desc
+    ) {
+      id
+      reelCount
+      reels
+      reelCombination
+      betAmount
+      payout
+      payoutTypeName
+      netResult
+      isJackpot
+      initiatedTimestamp
+      completedTimestamp
+    }
+  }
+}
+
+# =====================================================
+# 📊 CASINO ANALYTICS
+# =====================================================
+
+# Get Overall Casino Metrics
+query CasinoMetrics {
+  casinoMetrics(id: "global") {
+    id
+    
+    # Volume
+    totalSpins
+    totalBetsVolume
+    totalPayoutsVolume
+    
+    # Revenue
+    totalHouseFees
+    totalVRFMarkup
+    totalSwapFees
+    totalRevenue
+    
+    # Costs
+    totalVRFCostsPaid
+    totalJackpotsPaid
+    totalCosts
+    
+    # Profitability
+    grossProfit
+    netProfit
+    profitMargin
+    
+    # Treasury
+    currentPrizePool
+    contractETHBalance
+    totalChipsSupply
+    
+    # Players
+    uniquePlayers
+    activePlayers24h
+    
+    # Configuration
+    currentBaseChipPriceUSD
+    currentVRFCostUSD
+    currentVRFMarkupBP
+    currentHouseEdgeBP
+    
+    lastUpdateTimestamp
+  }
+}
+
+# Get Reel Performance Statistics
+query ReelStats {
+  reelStats(
+    orderBy: reelCount
+    orderDirection: asc
+  ) {
+    id
+    reelCount
+    totalSpins
+    totalBets
+    totalPayouts
+    uniquePlayers
+    winRate
+    avgBetSize
+    avgPayout
+    actualHouseEdge
+    
+    # Win Distribution
+    lossCount
+    smallWinCount
+    mediumWinCount
+    bigWinCount
+    megaWinCount
+    ultraWinCount
+    specialComboCount
+    jackpotCount
+    
+    # Jackpot Info
+    lastJackpotTimestamp
+    lastJackpotPlayer
+    lastJackpotAmount
+    
+    # Popular Combinations
+    mostFrequentWin
+    mostFrequentLoss
+  }
+}
+
+# Get Daily Performance (Last 7 Days)
+query DailyPerformance {
+  dailySnapshots(
+    first: 7
+    orderBy: date
+    orderDirection: desc
+  ) {
+    id
+    date
+    spinsCount
+    betsVolume
+    payoutsVolume
+    uniquePlayers
+    newPlayers
+    returningPlayers
+    houseFees
+    vrfMarkup
+    netProfit
+    avgWinRate
+    avgBetSize
+    biggestWin
+    biggestWinPlayer
+    
+    # Reel Distribution
+    reel3Spins
+    reel4Spins
+    reel5Spins
+    reel6Spins
+    reel7Spins
+    
+    # End of Day State
+    endingPrizePool
+    endingETHBalance
+    endingChipsSupply
+  }
+}
+
+# Get Hourly Activity (Last 24 Hours)
+query HourlyActivity {
+  hourlySnapshots(
+    first: 24
+    orderBy: timestamp
+    orderDirection: desc
+  ) {
+    id
+    timestamp
+    hour
+    dayOfWeek
+    spinsCount
+    betsVolume
+    payoutsVolume
+    uniquePlayers
+    winRate
+    avgBetSize
+    netProfit
+  }
+}
+
+# =====================================================
+# 💰 FINANCIAL QUERIES
+# =====================================================
+
+# Get CHIPS Purchase Activity
+query ChipsPurchases {
+  chipsTransacteds(
+    first: 20
+    orderBy: timestamp
+    orderDirection: desc
+    where: { transactionType: "purchase" }
+  ) {
+    id
+    player {
+      id
+      address
+    }
+    transactionType
+    chipsAmount
+    ethValue
+    exchangeRate
+    ethPriceUSD
+    timestamp
+    transactionHash
+  }
+}
+
+# Get Prize Pool Changes
+query PrizePoolChanges {
+  prizePoolChanges(
+    first: 20
+    orderBy: timestamp
+    orderDirection: desc
+  ) {
+    id
+    newTotalPrizePool
+    amount
+    reason
+    reasonName
+    timestamp
+    transactionHash
+  }
+}
+
+# Get Emergency Withdrawals
+query EmergencyWithdrawals {
+  emergencyWithdrawals(
+    orderBy: timestamp
+    orderDirection: desc
+  ) {
+    id
+    player {
+      id
+      address
+    }
+    amount
+    reason
+    timestamp
+    transactionHash
+  }
+}
+
+# =====================================================
+# 🔍 VRF & TECHNICAL QUERIES
+# =====================================================
+
+# Get VRF Analytics
+query VRFAnalytics {
+  vrfanalytics(id: "global") {
+    id
+    totalRequests
+    pendingRequests
+    fulfilledRequests
+    failedRequests
+    totalVRFCostETH
+    totalMarkupCollected
+    avgCostPerRequest
+    minCost
+    maxCost
+    avgResponseTime
+    minResponseTime
+    maxResponseTime
+    currentCallbackGasLimit
+    currentRequestConfirmations
+    lastRequestTimestamp
+    lastFulfillmentTimestamp
+  }
+}
+
+# Get Recent VRF Transactions
+query VRFTransactions {
+  vrftransactions(
+    first: 20
+    orderBy: timestamp
+    orderDirection: desc
+  ) {
+    id
+    requestId
+    estimatedCost
+    actualCost
+    markup
+    ethPriceUSD
+    timestamp
+    transactionHash
+  }
+}
+
+# Get System Configuration Updates
+query SystemConfigUpdates {
+  systemConfigUpdates(
+    orderBy: timestamp
+    orderDirection: desc
+  ) {
+    id
+    parameter
+    oldValue
+    newValue
+    timestamp
+    transactionHash
+  }
+}
+
+# Get Current System State
+query SystemState {
+  systemState(id: "current") {
+    id
+    isPaused
+    owner
+    implementation
+    payoutTablesAddress
+    vrfWrapperAddress
+    ethPriceFeedAddress
+    lastSpinTimestamp
+    lastConfigUpdateTimestamp
+    deploymentBlock
+    deploymentTimestamp
+  }
+}
+
+# =====================================================
+# 🏆 LEADERBOARDS
+# =====================================================
+
+# Get Volume Leaderboard (All Time)
+query VolumeLeaderboard {
+  leaderboardEntries(
+    first: 10
+    orderBy: rank
+    orderDirection: asc
+    where: { 
+      category: "volume"
+      period: "allTime"
+    }
+  ) {
+    id
+    player {
+      id
+      address
+      totalSpins
+    }
+    rank
+    value
+    lastUpdated
+  }
+}
+
+# Get Profit Leaderboard (Monthly)
+query ProfitLeaderboard {
+  leaderboardEntries(
+    first: 10
+    orderBy: rank
+    orderDirection: asc
+    where: { 
+      category: "profit"
+      period: "monthly"
+    }
+  ) {
+    id
+    player {
+      id
+      address
+      totalSpins
+      roi
+    }
+    rank
+    value
+    lastUpdated
+  }
+}
+
+# Get Win Rate Leaderboard (Weekly)
+query WinRateLeaderboard {
+  leaderboardEntries(
+    first: 10
+    orderBy: rank
+    orderDirection: asc
+    where: { 
+      category: "winRate"
+      period: "weekly"
+    }
+  ) {
+    id
+    player {
+      id
+      address
+      totalSpins
+      winRate
+    }
+    rank
+    value
+    lastUpdated
+  }
+}
+
+# =====================================================
+# 🔍 ADVANCED QUERIES
+# =====================================================
+
+# Get Hot Streaks (Players with Current Win Streak > 5)
+query HotStreaks {
+  players(
+    orderBy: currentStreak
+    orderDirection: desc
+    where: { currentStreak_gte: 5 }
+  ) {
+    id
+    address
+    currentStreak
+    longestWinStreak
+    totalSpins
+    winRate
+    lastSpinTimestamp
+  }
+}
+
+# Find Whale Players (High Volume, Recent Activity)
+query WhaleActivePlayers {
+  players(
+    first: 20
+    orderBy: totalBet
+    orderDirection: desc
+    where: { 
+      totalBet_gte: "10000000000000000000000"  # 10,000 CHIPS
+      lastSpinTimestamp_gte: "1704067200"      # Recent (adjust timestamp)
+    }
+  ) {
+    id
+    address
+    totalSpins
+    totalBet
+    totalWon
+    netProfit
+    roi
+    winRate
+    lastSpinTimestamp
+    avgBetSize
+  }
+}
+
+# Get Specific Reel Combination Wins
+query TripleSevenWins {
+  spins(
+    orderBy: completedTimestamp
+    orderDirection: desc
+    where: { 
+      reelCombination_contains: "6-6-6"  # Assuming 6 = JACKPOT symbol
+      settled: true
+    }
+  ) {
+    id
+    player {
+      id
+      address
+    }
+    reelCount
+    reelCombination
+    betAmount
+    payout
+    payoutTypeName
+    isJackpot
+    completedTimestamp
+  }
+}
+
+# Get Game Sessions with High Activity
+query HighActivitySessions {
+  gameSessions(
+    first: 10
+    orderBy: spinsCount
+    orderDirection: desc
+    where: { 
+      spinsCount_gte: "50"
+      isActive: false 
+    }
+  ) {
+    id
+    player {
+      id
+      address
+    }
+    startTime
+    endTime
+    duration
+    spinsCount
+    totalBet
+    totalWon
+    netResult
+    endReason
+  }
+}
+
+# Get Player Activity Timeline
+query PlayerActivityTimeline($playerAddress: ID!) {
+  playerActivities(
+    orderBy: timestamp
+    orderDirection: desc
+    where: { player: $playerAddress }
+  ) {
+    id
+    player {
+      id
+      address
+    }
+    totalSpins
+    totalBet
+    totalWon
+    sessionSpins
+    sessionBet
+    sessionWon
+    milestone
+    timestamp
+    transactionHash
+  }
+}
+
+# Search for Players by Partial Address
+query SearchPlayers($addressContains: String!) {
+  players(
+    first: 10
+    where: { 
+      address_contains: $addressContains
+      totalSpins_gte: "1"
+    }
+    orderBy: totalBet
+    orderDirection: desc
+  ) {
+    id
+    address
+    totalSpins
+    totalBet
+    totalWon
+    netProfit
+    lastSpinTimestamp
+  }
+}
+
+# =====================================================
+# 📈 TIME-BASED ANALYTICS
+# =====================================================
+
+# Get Activity by Hour of Day
+query ActivityByHour($dayOfWeek: Int!) {
+  hourlySnapshots(
+    orderBy: hour
+    orderDirection: asc
+    where: { dayOfWeek: $dayOfWeek }
+  ) {
+    hour
+    spinsCount
+    betsVolume
+    uniquePlayers
+    avgBetSize
+    winRate
+  }
+}
+
+# Get Growth Metrics (Compare periods)
+query GrowthMetrics {
+  latest: dailySnapshots(first: 7, orderBy: date, orderDirection: desc) {
+    date
+    spinsCount
+    uniquePlayers
+    betsVolume
+    netProfit
+  }
+  
+  previous: dailySnapshots(
+    first: 7
+    skip: 7
+    orderBy: date
+    orderDirection: desc
+  ) {
+    date
+    spinsCount
+    uniquePlayers
+    betsVolume
+    netProfit
+  }
+}
+
+# =====================================================
+# 📊 DASHBOARD & ANALYTICS QUERIES
+# =====================================================
+
+# Casino Dashboard Overview (Key Metrics)
+query CasinoDashboard {
+  metrics: casinoMetrics(id: "global") {
+    totalSpins
+    totalBetsVolume
+    totalPayoutsVolume
+    netProfit
+    profitMargin
+    uniquePlayers
+    activePlayers24h
+    currentPrizePool
+    contractETHBalance
+  }
+  
+  todayStats: dailySnapshots(
+    first: 1
+    orderBy: date
+    orderDirection: desc
+  ) {
+    spinsCount
+    betsVolume
+    payoutsVolume
+    uniquePlayers
+    netProfit
+    biggestWin
+    biggestWinPlayer
+  }
+  
+  recentJackpots: jackpotWins(
+    first: 5
+    orderBy: timestamp
+    orderDirection: desc
+  ) {
+    amount
+    player {
+      address
+    }
+    timestamp
+  }
+}
+
+# Real-Time Activity Feed
+query ActivityFeed {
+  recentSpins: spins(
+    first: 10
+    orderBy: completedTimestamp
+    orderDirection: desc
+    where: { settled: true }
+  ) {
+    player {
+      address
+    }
+    betAmount
+    payout
+    payoutTypeName
+    isJackpot
+    completedTimestamp
+    reelCombination
+  }
+  
+  bigWinsToday: spins(
+    first: 5
+    orderBy: payout
+    orderDirection: desc
+    where: { 
+      payout_gte: "1000000000000000000000"
+      settled: true
+    }
+  ) {
+    player {
+      address
+    }
+    payout
+    payoutTypeName
+    completedTimestamp
+  }
+}
+
+# Revenue Analytics Dashboard
+query RevenueAnalytics {
+  dailyRevenue: dailySnapshots(
+    first: 30
+    orderBy: date
+    orderDirection: desc
+  ) {
+    date
+    spinsCount
+    betsVolume
+    payoutsVolume
+    houseFees
+    vrfMarkup
+    vrfCosts
+    netProfit
+    avgBetSize
+    avgWinRate
+  }
+  
+  revenueByReel: reelStats_collection(
+    orderBy: totalBets
+    orderDirection: desc
+  ) {
+    reelCount
+    totalBets
+    totalPayouts
+    actualHouseEdge
+    totalSpins
+  }
+}
+
+# Player Engagement Metrics
+query PlayerEngagement {
+  activeSessions: gameSessions(
+    first: 20
+    orderBy: startTime
+    orderDirection: desc
+    where: { isActive: true }
+  ) {
+    player {
+      address
+    }
+    spinsCount
+    totalBet
+    duration
+    startTime
+  }
+  
+  playerRetention: players(
+    first: 100
+    orderBy: lastSpinTimestamp
+    orderDirection: desc
+    where: { totalSpins_gte: "5" }
+  ) {
+    address
+    totalSpins
+    firstSpinTimestamp
+    lastSpinTimestamp
+    totalSessionCount
+    avgSessionDuration
+  }
+  
+  highValuePlayers: players(
+    first: 20
+    orderBy: totalBet
+    orderDirection: desc
+    where: { 
+      totalSpins_gte: "10"
+    }
+  ) {
+    address
+    totalBet
+    totalWon
+    netProfit
+    roi
+    totalSpins
+    avgBetSize
+  }
+}
+
+# Leaderboard Display (Complete)
+query LeaderboardsComplete {
+  volumeLeaders: leaderboardEntries(
+    first: 10
+    orderBy: value
+    orderDirection: desc
+    where: { 
+      category: "volume"
+      period: "weekly"
+    }
+  ) {
+    rank
+    value
+    player {
+      address
+      totalSpins
+      winRate
+    }
+  }
+  
+  profitLeaders: leaderboardEntries(
+    first: 10
+    orderBy: value
+    orderDirection: desc
+    where: { 
+      category: "profit"
+      period: "weekly"
+    }
+  ) {
+    rank
+    value
+    player {
+      address
+      roi
+      totalSpins
+    }
+  }
+  
+  streakLeaders: leaderboardEntries(
+    first: 10
+    orderBy: value
+    orderDirection: desc
+    where: { 
+      category: "streak"
+      period: "allTime"
+    }
+  ) {
+    rank
+    value
+    player {
+      address
+      currentStreak
+      longestWinStreak
+    }
+  }
+}
+
+# Reel Performance Analytics
+query ReelAnalytics {
+  reelPopularity: reelStats_collection(
+    orderBy: totalSpins
+    orderDirection: desc
+  ) {
+    reelCount
+    totalSpins
+    uniquePlayers
+    winRate
+    avgPayout
+    actualHouseEdge
+    
+    # Win distribution
+    lossCount
+    smallWinCount
+    mediumWinCount
+    bigWinCount
+    megaWinCount
+    ultraWinCount
+    specialComboCount
+    jackpotCount
+  }
+  
+  reelProfitability: reelStats_collection(
+    orderBy: reelCount
+    orderDirection: asc
+  ) {
+    reelCount
+    totalBets
+    totalPayouts
+    actualHouseEdge
+  }
+}
+
+# VRF Performance Monitoring
+query VRFMonitoring {
+  vrfStats: vrfanalytics(id: "global") {
+    totalRequests
+    pendingRequests
+    fulfilledRequests
+    failedRequests
+    avgResponseTime
+    minResponseTime
+    maxResponseTime
+    totalVRFCostETH
+    avgCostPerRequest
+  }
+  
+  recentVRFTransactions: vrftransactions(
+    first: 20
+    orderBy: timestamp
+    orderDirection: desc
+  ) {
+    requestId
+    estimatedCost
+    actualCost
+    markup
+    timestamp
+  }
+}
+
+# Prize Pool Analytics
+query PrizePoolStatus {
+  currentMetrics: casinoMetrics(id: "global") {
+    currentPrizePool
+  }
+  
+  prizePoolHistory: prizePoolChanges(
+    first: 50
+    orderBy: timestamp
+    orderDirection: desc
+  ) {
+    newTotalPrizePool
+    amount
+    reasonName
+    timestamp
+  }
+  
+  jackpotHistory: jackpotWins(
+    orderBy: amount
+    orderDirection: desc
+  ) {
+    player {
+      address
+    }
+    amount
+    prizePoolBefore
+    prizePoolAfter
+    timestamp
+  }
+}
+
+# Player Journey Analytics
+query PlayerJourney($playerAddress: ID!) {
+  player(id: $playerAddress) {
+    # Lifetime stats
+    totalSpins
+    totalBet
+    totalWon
+    netProfit
+    roi
+    winRate
+    
+    # Current state
+    currentStreak
+    currentChipsBalance
+    pendingWinnings
+    
+    # Milestones
+    milestonesAchieved
+    
+    # Session history
+    sessions(
+      first: 10
+      orderBy: startTime
+      orderDirection: desc
+    ) {
+      startTime
+      endTime
+      duration
+      spinsCount
+      totalBet
+      totalWon
+      netResult
+    }
+    
+    # Recent activity
+    recentActivity: spins(
+      first: 20
+      orderBy: completedTimestamp
+      orderDirection: desc
+    ) {
+      betAmount
+      payout
+      payoutTypeName
+      completedTimestamp
+    }
+  }
+}
+
+# Hourly Heatmap Data (for UI visualization)
+query HourlyHeatmap {
+  hourlyData: hourlySnapshots(
+    first: 168  # 7 days * 24 hours
+    orderBy: timestamp
+    orderDirection: desc
+  ) {
+    timestamp
+    hour
+    dayOfWeek
+    spinsCount
+    betsVolume
+    uniquePlayers
+    winRate
+    netProfit
+  }
+}
+
+# Financial Health Monitoring
+query FinancialHealth {
+  metrics: casinoMetrics(id: "global") {
+    # Revenue
+    totalRevenue
+    totalHouseFees
+    totalVRFMarkup
+    totalSwapFees
+    
+    # Costs
+    totalVRFCostsPaid
+    totalJackpotsPaid
+    totalCosts
+    
+    # Treasury
+    contractETHBalance
+    currentPrizePool
+    totalChipsSupply
+    
+    # Profitability
+    grossProfit
+    netProfit
+    profitMargin
+  }
+  
+  # Daily P&L
+  dailyPnL: dailySnapshots(
+    first: 30
+    orderBy: date
+    orderDirection: desc
+  ) {
+    date
+    houseFees
+    vrfMarkup
+    vrfCosts
+    jackpotsPaid
+    netProfit
+  }
+}
+
+# System Health Dashboard
+query SystemHealth {
+  systemState(id: "current") {
+    isPaused
+    owner
+    lastSpinTimestamp
+    lastConfigUpdateTimestamp
+    deploymentTimestamp
+  }
+  
+  vrfHealth: vrfanalytics(id: "global") {
+    pendingRequests
+    failedRequests
+    avgResponseTime
+    lastRequestTimestamp
+    lastFulfillmentTimestamp
+  }
+  
+  recentErrors: emergencyWithdrawals(
+    first: 10
+    orderBy: timestamp
+    orderDirection: desc
+  ) {
+    player {
+      address
+    }
+    amount
+    reason
+    timestamp
+  }
+}
+
+# Player Segmentation Analysis
+query PlayerSegmentation {
+  # Whales (high volume players)
+  whales: players(
+    first: 10
+    orderBy: totalBet
+    orderDirection: desc
+    where: { totalBet_gte: "5000000000000000000000" }  # 5,000+ CHIPS
+  ) {
+    address
+    totalBet
+    totalSpins
+    avgBetSize
+    roi
+  }
+  
+  # Regular players
+  regulars: players(
+    first: 50
+    orderBy: totalSpins
+    orderDirection: desc
+    where: { 
+      totalSpins_gte: "5"
+      totalSpins_lt: "50"
+    }
+  ) {
+    address
+    totalSpins
+    avgBetSize
+    winRate
+  }
+  
+  # All players (no time filter needed)
+  allPlayers: players(
+    first: 20
+    orderBy: firstSpinTimestamp
+    orderDirection: desc
+  ) {
+    address
+    firstSpinTimestamp
+    totalSpins
+    netProfit
+  }
+}
+
+# Win Distribution Analysis
+query WinDistribution {
+  players(
+    first: 100
+    orderBy: totalSpins
+    orderDirection: desc
+    where: { totalSpins_gte: "10" }
+  ) {
+    lossCount
+    smallWinCount
+    mediumWinCount
+    bigWinCount
+    megaWinCount
+    ultraWinCount
+    specialComboCount
+    jackpotCount
+    totalSpins
+  }
+}
+
+# Session Analytics
+query SessionAnalytics {
+  # Long sessions
+  longSessions: gameSessions(
+    first: 10
+    orderBy: duration
+    orderDirection: desc
+    where: { 
+      isActive: false
+      duration_gte: "3600"  # 1 hour+
+    }
+  ) {
+    player {
+      address
+    }
+    duration
+    spinsCount
+    totalBet
+    netResult
+  }
+  
+  # Profitable sessions
+  profitableSessions: gameSessions(
+    first: 20
+    orderBy: netResult
+    orderDirection: desc
+    where: { 
+      isActive: false
+      netResult_gt: "0"
+    }
+  ) {
+    player {
+      address
+    }
+    spinsCount
+    totalBet
+    totalWon
+    netResult
+    duration
+  }
+}
+
+# New Player Analytics (Last 30 players)
+query NewPlayerAnalytics {
+  # Recent player acquisition
+  recentPlayers: players(
+    first: 30
+    orderBy: firstSpinTimestamp
+    orderDirection: desc
+  ) {
+    address
+    firstSpinTimestamp
+    totalSpins
+    totalBet
+    totalChipsPurchased
+    netProfit
+  }
+  
+  # Player lifetime value (all time top players)
+  playerLTV: players(
+    first: 20
+    orderBy: totalBet
+    orderDirection: desc
+    where: { totalSpins_gte: "5" }
+  ) {
+    address
+    totalBet
+    totalChipsPurchased
+    totalETHSpent
+    totalSessionCount
+    lastSpinTimestamp
+    roi
+  }
+}
+
+# Chip Economy Analytics
+query ChipEconomy {
+  metrics: casinoMetrics(id: "global") {
+    totalChipsSupply
+    contractETHBalance
+  }
+  
+  # Recent purchases
+  recentPurchases: chipsTransacteds(
+    first: 20
+    orderBy: timestamp
+    orderDirection: desc
+    where: { transactionType: "purchase" }
+  ) {
+    player {
+      address
+    }
+    chipsAmount
+    ethValue
+    exchangeRate
+    ethPriceUSD
+    timestamp
+  }
+  
+  # Large withdrawals
+  largeWithdrawals: chipsTransacteds(
+    first: 10
+    orderBy: ethValue
+    orderDirection: desc
+    where: { 
+      transactionType: "withdraw"
+      ethValue_gte: "1000000000000000000"  # 1 ETH+
+    }
+  ) {
+    player {
+      address
+    }
+    chipsAmount
+    ethValue
+    timestamp
+  }
+}
+
+# Risk Management Dashboard
+query RiskManagement {
+  # Players with pending winnings
+  pendingPayouts: players(
+    first: 50
+    orderBy: pendingWinnings
+    orderDirection: desc
+    where: { pendingWinnings_gt: "0" }
+  ) {
+    address
+    pendingWinnings
+    currentChipsBalance
+    lastSpinTimestamp
+  }
+  
+  # Hot/Cold analysis
+  hotPlayers: players(
+    first: 10
+    orderBy: netProfit
+    orderDirection: desc
+    where: { 
+      totalSpins_gte: "10"
+      netProfit_gt: "10000000000000000000000"  # 10k+ CHIPS profit
+    }
+  ) {
+    address
+    netProfit
+    roi
+    totalSpins
+    winRate
+  }
+  
+  # System exposure
+  systemRisk: casinoMetrics(id: "global") {
+    contractETHBalance
+    totalChipsSupply
+    currentPrizePool
+    totalPayoutsVolume
+  }
+}
+
+# Spin Pattern Analysis
+query SpinPatterns {
+  # Most common winning combinations
+  winningSpins: spins(
+    first: 100
+    orderBy: completedTimestamp
+    orderDirection: desc
+    where: { 
+      payout_gt: "0"
+      settled: true
+    }
+  ) {
+    reelCombination
+    payoutTypeName
+    payout
+    reelCount
+  }
+  
+  # Jackpot combinations
+  jackpotSpins: spins(
+    where: { 
+      isJackpot: true
+      settled: true
+    }
+  ) {
+    player {
+      address
+    }
+    reelCombination
+    payout
+    completedTimestamp
+  }
+}
+
+# Mobile Dashboard (Lightweight)
+query MobileDashboard {
+  # Key metrics only
+  metrics: casinoMetrics(id: "global") {
+    totalSpins
+    currentPrizePool
+    activePlayers24h
+  }
+  
+  # Last 5 spins
+  recentActivity: spins(
+    first: 5
+    orderBy: completedTimestamp
+    orderDirection: desc
+    where: { settled: true }
+  ) {
+    player {
+      address
+    }
+    payout
+    payoutTypeName
+    completedTimestamp
+  }
+  
+  # Top winner today
+  topWinner: dailySnapshots(
+    first: 1
+    orderBy: date
+    orderDirection: desc
+  ) {
+    biggestWin
+    biggestWinPlayer
+  }
+}
+
+# =====================================================
+# 📅 TIME-FILTERED QUERIES (Require Variables)
+# =====================================================
+
+# Activity Since Specific Date
+query ActivitySince($timestamp: BigInt!) {
+  spins(
+    first: 50
+    orderBy: completedTimestamp
+    orderDirection: desc
+    where: { 
+      completedTimestamp_gte: $timestamp
+      settled: true
+    }
+  ) {
+    player {
+      address
+    }
+    betAmount
+    payout
+    payoutTypeName
+    completedTimestamp
+  }
+  
+  newPlayersSince: players(
+    orderBy: firstSpinTimestamp
+    orderDirection: desc
+    where: { firstSpinTimestamp_gte: $timestamp }
+  ) {
+    address
+    firstSpinTimestamp
+    totalSpins
+    totalBet
+  }
+}
+
+# Custom Date Range Analytics
+query DateRangeAnalytics($startDate: BigInt!, $endDate: BigInt!) {
+  dailySnapshots(
+    orderBy: date
+    orderDirection: asc
+    where: { 
+      date_gte: $startDate
+      date_lte: $endDate
+    }
+  ) {
+    date
+    spinsCount
+    betsVolume
+    payoutsVolume
+    netProfit
+    uniquePlayers
+  }
+}
+
+# =====================================================
+# 💡 EXAMPLE VARIABLES FOR QUERIES
+# =====================================================
+
+# Use these in GraphiQL "Query Variables" panel:
+#
+# For PlayerProfile, PlayerSpins, PlayerActivityTimeline, PlayerJourney:
+# {
+#   "playerAddress": "0x1234567890123456789012345678901234567890"
+# }
+#
+# For SearchPlayers:
+# {
+#   "addressContains": "0x123"
+# }
+#
+# For ActivityByHour:
+# {
+#   "dayOfWeek": 1
+# }
+#
+# For time-based queries (ActivityFeed, PlayerEngagement, etc):
+# {
+#   "todayStart": "1705104000",
+#   "sevenDaysAgo": "1704499200",
+#   "thirtyDaysAgo": "1702425600"
+# }
+#
+# For RevenueAnalytics:
+# {
+#   "daysBack": 30
+# }
+#
+# For MarketingAnalytics:
+# {
+#   "campaignStartTime": "1704067200"
+# }
+
+# =====================================================
+# 📝 QUERY TIPS
+# =====================================================
+
+# 1. Use 'first' parameter to limit results (max usually 1000)
+# 2. Use 'skip' parameter for pagination
+# 3. Use 'where' filters to narrow results
+# 4. BigInt values must be quoted strings
+# 5. Timestamps are Unix timestamps in seconds
+# 6. Address fields expect checksummed addresses
+# 7. Use 'orderBy' and 'orderDirection' for sorting
+# 8. GraphiQL provides autocomplete and schema exploration

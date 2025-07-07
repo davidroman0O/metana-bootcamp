@@ -43,7 +43,8 @@ import {
   DailySnapshot,
   HourlySnapshot,
   VRFAnalytics,
-  SystemState
+  SystemState,
+  LeaderboardEntry
 } from "../generated/schema"
 
 // Helper constants
@@ -80,6 +81,111 @@ function getHourOfDay(timestamp: BigInt): i32 {
   let secondsInDay = timestamp.mod(BigInt.fromI32(86400))
   let hour = secondsInDay.div(BigInt.fromI32(3600))
   return hour.toI32()
+}
+
+function getWeekId(timestamp: BigInt): string {
+  // Week starts on Monday (adjust from Unix timestamp which starts on Thursday)
+  let days = timestamp.div(BigInt.fromI32(86400))
+  let weeksSinceEpoch = days.plus(BigInt.fromI32(3)).div(BigInt.fromI32(7))
+  let weekTimestamp = weeksSinceEpoch.times(BigInt.fromI32(604800)).minus(BigInt.fromI32(259200))
+  return weekTimestamp.toString()
+}
+
+function getMonthId(timestamp: BigInt): string {
+  // Approximate month calculation (30 days)
+  let monthTimestamp = timestamp.div(BigInt.fromI32(2592000)).times(BigInt.fromI32(2592000))
+  return monthTimestamp.toString()
+}
+
+function getPeriodId(period: string, timestamp: BigInt): string {
+  if (period == "daily") {
+    return getDayId(timestamp)
+  } else if (period == "weekly") {
+    return getWeekId(timestamp)
+  } else if (period == "monthly") {
+    return getMonthId(timestamp)
+  } else {
+    return "0" // allTime
+  }
+}
+
+function createLeaderboardEntryId(playerAddress: string, category: string, period: string, periodId: string): string {
+  return playerAddress + "-" + category + "-" + period + "-" + periodId
+}
+
+function getLeaderboardValue(player: Player, category: string): BigInt {
+  if (category == "volume") {
+    return player.totalBet
+  } else if (category == "profit") {
+    return player.netProfit
+  } else if (category == "winRate") {
+    // Convert winRate percentage to BigInt (multiply by 10000 for precision)
+    let winRateScaled = player.winRate.times(BigInt.fromI32(10000).toBigDecimal())
+    return BigInt.fromString(winRateScaled.truncate(0).toString())
+  } else if (category == "streak") {
+    return BigInt.fromI32(player.longestWinStreak)
+  } else if (category == "jackpots") {
+    return player.jackpotCount
+  }
+  return ZERO_BI
+}
+
+function shouldUpdateLeaderboard(player: Player, category: string): boolean {
+  if (category == "volume" || category == "profit") {
+    return player.totalSpins.ge(BigInt.fromI32(10))
+  } else if (category == "winRate") {
+    return player.totalSpins.ge(BigInt.fromI32(20))
+  } else if (category == "streak") {
+    return player.longestWinStreak >= 5
+  } else if (category == "jackpots") {
+    return player.jackpotCount.gt(ZERO_BI)
+  }
+  return false
+}
+
+function updateLeaderboardForPlayer(
+  player: Player,
+  categories: string[],
+  timestamp: BigInt
+): void {
+  let periods = ["daily", "weekly", "monthly", "allTime"]
+  
+  for (let i = 0; i < categories.length; i++) {
+    let category = categories[i]
+    
+    if (!shouldUpdateLeaderboard(player, category)) {
+      continue
+    }
+    
+    let value = getLeaderboardValue(player, category)
+    
+    for (let j = 0; j < periods.length; j++) {
+      let period = periods[j]
+      let periodId = getPeriodId(period, timestamp)
+      let entryId = createLeaderboardEntryId(player.id, category, period, periodId)
+      
+      let entry = LeaderboardEntry.load(entryId)
+      if (entry == null) {
+        entry = new LeaderboardEntry(entryId)
+        entry.player = player.id
+        entry.category = category
+        entry.period = period
+        entry.value = value
+        entry.rank = 1 // Will be updated below
+        entry.lastUpdated = timestamp
+      } else {
+        entry.value = value
+        entry.lastUpdated = timestamp
+      }
+      
+      // Simple ranking: count how many players have better values
+      // Note: In a real implementation, we'd need a more efficient approach
+      // For now, we'll save with rank 1 and note that a proper ranking system
+      // would require additional infrastructure
+      entry.rank = 1
+      entry.save()
+    }
+  }
 }
 
 function getOrCreatePlayer(address: Bytes): Player {
@@ -772,6 +878,9 @@ export function handleSpinCompleted(event: SpinCompleted): void {
   }
   
   hourlySnapshot.save()
+  
+  // Update leaderboards for relevant categories
+  updateLeaderboardForPlayer(player, ["volume", "profit", "winRate", "streak"], event.block.timestamp)
 }
 
 export function handleChipsTransacted(event: ChipsTransacted): void {
@@ -1051,6 +1160,9 @@ export function handleJackpotHit(event: JackpotHit): void {
   let dailySnapshot = getOrCreateDailySnapshot(event.block.timestamp)
   dailySnapshot.jackpotsPaid = dailySnapshot.jackpotsPaid.plus(event.params.amount)
   dailySnapshot.save()
+  
+  // Update leaderboard for jackpots category
+  updateLeaderboardForPlayer(player, ["jackpots"], event.block.timestamp)
 }
 
 export function handlePrizePoolStateChanged(event: PrizePoolStateChanged): void {
