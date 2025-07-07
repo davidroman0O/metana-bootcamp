@@ -13,9 +13,11 @@
 #
 # NAMING CONVENTION: The Graph automatically converts all entity names
 # to lowercase for GraphQL queries. For example:
-# - Entity "VRFAnalytics" becomes query "vrfanalytics"
-# - Entity "VRFTransaction" becomes query "vrftransactions" (plural)
-# - Entity "ReelStats" becomes query "reelStats" (plural form)
+# - Entity "VRFAnalytics" becomes query "vrfanalytics" (singular by ID)
+# - Entity "VRFTransaction" becomes query "vrftransactions" (plural collections)
+# - Entity "ReelStats" becomes:
+#   - "reelStats" for singular queries (by ID)
+#   - "reelStats_collection" for plural queries (lists)
 # =====================================================
 
 # =====================================================
@@ -272,7 +274,7 @@ query CasinoMetrics {
 
 # Get Reel Performance Statistics
 query ReelStats {
-  reelStats(
+  reelStats_collection(
     orderBy: reelCount
     orderDirection: asc
   ) {
