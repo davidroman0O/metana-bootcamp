@@ -1,3 +1,4 @@
+import React from 'react';
 import { useQuery, ApolloError } from '@apollo/client';
 
 // Overview queries - the only ones we need for the simplified dashboard
@@ -8,12 +9,15 @@ import {
   DAILY_PERFORMANCE,
   ACTIVE_PLAYERS_24H,
   BLOCKCHAIN_META,
+  REEL_DISTRIBUTION_24H,
   type CasinoDashboardVariables,
   type ActivityFeedVariables,
   type DailyPerformanceVariables,
   type ActivePlayers24hVariables,
   type ActivePlayers24hResult,
   type BlockchainMetaResult,
+  type ReelDistribution24hVariables,
+  type ReelDistribution24hResult,
 } from '../../graphql/queries/overview';
 
 // Utility functions
@@ -53,7 +57,7 @@ export interface QueryResult<T> {
 export function useCasinoDashboard(variables?: CasinoDashboardVariables) {
   return useQuery(CASINO_DASHBOARD, {
     variables,
-    pollInterval: 60000, // Refresh every minute
+    pollInterval: 5000, // Refresh every 5s
   });
 }
 
@@ -67,7 +71,7 @@ export function useActivityFeed(variables?: ActivityFeedVariables) {
 
   return useQuery(ACTIVITY_FEED, {
     variables: { ...defaultVariables, ...variables },
-    pollInterval: 30000, // Refresh every 30 seconds
+    pollInterval: 5000, // Refresh every 5 seconds
   });
 }
 
@@ -90,7 +94,7 @@ export function useDailyPerformance(variables?: DailyPerformanceVariables) {
 export function useActivePlayers24h() {
   // First get the blockchain timestamp
   const { data: metaData } = useQuery<BlockchainMetaResult>(BLOCKCHAIN_META, {
-    pollInterval: 60000, // Update every minute
+    pollInterval: 10000, // Update every 10s
   });
   
   // Calculate 24 hours ago from blockchain time
@@ -104,12 +108,60 @@ export function useActivePlayers24h() {
     {
       variables: { timestamp24hAgo },
       skip: !metaData?._meta?.block?.timestamp,
-      pollInterval: 60000, // Update every minute
+      pollInterval: 10000, // Update every 10s
     }
   );
   
   return {
     count: data?.players?.length || 0,
+    loading: loading || !metaData,
+    error,
+  };
+}
+
+export function useReelDistribution24h() {
+  // First get the blockchain timestamp
+  const { data: metaData } = useQuery<BlockchainMetaResult>(BLOCKCHAIN_META, {
+    pollInterval: 60000, // Update every minute
+  });
+  
+  // Calculate 24 hours ago from blockchain time
+  const timestamp24hAgo = metaData?._meta?.block?.timestamp 
+    ? (metaData._meta.block.timestamp - 24 * 60 * 60).toString()
+    : '0';
+  
+  // Query spins from last 24h
+  const { data, loading, error } = useQuery<ReelDistribution24hResult, ReelDistribution24hVariables>(
+    REEL_DISTRIBUTION_24H,
+    {
+      variables: { timestamp24hAgo },
+      skip: !metaData?._meta?.block?.timestamp,
+      pollInterval: 60000, // Update every minute
+    }
+  );
+  
+  // Process the data to count spins per reel type
+  const reelCounts = React.useMemo(() => {
+    if (!data?.spins) return null;
+    
+    const counts: Record<number, number> = {};
+    
+    // Initialize counts
+    for (let i = 3; i <= 7; i++) {
+      counts[i] = 0;
+    }
+    
+    // Count spins per reel type
+    data.spins.forEach(spin => {
+      counts[spin.reelCount] = (counts[spin.reelCount] || 0) + 1;
+    });
+    
+    return counts;
+  }, [data]);
+  
+  return {
+    reelCounts,
+    totalSpins: data?.spins?.length || 0,
     loading: loading || !metaData,
     error,
   };

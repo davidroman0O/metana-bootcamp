@@ -17,7 +17,7 @@ const AdminHeader: React.FC = () => {
     checkGraphQLConnection().then(setGraphQLConnected);
     const interval = setInterval(() => {
       checkGraphQLConnection().then(setGraphQLConnected);
-    }, 30000); // Check every 30 seconds
+    }, 5000); // Check every 5 seconds
     return () => clearInterval(interval);
   }, []);
 

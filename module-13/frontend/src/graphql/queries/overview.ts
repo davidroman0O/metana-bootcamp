@@ -320,3 +320,30 @@ export const BLOCKCHAIN_META = gql`
     }
   }
 `;
+
+// Reel Distribution Query - Simplified to just get spins in last 24h
+export interface ReelDistribution24hVariables {
+  timestamp24hAgo: string;
+}
+
+export interface ReelDistribution24hResult {
+  spins: Array<{
+    id: string;
+    reelCount: number;
+  }>;
+}
+
+export const REEL_DISTRIBUTION_24H = gql`
+  query ReelDistribution24h($timestamp24hAgo: BigInt!) {
+    spins(
+      where: { 
+        settled: true, 
+        completedTimestamp_gte: $timestamp24hAgo 
+      }
+      first: 1000
+    ) {
+      id
+      reelCount
+    }
+  }
+`;

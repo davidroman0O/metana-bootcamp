@@ -5,11 +5,13 @@ import {
   useActivityFeed, 
   useDailyPerformance,
   useActivePlayers24h,
+  useReelDistribution24h,
   formatGraphQLError 
 } from '../../../hooks/admin/useGraphQLQueries';
 import MetricCard from './MetricCard';
 import ActivityFeed from './ActivityFeed';
 import QuickStats from './QuickStats';
+import ReelDistribution from './ReelDistribution';
 import { 
   Users as UsersIcon, 
   DollarSign as DollarSignIcon, 
@@ -42,6 +44,7 @@ const OverviewDashboard: React.FC = () => {
   const { data: activityData, loading: activityLoading } = useActivityFeed();
   const { data: performanceData, loading: performanceLoading, error: performanceError } = useDailyPerformance();
   const { count: activePlayers24h, loading: activePlayers24hLoading } = useActivePlayers24h();
+  const { reelCounts, totalSpins: reelSpins24h, loading: reelStatsLoading } = useReelDistribution24h();
 
   // Format numbers
   const formatNumber = (value: string | number): string => {
@@ -292,7 +295,7 @@ const OverviewDashboard: React.FC = () => {
         </div>
 
         {/* Quick Stats (1 col) */}
-        <div>
+        <div className="space-y-6">
           <QuickStats
             totalBets={metrics?.totalBetsVolume}
             totalPayouts={metrics?.totalPayoutsVolume}
@@ -300,6 +303,13 @@ const OverviewDashboard: React.FC = () => {
             chipsSupply={metrics?.totalChipsSupply}
             recentJackpots={recentJackpots}
             loading={dashboardLoading}
+          />
+          
+          {/* Reel Distribution Chart */}
+          <ReelDistribution 
+            reelCounts={reelCounts}
+            totalSpins={reelSpins24h}
+            loading={reelStatsLoading}
           />
         </div>
       </div>
