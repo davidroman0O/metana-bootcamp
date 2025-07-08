@@ -10,11 +10,13 @@ services:
       - ../../hardhat:/hardhat
       - hardhat-node-modules:/hardhat/node_modules
       - hardhat-deployments:/hardhat/deployments
+      - hardhat-cache:/hardhat/cache
+      - hardhat-artifacts:/hardhat/artifacts
     working_dir: /hardhat
     environment:
       - NODE_ENV=development
       - DEBIAN_FRONTEND=noninteractive
-    command: bash -c "apt-get update && apt-get install -y --no-install-recommends curl && if [ ! -d 'node_modules' ] || [ ! -f 'node_modules/.package-lock.json' ]; then npm install --production; fi && npm run node:fork"
+    command: bash -c "apt-get update && apt-get install -y --no-install-recommends curl && if [ ! -d 'node_modules' ] || [ ! -f 'node_modules/.package-lock.json' ]; then npm install --production; fi && npx hardhat node --hostname 0.0.0.0 --fork https://eth-mainnet.g.alchemy.com/v2/UlgUe5NUoeezq_0_AxTSKl0qpQQeHSKV"
     healthcheck:
       test: ["CMD", "curl", "-X", "POST", "-H", "Content-Type: application/json", "--data", '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}', "http://localhost:8545"]
       interval: 30s
@@ -51,7 +53,14 @@ services:
       GRAPH_LOG: debug
       GRAPH_LOG_QUERY_TIMING: 'gql'
       GRAPH_ALLOW_NON_DETERMINISTIC_FULLTEXT_SEARCH: 'true'
-      ETHEREUM_POLLING_INTERVAL: 1000
+      # Reduce RPC load on hardhat
+      ETHEREUM_POLLING_INTERVAL: 5000  # Poll every 5 seconds instead of 1 second
+      ETHEREUM_BLOCK_BATCH_SIZE: 1     # Fetch 1 block at a time instead of 10
+      GRAPH_ETHEREUM_REQUEST_RETRIES: 1 # Retry failed requests only once instead of 10 times
+      GRAPH_ETHEREUM_JSON_RPC_TIMEOUT: 10 # Timeout in seconds (numeric value)
+      # Critical: Prevent graph-node from fetching excessive historical blocks
+      ETHEREUM_REORG_THRESHOLD: 10     # Allow handling up to 10 block reorgs (was 250)
+      ETHEREUM_ANCESTOR_COUNT: 10      # Check 10 ancestor blocks (was unset)
     volumes:
       - ./:/subgraph
       - hardhat-deployments:/deployments:ro
@@ -99,4 +108,6 @@ services:
 volumes:
   hardhat-node-modules:
   hardhat-deployments:
+  hardhat-cache:
+  hardhat-artifacts:
   postgres-data:

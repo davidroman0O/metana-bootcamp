@@ -22,6 +22,11 @@ help:
 	@echo "  reset-contracts  - Redeploy contracts only"
 	@echo "  reset-subgraph   - Remove and redeploy subgraph"
 	@echo ""
+	@echo "🎮 Script Running:"
+	@echo "  Scripts now work directly without special handling"
+	@echo "  Just run: cd ../../hardhat && npm run <script-name>"
+	@echo "  Examples: npm run vrf:fulfiller, npm run test:multi-player"
+	@echo ""
 	@echo "📋 Core Commands:"
 	@echo "  update-abi     - Auto-compile Hardhat & copy latest ABI"
 	@echo "  codegen        - Generate TypeScript types from ABI and schema"
@@ -117,10 +122,19 @@ update-addresses:
 		exit 1; \
 	fi; \
 	echo "🎯 Found contract address: $$CONTRACT_ADDRESS for $(NETWORK)"; \
+	DEPLOYMENT_BLOCK=$$(cat "$$DEPLOYMENT_FILE" | grep -E '"deploymentBlock"' | head -1 | sed 's/[^0-9]//g'); \
+	if [ -z "$$DEPLOYMENT_BLOCK" ]; then \
+		echo "⚠️  No deployment block found, using 0"; \
+		DEPLOYMENT_BLOCK="0"; \
+	else \
+		echo "📦 Found deployment block: $$DEPLOYMENT_BLOCK"; \
+	fi; \
 	sed -i.bak "s/address: \"0x[a-fA-F0-9]*\"/address: \"$$CONTRACT_ADDRESS\"/g" subgraph.yaml; \
 	sed -i.bak "s/network: .*/network: $(NETWORK)/g" subgraph.yaml; \
+	sed -i.bak "s/startBlock: [0-9]*/startBlock: $$DEPLOYMENT_BLOCK/g" subgraph.yaml; \
 	rm -f subgraph.yaml.bak; \
-	echo "✅ Contract address updated to $$CONTRACT_ADDRESS"
+	echo "✅ Contract address updated to $$CONTRACT_ADDRESS"; \
+	echo "✅ Start block updated to $$DEPLOYMENT_BLOCK"
 
 # Update networks.json from deployment files
 update-networks:
@@ -201,6 +215,34 @@ clean:
 	@rm -rf build/
 	@echo "✅ Cleanup completed"
 
+# Quick iteration commands for rapid development
+quick-update:
+	@echo "⚡ Quick contract update (keeping fork alive)..."
+	@echo "   1️⃣ Deploying new contracts..."
+	@cd ../../hardhat && npm run deploy:local
+	@echo "   2️⃣ Updating subgraph configuration..."
+	@make update-addresses NETWORK=localhost
+	@echo "   3️⃣ Rebuilding subgraph..."
+	@make smart-rebuild
+	@echo "   4️⃣ Deploying subgraph..."
+	@make remove-local 2>/dev/null || true
+	@make create-local 2>/dev/null || true
+	@make deploy-local
+	@echo "✅ Quick update completed!"
+
+quick-sync:
+	@echo "⚡ Quick subgraph sync (from current block)..."
+	@make update-addresses NETWORK=localhost
+	@make smart-rebuild
+	@make deploy-local
+	@echo "✅ Quick sync completed!"
+
+preserve-fork:
+	@echo "🔧 Keeping hardhat fork running while updating..."
+	@echo "   ⚠️  DO NOT stop docker-compose!"
+	@echo "   Use 'make quick-update' for contract changes"
+	@echo "   Use 'make quick-sync' for subgraph changes"
+
 # Network switching and deployment
 switch-network:
 	@if [ -z "$(NETWORK)" ]; then \
@@ -225,8 +267,8 @@ deploy-to:
 
 # Infrastructure Management Commands
 dev-start:
-	@echo "🚀 Starting development infrastructure..."
-	@docker-compose up -d
+	@echo "🚀 Starting essential development services (without graph-node)..."
+	@docker-compose up -d hardhat-node ipfs postgres
 	@echo ""
 	@echo "⏳ Waiting for basic services to start..."
 	@sleep 10
@@ -234,20 +276,32 @@ dev-start:
 	@echo "🧪 Testing service availability:"
 	@printf "   PostgreSQL: " && (docker-compose exec -T postgres pg_isready -h localhost -U graph-node > /dev/null 2>&1 && echo "✅ Ready" || echo "❌ Not ready")
 	@printf "   IPFS: " && (curl -s --max-time 2 -X POST http://localhost:5001/api/v0/version > /dev/null 2>&1 && echo "✅ Ready" || echo "❌ Not ready")
-	@printf "   Graph Node: " && (curl -s --max-time 2 -f http://localhost:8000 > /dev/null 2>&1 && echo "✅ Ready" || echo "❌ Not ready")
+	@printf "   Graph Node: " && echo "⏳ Will start after contracts are deployed"
 	@printf "   Hardhat Node: " && (./scripts/check-hardhat-quick.sh > /dev/null 2>&1 && echo "⏳ Starting (forking mainnet...)" || echo "❌ Not started")
 	@echo ""
 	@echo "📍 Service URLs:"
 	@echo "   - Hardhat Node: http://localhost:8545"
-	@echo "   - Graph Node: http://localhost:8000"
+	@echo "   - Graph Node: http://localhost:8000 (will be available after deployment)"
 	@echo "   - GraphiQL: http://localhost:8000/subgraphs/name/casino-slot-subgraph/graphql"
 	@echo "   - IPFS: http://localhost:5001"
 	@echo "   - PostgreSQL: localhost:5432"
 	@echo ""
 	@echo "💡 Next steps:"
-	@echo "   - If Hardhat shows '⏳ Starting', run 'make wait-for-hardhat' to wait for it"
-	@echo "   - Once ready, run 'make deploy-all' to deploy contracts and subgraph"
-	@echo "   - Or run 'make test-hardhat' to check Hardhat status"
+	@echo "   - Contracts will be deployed automatically if you ran 'make dev'"
+	@echo "   - Otherwise, run 'make deploy-all' to deploy contracts and subgraph"
+	@echo "   - Graph Node will start automatically after contracts are deployed"
+
+dev-start-all:
+	@echo "⚠️  WARNING: Starting all services including graph-node"
+	@echo "   Graph-node may flood hardhat with requests and make it unresponsive!"
+	@echo "   Use 'make dev-start' instead for the recommended workflow."
+	@echo ""
+	@echo "🚀 Starting ALL development services..."
+	@docker-compose up -d
+	@echo ""
+	@echo "⏳ Waiting for services to start..."
+	@sleep 10
+	@echo "✅ All services started (graph-node may be flooding hardhat)"
 
 dev-stop:
 	@echo "🛑 Stopping development infrastructure..."
@@ -306,10 +360,9 @@ deploy-subgraph:
 	@echo "✅ Subgraph deployed"
 	@echo "   - GraphiQL: http://localhost:8000/subgraphs/name/$(SUBGRAPH_NAME)/graphql"
 
-deploy-all: wait-for-hardhat deploy-contracts fund-contract deploy-subgraph
-	@echo "🎉 Full deployment completed!"
-	@echo "You can now query the subgraph at:"
-	@echo "http://localhost:8000/subgraphs/name/$(SUBGRAPH_NAME)/graphql"
+deploy-all:
+	@echo "🚀 Starting full deployment (with graph-node management)..."
+	@./scripts/deploy-all.sh
 
 # Reset Commands
 reset-contracts:
@@ -329,6 +382,9 @@ reset-all:
 	@make reset-contracts
 	@make reset-subgraph
 	@echo "✅ Full reset completed!"
+
+# Note: Graph-node no longer needs to be paused for scripts
+# The compatibility issue has been fixed with environment variables
 
 # Development workflow shortcuts
 dev: dev-start deploy-all

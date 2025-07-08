@@ -379,7 +379,7 @@ class MultiPlayerTestSimulator {
             }
             
             // Small delay between spins
-            await this.delay(1000 + Math.random() * 2000); // 1-3 seconds
+            await this.delay(150 + Math.random() * 250); 
         }
         
         console.log(`\n   📊 ${player.name} finished with ${ethers.utils.formatEther(player.chipsBalance)} CHIPS`);
@@ -482,7 +482,7 @@ async function runMultiPlayerSimulation() {
             await simulator.playPlayer(player);
             
             // Small break between players
-            await simulator.delay(2000);
+            await simulator.delay(150);
         }
         
         // Generate final report

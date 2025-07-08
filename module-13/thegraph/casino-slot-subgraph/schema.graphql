@@ -472,3 +472,10 @@ type SystemState @entity(immutable: false) {
   deploymentBlock: BigInt!
   deploymentTimestamp: BigInt!
 }
+
+# Helper entity to track unique players per day
+type PlayerDayActivity @entity(immutable: true) {
+  id: ID! # player-dayId
+  player: Player!
+  date: String! # dayId timestamp
+}

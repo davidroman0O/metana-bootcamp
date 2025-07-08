@@ -188,6 +188,8 @@ async function main() {
     }
   }
   
+  let deploymentBlockNumber = null;
+  
   if (!casinoAddresses.proxy || !contractExists) {
     console.log("\n🔨 Deploying CasinoSlotTest (UUPS Proxy)...");
     const CasinoSlotTest = await ethers.getContractFactory("CasinoSlotTest");
@@ -208,22 +210,35 @@ async function main() {
     );
     await casinoSlot.deployed();
     
+    // Capture deployment block number
+    deploymentBlockNumber = await ethers.provider.getBlockNumber();
+    console.log(`   📦 Deployed at block: ${deploymentBlockNumber}`);
+    
     const proxyAddress = casinoSlot.address;
     const implementationAddress = await upgrades.erc1967.getImplementationAddress(proxyAddress);
     
     console.log(`   ✅ CasinoSlotTest Proxy: ${proxyAddress}`);
     console.log(`   ✅ CasinoSlotTest Implementation: ${implementationAddress}`);
     
-    // Save addresses
+    // Save addresses with deployment block
     casinoAddresses = {
       proxy: proxyAddress,
       implementation: implementationAddress,
-      admin: deployer.address
+      admin: deployer.address,
+      deploymentBlock: deploymentBlockNumber
     };
     saveAddresses(network.name, "casino", casinoAddresses);
   } else {
     console.log("   ⏭️  CasinoSlot already deployed");
     console.log(`   ✅ CasinoSlot Proxy: ${casinoAddresses.proxy}`);
+    // Get current block if not stored
+    if (!casinoAddresses.deploymentBlock) {
+      deploymentBlockNumber = await ethers.provider.getBlockNumber();
+      casinoAddresses.deploymentBlock = deploymentBlockNumber;
+      saveAddresses(network.name, "casino", casinoAddresses);
+    } else {
+      deploymentBlockNumber = casinoAddresses.deploymentBlock;
+    }
   }
   
   // Step 4: Fund contract and test addresses
@@ -297,6 +312,7 @@ async function main() {
       CasinoSlotTest: {
         address: casinoAddresses.proxy,
         implementation: casinoAddresses.implementation,
+        deploymentBlock: deploymentBlockNumber,
         admin: casinoAddresses.admin,
         constructor: {
           vrfWrapper: mockAddresses.vrfCoordinator,

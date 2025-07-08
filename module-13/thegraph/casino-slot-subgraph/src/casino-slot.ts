@@ -44,7 +44,8 @@ import {
   HourlySnapshot,
   VRFAnalytics,
   SystemState,
-  LeaderboardEntry
+  LeaderboardEntry,
+  PlayerDayActivity
 } from "../generated/schema"
 
 // Helper constants
@@ -581,6 +582,21 @@ export function handleSpinInitiated(event: SpinInitiated): void {
   // Check if new player today
   if (player.firstSpinTimestamp.equals(event.params.timestamp)) {
     dailySnapshot.newPlayers = dailySnapshot.newPlayers.plus(ONE_BI)
+  }
+  
+  // Track unique players - check if this is the player's first spin today
+  let dayId = getDayId(event.params.timestamp)
+  let playerDayId = player.id + "-" + dayId
+  let playerDayTracker = PlayerDayActivity.load(playerDayId)
+  if (playerDayTracker == null) {
+    // First spin of the day for this player
+    playerDayTracker = new PlayerDayActivity(playerDayId)
+    playerDayTracker.player = player.id
+    playerDayTracker.date = dayId
+    playerDayTracker.save()
+    
+    // Increment unique players count
+    dailySnapshot.uniquePlayers = dailySnapshot.uniquePlayers.plus(ONE_BI)
   }
   
   // Update ending state from metrics

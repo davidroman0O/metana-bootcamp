@@ -8,9 +8,9 @@ dataSources:
     name: CasinoSlot
     network: localhost
     source:
-      address: "0xEC7cb8C3EBE77BA6d284F13296bb1372A8522c5F"
+      address: "0x0B32a3F8f5b7E5d315b9E52E640a49A89d89c820"
       abi: CasinoSlot
-      startBlock: 0
+      startBlock: 19000017
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
