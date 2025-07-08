@@ -4,6 +4,7 @@ import {
   useCasinoDashboard, 
   useActivityFeed, 
   useDailyPerformance,
+  useActivePlayers24h,
   formatGraphQLError 
 } from '../../../hooks/admin/useGraphQLQueries';
 import MetricCard from './MetricCard';
@@ -40,6 +41,7 @@ const OverviewDashboard: React.FC = () => {
   const { data: dashboardData, loading: dashboardLoading, error: dashboardError } = useCasinoDashboard();
   const { data: activityData, loading: activityLoading } = useActivityFeed();
   const { data: performanceData, loading: performanceLoading, error: performanceError } = useDailyPerformance();
+  const { count: activePlayers24h, loading: activePlayers24hLoading } = useActivePlayers24h();
 
   // Format numbers
   const formatNumber = (value: string | number): string => {
@@ -49,10 +51,12 @@ const OverviewDashboard: React.FC = () => {
     return num.toFixed(0);
   };
 
-  const formatCHIPS = (value: string): string => {
+  const formatCHIPS = (value: string, decimals: number = 0): string => {
     const chips = parseFloat(formatEther(BigInt(value)));
     // Handle -0 case
     if (chips === 0 || Object.is(chips, -0)) return '0';
+    // If decimals specified, use fixed decimals
+    if (decimals > 0) return chips.toFixed(decimals);
     return formatNumber(chips);
   };
 
@@ -76,19 +80,17 @@ const OverviewDashboard: React.FC = () => {
   React.useEffect(() => {
     if (dashboardData?.casinoMetrics && process.env.NODE_ENV === 'development') {
       const metrics = dashboardData.casinoMetrics;
-      const recentSpins = activityData?.recentSpins || [];
-      const uniqueRecentPlayers = new Set(recentSpins.map(spin => spin.player.address)).size;
       
       if (parseInt(metrics.totalSpins) > 0) {
         if (parseInt(metrics.totalHouseFees) === 0) {
           console.warn('CasinoMetrics: totalHouseFees is 0 despite having spins');
         }
-        if (parseInt(metrics.activePlayers24h) === 0 && uniqueRecentPlayers > 0) {
-          console.warn('CasinoMetrics: activePlayers24h is 0 but recent activity shows players');
+        if (parseInt(metrics.activePlayers24h) === 0 && activePlayers24h > 0) {
+          console.warn('CasinoMetrics: activePlayers24h in subgraph is 0 but query shows', activePlayers24h, 'active players');
         }
       }
     }
-  }, [dashboardData, activityData]);
+  }, [dashboardData, activePlayers24h]);
 
   // Prepare chart data with proper typing
   // Data comes in ascending order now, take last 7 days if more are available
@@ -131,12 +133,8 @@ const OverviewDashboard: React.FC = () => {
   const todayStats = dashboardData?.dailySnapshots?.[0];
   const recentJackpots = dashboardData?.jackpotWins || [];
 
-  // Calculate active players from recent activity if needed
-  const recentSpins = activityData?.recentSpins || [];
-  const uniqueRecentPlayers = new Set(recentSpins.map(spin => spin.player.address)).size;
-  const activePlayersDisplay = metrics?.activePlayers24h && parseInt(metrics.activePlayers24h) > 0 
-    ? metrics.activePlayers24h 
-    : uniqueRecentPlayers.toString();
+  // Use the real 24h active players count
+  const activePlayersDisplay = activePlayers24h.toString();
 
   return (
     <div className="space-y-6">
@@ -154,12 +152,12 @@ const OverviewDashboard: React.FC = () => {
         />
         
         <MetricCard
-          title="Active Players"
+          title="Active Players (24h)"
           value={formatNumber(activePlayersDisplay)}
           subtitle={`${metrics ? formatNumber(metrics.uniquePlayers) : '0'} total players`}
           icon={<UsersIcon size={24} />}
           color="green"
-          loading={dashboardLoading || activityLoading}
+          loading={dashboardLoading || activePlayers24hLoading}
         />
         
         <MetricCard
@@ -175,7 +173,7 @@ const OverviewDashboard: React.FC = () => {
         
         <MetricCard
           title="Prize Pool"
-          value={metrics ? `${formatCHIPS(metrics.currentPrizePool)} CHIPS` : '0 CHIPS'}
+          value={metrics ? `${formatCHIPS(metrics.currentPrizePool, 2)} CHIPS` : '0.00 CHIPS'}
           subtitle="Current jackpot"
           icon={<TrophyIcon size={24} />}
           color="purple"

@@ -6,9 +6,14 @@ import {
   ACTIVITY_FEED,
   SYSTEM_STATE_QUERY,
   DAILY_PERFORMANCE,
+  ACTIVE_PLAYERS_24H,
+  BLOCKCHAIN_META,
   type CasinoDashboardVariables,
   type ActivityFeedVariables,
   type DailyPerformanceVariables,
+  type ActivePlayers24hVariables,
+  type ActivePlayers24hResult,
+  type BlockchainMetaResult,
 } from '../../graphql/queries/overview';
 
 // Utility functions
@@ -80,4 +85,32 @@ export function useDailyPerformance(variables?: DailyPerformanceVariables) {
       ...variables,
     },
   });
+}
+
+export function useActivePlayers24h() {
+  // First get the blockchain timestamp
+  const { data: metaData } = useQuery<BlockchainMetaResult>(BLOCKCHAIN_META, {
+    pollInterval: 60000, // Update every minute
+  });
+  
+  // Calculate 24 hours ago from blockchain time
+  const timestamp24hAgo = metaData?._meta?.block?.timestamp 
+    ? (metaData._meta.block.timestamp - 24 * 60 * 60).toString()
+    : '0';
+  
+  // Query active players
+  const { data, loading, error } = useQuery<ActivePlayers24hResult, ActivePlayers24hVariables>(
+    ACTIVE_PLAYERS_24H,
+    {
+      variables: { timestamp24hAgo },
+      skip: !metaData?._meta?.block?.timestamp,
+      pollInterval: 60000, // Update every minute
+    }
+  );
+  
+  return {
+    count: data?.players?.length || 0,
+    loading: loading || !metaData,
+    error,
+  };
 }

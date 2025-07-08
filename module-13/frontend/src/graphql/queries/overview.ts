@@ -282,3 +282,41 @@ export const HOURLY_ACTIVITY: TypedDocumentNode<HourlyActivityResult, HourlyActi
     }
   }
 `;
+
+// Active Players Query
+export interface ActivePlayers24hVariables {
+  timestamp24hAgo: string;
+}
+
+export interface ActivePlayers24hResult {
+  players: Array<{ id: string }>;
+}
+
+export const ACTIVE_PLAYERS_24H: TypedDocumentNode<ActivePlayers24hResult, ActivePlayers24hVariables> = gql`
+  query ActivePlayers24h($timestamp24hAgo: BigInt!) {
+    players(where: { lastSpinTimestamp_gte: $timestamp24hAgo }) {
+      id
+    }
+  }
+`;
+
+// Meta Query for blockchain timestamp
+export interface BlockchainMetaResult {
+  _meta: {
+    block: {
+      number: number;
+      timestamp: number;
+    };
+  };
+}
+
+export const BLOCKCHAIN_META = gql`
+  query BlockchainMeta {
+    _meta {
+      block {
+        number
+        timestamp
+      }
+    }
+  }
+`;

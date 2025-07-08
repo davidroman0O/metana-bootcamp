@@ -19,6 +19,11 @@
 #   - "reelStats" for singular queries (by ID)
 #   - "reelStats_collection" for plural queries (lists)
 # =====================================================
+# Note: Of course, i won't implement them all in the frontend.
+# This is just a reference for the most useful queries.
+# I won't have the time nor the will to make a full dashboard analytics app.
+# But these queries are useful for anyone who wants to analyze the data or play around with it.
+# =====================================================
 
 # =====================================================
 # 🎰 BASIC GAME QUERIES
