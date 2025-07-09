@@ -10,6 +10,7 @@ interface MetricCardProps {
   icon?: React.ReactNode;
   color?: 'blue' | 'green' | 'yellow' | 'red' | 'purple';
   loading?: boolean;
+  tooltip?: string;
 }
 
 const colorClasses = {
@@ -29,6 +30,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
   icon,
   color = 'blue',
   loading = false,
+  tooltip,
 }) => {
   const getTrendIcon = () => {
     if (change === undefined || change === 0) return <MinusIcon size={16} />;
@@ -53,7 +55,16 @@ const MetricCard: React.FC<MetricCardProps> = ({
   return (
     <div className={`p-6 rounded-xl border ${colorClasses[color]} backdrop-blur-sm`}>
       <div className="flex items-start justify-between mb-4">
-        <h3 className="text-sm font-medium text-gray-400">{title}</h3>
+        <h3 className="text-sm font-medium text-gray-400 group relative">
+          {title}
+          {tooltip && (
+            <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block z-10">
+              <div className="bg-gray-900 text-xs text-gray-300 p-3 rounded-lg shadow-lg border border-gray-700 w-64 whitespace-normal">
+                {tooltip}
+              </div>
+            </div>
+          )}
+        </h3>
         {icon && <div className={`${colorClasses[color].split(' ')[2]}`}>{icon}</div>}
       </div>
       

@@ -24,6 +24,7 @@
     "vrf:fulfiller": "hardhat run scripts/vrf-fulfiller.js --network localhost",
     "test-player": "hardhat run scripts/test-player.js --network localhost",
     "test:multi-player": "hardhat run scripts/test-multi-player.js --network localhost",
+    "test:multi-player-concurrent": "hardhat run scripts/test-multi-player-concurrent.js --network localhost",
     "clean": "hardhat clean",
     "size": "hardhat size-contracts",
     "coverage": "hardhat coverage",

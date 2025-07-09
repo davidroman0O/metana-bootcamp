@@ -77,6 +77,7 @@ export const CASINO_DASHBOARD: TypedDocumentNode<CasinoDashboardResult, CasinoDa
       orderDirection: $jackpotWinsOrderDirection
     ) {
       id
+      requestId
       amount
       player {
         id
@@ -85,6 +86,29 @@ export const CASINO_DASHBOARD: TypedDocumentNode<CasinoDashboardResult, CasinoDa
       timestamp
       prizePoolBefore
       prizePoolAfter
+    }
+  }
+`;
+
+// Spin Details Query
+export interface SpinDetailsVariables {
+  requestId: string;
+}
+
+export interface SpinDetailsResult {
+  spin: {
+    id: string;
+    reelCount: number;
+    reelCombination: string;
+  } | null;
+}
+
+export const SPIN_DETAILS = gql`
+  query SpinDetails($requestId: ID!) {
+    spin(id: $requestId) {
+      id
+      reelCount
+      reelCombination
     }
   }
 `;

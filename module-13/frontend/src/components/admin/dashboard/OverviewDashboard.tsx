@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import { formatEther } from 'viem';
+import { useQuery } from '@apollo/client';
 import { 
   useCasinoDashboard, 
   useActivityFeed, 
@@ -8,10 +9,13 @@ import {
   useReelDistribution24h,
   formatGraphQLError 
 } from '../../../hooks/admin/useGraphQLQueries';
+import { SPIN_DETAILS } from '../../../graphql/queries/overview';
+import type { SpinDetailsResult, SpinDetailsVariables } from '../../../graphql/queries/overview';
 import MetricCard from './MetricCard';
 import ActivityFeed from './ActivityFeed';
 import QuickStats from './QuickStats';
 import ReelDistribution from './ReelDistribution';
+import SymbolLegend from './SymbolLegend';
 import { 
   Users as UsersIcon, 
   DollarSign as DollarSignIcon, 
@@ -20,7 +24,8 @@ import {
   Trophy as TrophyIcon,
   AlertCircle as AlertCircleIcon,
   BarChart3 as BarChart3Icon,
-  Coins as CoinsIcon
+  Coins as CoinsIcon,
+  Wallet as WalletIcon
 } from 'lucide-react';
 import {
   LineChart,
@@ -45,6 +50,9 @@ const OverviewDashboard: React.FC = () => {
   const { data: performanceData, loading: performanceLoading, error: performanceError } = useDailyPerformance();
   const { count: activePlayers24h, loading: activePlayers24hLoading } = useActivePlayers24h();
   const { reelCounts, totalSpins: reelSpins24h, loading: reelStatsLoading } = useReelDistribution24h();
+
+  // State to store enhanced jackpot data with spin details
+  const [enhancedJackpots, setEnhancedJackpots] = useState<any[]>([]);
 
   // Format numbers
   const formatNumber = (value: string | number): string => {
@@ -119,6 +127,59 @@ const OverviewDashboard: React.FC = () => {
     }));
   }, [performanceData]);
 
+  const metrics = dashboardData?.casinoMetrics;
+  const todayStats = dashboardData?.dailySnapshots?.[0];
+  const recentJackpots = dashboardData?.jackpotWins || [];
+
+  // Fetch spin details for each jackpot
+  useEffect(() => {
+    const fetchSpinDetails = async () => {
+      if (!recentJackpots.length) return;
+      
+      const enhanced = await Promise.all(
+        recentJackpots.map(async (jackpot) => {
+          if (!jackpot.requestId) return jackpot;
+          
+          try {
+            const response = await fetch('http://localhost:8000/subgraphs/name/casino-slot-subgraph', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                query: `
+                  query SpinDetails($requestId: ID!) {
+                    spin(id: $requestId) {
+                      id
+                      reelCount
+                      reelCombination
+                    }
+                  }
+                `,
+                variables: { requestId: jackpot.requestId }
+              })
+            });
+            
+            const data = await response.json();
+            if (data.data?.spin) {
+              return {
+                ...jackpot,
+                reelCount: data.data.spin.reelCount,
+                reelCombination: data.data.spin.reelCombination
+              };
+            }
+          } catch (error) {
+            console.error('Error fetching spin details:', error);
+          }
+          
+          return jackpot;
+        })
+      );
+      
+      setEnhancedJackpots(enhanced);
+    };
+    
+    fetchSpinDetails();
+  }, [recentJackpots]);
+
   if (dashboardError) {
     return (
       <div className="p-8">
@@ -131,10 +192,6 @@ const OverviewDashboard: React.FC = () => {
       </div>
     );
   }
-
-  const metrics = dashboardData?.casinoMetrics;
-  const todayStats = dashboardData?.dailySnapshots?.[0];
-  const recentJackpots = dashboardData?.jackpotWins || [];
 
   // Use the real 24h active players count
   const activePlayersDisplay = activePlayers24h.toString();
@@ -172,6 +229,7 @@ const OverviewDashboard: React.FC = () => {
           icon={<DollarSignIcon size={24} />}
           color="yellow"
           loading={dashboardLoading}
+          tooltip="Net Profit = Revenue (House Fees + VRF Markup) - Costs (VRF Costs + Jackpots Paid). This excludes player deposits (CHIPS purchases) which are liabilities, not revenue."
         />
         
         <MetricCard
@@ -281,6 +339,34 @@ const OverviewDashboard: React.FC = () => {
             <p className="text-xs text-gray-500 mt-1">VRF + Jackpots paid</p>
           </div>
         </div>
+        
+        {/* Player Deposits Section */}
+        <div className="mt-6 p-4 bg-blue-900/20 border border-blue-600/30 rounded-lg">
+          <h4 className="text-sm font-semibold text-blue-400 mb-3 flex items-center space-x-2">
+            <WalletIcon size={16} />
+            <span>Player Deposits (Liabilities)</span>
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <p className="text-xs text-gray-400">CHIPS Supply</p>
+              <p className="text-lg font-semibold text-white">{metrics ? formatCHIPS(metrics.totalChipsSupply, 0) : '0'} CHIPS</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400">Contract ETH Balance</p>
+              <p className="text-lg font-semibold text-white">{metrics ? formatETH(metrics.contractETHBalance) : '0.0000'} ETH</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400">Operating Cash</p>
+              <p className="text-lg font-semibold text-white">
+                {metrics ? formatETH(
+                  (BigInt(metrics.contractETHBalance) - 
+                   BigInt(metrics.totalChipsSupply) / BigInt(100)).toString()
+                ) : '0.0000'} ETH
+              </p>
+              <p className="text-xs text-gray-500 mt-1">ETH Balance - CHIPS Liability</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Bottom Row: Activity Feed and Quick Stats */}
@@ -301,7 +387,8 @@ const OverviewDashboard: React.FC = () => {
             totalPayouts={metrics?.totalPayoutsVolume}
             contractBalance={metrics?.contractETHBalance}
             chipsSupply={metrics?.totalChipsSupply}
-            recentJackpots={recentJackpots}
+            recentJackpots={enhancedJackpots}
+            currentPrizePool={metrics?.currentPrizePool}
             loading={dashboardLoading}
           />
           
@@ -311,6 +398,9 @@ const OverviewDashboard: React.FC = () => {
             totalSpins={reelSpins24h}
             loading={reelStatsLoading}
           />
+          
+          {/* Symbol Legend */}
+          <SymbolLegend />
         </div>
       </div>
     </div>
