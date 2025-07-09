@@ -10,6 +10,9 @@ interface SpinActivity {
   payoutTypeName: string;
   isJackpot: boolean;
   completedTimestamp: string;
+  displayCompletedTimestamp?: string;
+  completedTimeAgo?: string;
+  completedDate?: string;
   reelCombination: string;
 }
 
@@ -21,17 +24,6 @@ interface ActivityFeedProps {
 
 const ActivityFeed: React.FC<ActivityFeedProps> = ({ recentSpins = [], bigWinsToday = [], loading }) => {
   const formatAddress = (address: string) => `${address.slice(0, 6)}...${address.slice(-4)}`;
-  
-  const formatTimestamp = (timestamp: string) => {
-    const date = new Date(parseInt(timestamp) * 1000);
-    const now = new Date();
-    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-    
-    if (diffInSeconds < 60) return `${diffInSeconds}s ago`;
-    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
-    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
-    return format(date, 'MMM d, HH:mm');
-  };
 
   const getPayoutColor = (payoutType: string, isJackpot: boolean) => {
     if (isJackpot) return 'text-yellow-400';
@@ -101,9 +93,14 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({ recentSpins = [], bigWinsTo
                     <span className="text-sm font-mono text-gray-300">
                       {formatAddress(spin.player.address)}
                     </span>
-                    <span className="text-xs text-gray-500">
-                      {formatTimestamp(spin.completedTimestamp)}
+                    <span className="text-xs text-gray-500" title={spin.completedDate || 'Pending'}>
+                      {spin.completedDate || 'Pending'}
                     </span>
+                    {spin.completedTimeAgo && (
+                      <span className="text-xs text-gray-400">
+                        ({spin.completedTimeAgo})
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center space-x-4 text-xs">
                     <span className="text-gray-400">

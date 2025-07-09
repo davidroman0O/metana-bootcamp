@@ -252,6 +252,15 @@ type Spin @entity(immutable: false) {
   completedTimestamp: BigInt
   responseTime: BigInt # completedTimestamp - initiatedTimestamp
   
+  # Display timestamps (adjusted for local dev)
+  displayInitiatedTimestamp: BigInt!
+  displayCompletedTimestamp: BigInt
+  
+  # Formatted display strings
+  initiatedTimeAgo: String!
+  completedTimeAgo: String
+  completedDate: String # e.g., "Jul 8, 2:34 PM"
+  
   # Status
   settled: Boolean!
   isJackpot: Boolean!
@@ -346,6 +355,8 @@ type ReelStats @entity(immutable: false) {
 type DailySnapshot @entity(immutable: false) {
   id: ID! # timestamp at start of day
   date: BigInt!
+  displayDate: BigInt! # Display-friendly timestamp (adjusted for local dev)
+  formattedDate: String! # e.g., "Jul 8"
   
   # Volume Metrics
   spinsCount: BigInt!
@@ -392,6 +403,8 @@ type DailySnapshot @entity(immutable: false) {
 type HourlySnapshot @entity(immutable: false) {
   id: ID! # timestamp at start of hour
   timestamp: BigInt!
+  displayTimestamp: BigInt! # Display-friendly timestamp (adjusted for local dev)
+  formattedDate: String! # e.g., "Jul 8"
   hour: Int! # 0-23
   dayOfWeek: Int! # 0-6
   

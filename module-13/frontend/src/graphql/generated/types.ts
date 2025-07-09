@@ -71,6 +71,11 @@ export interface Spin {
   initiatedTimestamp: string;
   completedTimestamp: string;
   responseTime: string;
+  displayInitiatedTimestamp?: string;
+  displayCompletedTimestamp?: string;
+  initiatedTimeAgo?: string;
+  completedTimeAgo?: string;
+  completedDate?: string;
   settled: boolean;
   transactionHash: string;
 }
@@ -105,6 +110,8 @@ export interface CasinoMetrics {
 export interface DailySnapshot {
   id: string;
   date: string;
+  displayDate?: string;
+  formattedDate?: string;
   spinsCount: string;
   betsVolume: string;
   payoutsVolume: string;
@@ -137,6 +144,8 @@ export interface DailySnapshot {
 export interface HourlySnapshot {
   id: string;
   timestamp: string;
+  displayTimestamp?: string;
+  formattedDate?: string;
   hour: number;
   dayOfWeek: number;
   spinsCount: string;

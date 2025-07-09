@@ -110,7 +110,7 @@ const OverviewDashboard: React.FC = () => {
       : snapshots;
     
     return recentSnapshots.map((day: DailySnapshot) => ({
-      date: format(new Date(parseInt(day.date) * 1000), 'MMM d'),
+      date: day.formattedDate || format(new Date(parseInt(day.displayDate || day.date) * 1000), 'MMM d'),
       spins: parseInt(day.spinsCount),
       // Revenue is houseFees + vrfMarkup (both in ETH)
       revenue: parseFloat(formatEther(BigInt(day.houseFees))) + parseFloat(formatEther(BigInt(day.vrfMarkup))),

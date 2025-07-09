@@ -54,7 +54,26 @@ const ONE_BI = BigInt.fromI32(1)
 const ZERO_BD = BigInt.fromI32(0).toBigDecimal()
 const HUNDRED_BD = BigInt.fromI32(100).toBigDecimal()
 
+// Fork detection and timestamp adjustment constants
+const FORK_BLOCK = BigInt.fromI32(19000000)
+const FORK_TIMESTAMP = BigInt.fromI32(1705104000) // Jan 13, 2024
+
 // Helper functions
+function getDisplayTimestamp(originalTimestamp: BigInt, currentEventTimestamp: BigInt, blockNumber: BigInt): BigInt {
+  // Only adjust old timestamps from the forked data (before Feb 2024)
+  // Keep recent timestamps (after Feb 2024) as-is
+  const FEB_2024 = BigInt.fromI32(1706745600) // Feb 1, 2024
+  
+  if (blockNumber.ge(FORK_BLOCK) && originalTimestamp.lt(FEB_2024)) {
+    // Calculate dynamic offset based on current event timestamp
+    const dynamicOffset = currentEventTimestamp.minus(FORK_TIMESTAMP)
+    // Old data from fork - adjust to appear relative to current event time
+    return originalTimestamp.plus(dynamicOffset)
+  }
+  // Recent data or testnet/mainnet - use original timestamp
+  return originalTimestamp
+}
+
 function getActiveSessionForPlayer(playerAddress: Bytes): GameSession | null {
   // In a real implementation, we'd query for active sessions
   // For now, we'll return null and sessions will be linked if available
@@ -187,6 +206,105 @@ function updateLeaderboardForPlayer(
       entry.save()
     }
   }
+}
+
+// Formatting helper functions
+function formatTimeAgo(timestamp: BigInt, currentTimestamp: BigInt): string {
+  let diffSeconds = currentTimestamp.minus(timestamp)
+  
+  if (diffSeconds.lt(BigInt.fromI32(60))) {
+    return "Just now"
+  }
+  
+  let diffMinutes = diffSeconds.div(BigInt.fromI32(60))
+  if (diffMinutes.lt(BigInt.fromI32(60))) {
+    return diffMinutes.toString() + "m ago"
+  }
+  
+  let diffHours = diffMinutes.div(BigInt.fromI32(60))
+  if (diffHours.lt(BigInt.fromI32(24))) {
+    return diffHours.toString() + "h ago"
+  }
+  
+  let diffDays = diffHours.div(BigInt.fromI32(24))
+  if (diffDays.lt(BigInt.fromI32(7))) {
+    return diffDays.toString() + "d ago"
+  }
+  
+  let diffWeeks = diffDays.div(BigInt.fromI32(7))
+  if (diffWeeks.lt(BigInt.fromI32(4))) {
+    return diffWeeks.toString() + "w ago"
+  }
+  
+  let diffMonths = diffDays.div(BigInt.fromI32(30))
+  if (diffMonths.lt(BigInt.fromI32(12))) {
+    return diffMonths.toString() + "mo ago"
+  }
+  
+  let diffYears = diffDays.div(BigInt.fromI32(365))
+  return diffYears.toString() + "y ago"
+}
+
+function formatDate(timestamp: BigInt): string {
+  // Convert timestamp to date components
+  // Note: This is a simplified approach - in production, you'd want a proper date library
+  let secondsInDay = BigInt.fromI32(86400)
+  let daysSinceEpoch = timestamp.div(secondsInDay)
+  
+  // Calculate approximate month and day
+  // January 1, 1970 was a Thursday
+  let totalDays = daysSinceEpoch.toI32()
+  let year = 1970
+  let daysInYear = 365
+  
+  while (totalDays >= daysInYear) {
+    totalDays -= daysInYear
+    year++
+    // Simple leap year calculation
+    if (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)) {
+      daysInYear = 366
+    } else {
+      daysInYear = 365
+    }
+  }
+  
+  // Determine month and day
+  let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  let daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+  
+  // Adjust February for leap year
+  if (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)) {
+    daysInMonth[1] = 29
+  }
+  
+  let monthIndex = 0
+  while (monthIndex < 12 && totalDays >= daysInMonth[monthIndex]) {
+    totalDays -= daysInMonth[monthIndex]
+    monthIndex++
+  }
+  
+  let day = totalDays + 1
+  return months[monthIndex] + " " + day.toString()
+}
+
+function formatDateTime(timestamp: BigInt): string {
+  // Get date part
+  let dateStr = formatDate(timestamp)
+  
+  // Get time part
+  let secondsInDay = timestamp.mod(BigInt.fromI32(86400))
+  let hours = secondsInDay.div(BigInt.fromI32(3600))
+  let minutes = secondsInDay.mod(BigInt.fromI32(3600)).div(BigInt.fromI32(60))
+  
+  // Convert to 12-hour format
+  let hour = hours.toI32()
+  let ampm = hour >= 12 ? "PM" : "AM"
+  hour = hour % 12
+  if (hour == 0) hour = 12
+  
+  // Format time string
+  let minuteStr = minutes.toI32() < 10 ? "0" + minutes.toString() : minutes.toString()
+  return dateStr + ", " + hour.toString() + ":" + minuteStr + " " + ampm
 }
 
 function getOrCreatePlayer(address: Bytes): Player {
@@ -330,12 +448,14 @@ function getOrCreateVRFAnalytics(): VRFAnalytics {
   return analytics as VRFAnalytics
 }
 
-function getOrCreateDailySnapshot(timestamp: BigInt): DailySnapshot {
+function getOrCreateDailySnapshot(timestamp: BigInt, blockNumber: BigInt): DailySnapshot {
   let dayId = getDayId(timestamp)
   let snapshot = DailySnapshot.load(dayId)
   if (snapshot == null) {
     snapshot = new DailySnapshot(dayId)
     snapshot.date = BigInt.fromString(dayId)
+    snapshot.displayDate = getDisplayTimestamp(BigInt.fromString(dayId), timestamp, blockNumber)
+    snapshot.formattedDate = formatDate(snapshot.displayDate)
     snapshot.spinsCount = ZERO_BI
     snapshot.betsVolume = ZERO_BI
     snapshot.payoutsVolume = ZERO_BI
@@ -368,12 +488,14 @@ function getOrCreateDailySnapshot(timestamp: BigInt): DailySnapshot {
   return snapshot as DailySnapshot
 }
 
-function getOrCreateHourlySnapshot(timestamp: BigInt): HourlySnapshot {
+function getOrCreateHourlySnapshot(timestamp: BigInt, blockNumber: BigInt): HourlySnapshot {
   let hourId = getHourId(timestamp)
   let snapshot = HourlySnapshot.load(hourId)
   if (snapshot == null) {
     snapshot = new HourlySnapshot(hourId)
     snapshot.timestamp = BigInt.fromString(hourId)
+    snapshot.displayTimestamp = getDisplayTimestamp(BigInt.fromString(hourId), timestamp, blockNumber)
+    snapshot.formattedDate = formatDate(snapshot.displayTimestamp)
     snapshot.hour = getHourOfDay(timestamp)
     snapshot.dayOfWeek = getDayOfWeek(timestamp)
     snapshot.spinsCount = ZERO_BI
@@ -430,6 +552,12 @@ export function handleSpinInitiated(event: SpinInitiated): void {
   spin.initiatedTimestamp = event.params.timestamp
   spin.completedTimestamp = null
   spin.responseTime = null
+  spin.displayInitiatedTimestamp = getDisplayTimestamp(event.params.timestamp, event.block.timestamp, event.block.number)
+  spin.displayCompletedTimestamp = null
+  // Format time ago based on display timestamp
+  spin.initiatedTimeAgo = formatTimeAgo(spin.displayInitiatedTimestamp, event.block.timestamp)
+  spin.completedTimeAgo = null
+  spin.completedDate = null
   spin.settled = false
   spin.isJackpot = false
   spin.initiatedBlockNumber = event.block.number
@@ -560,7 +688,7 @@ export function handleSpinInitiated(event: SpinInitiated): void {
   vrfAnalytics.save()
   
   // Update daily snapshot
-  let dailySnapshot = getOrCreateDailySnapshot(event.params.timestamp)
+  let dailySnapshot = getOrCreateDailySnapshot(event.params.timestamp, event.block.number)
   dailySnapshot.spinsCount = dailySnapshot.spinsCount.plus(ONE_BI)
   dailySnapshot.betsVolume = dailySnapshot.betsVolume.plus(event.params.betAmount)
   dailySnapshot.houseFees = dailySnapshot.houseFees.plus(event.params.houseFeeETH)
@@ -612,7 +740,7 @@ export function handleSpinInitiated(event: SpinInitiated): void {
   dailySnapshot.save()
   
   // Update hourly snapshot
-  let hourlySnapshot = getOrCreateHourlySnapshot(event.params.timestamp)
+  let hourlySnapshot = getOrCreateHourlySnapshot(event.params.timestamp, event.block.number)
   hourlySnapshot.spinsCount = hourlySnapshot.spinsCount.plus(ONE_BI)
   hourlySnapshot.betsVolume = hourlySnapshot.betsVolume.plus(event.params.betAmount)
   
@@ -658,6 +786,12 @@ export function handleSpinCompleted(event: SpinCompleted): void {
   spin.netResult = event.params.payout.minus(spin.betAmount)
   spin.completedTimestamp = event.block.timestamp
   spin.responseTime = event.block.timestamp.minus(spin.initiatedTimestamp)
+  spin.displayCompletedTimestamp = getDisplayTimestamp(event.block.timestamp, event.block.timestamp, event.block.number)
+  // Update both time ago fields with current timestamp
+  spin.initiatedTimeAgo = formatTimeAgo(spin.displayInitiatedTimestamp, event.block.timestamp)
+  // displayCompletedTimestamp should never be null here since we just set it
+  spin.completedTimeAgo = formatTimeAgo(spin.displayCompletedTimestamp as BigInt, event.block.timestamp)
+  spin.completedDate = formatDateTime(spin.displayCompletedTimestamp as BigInt)
   spin.settled = true
   spin.isJackpot = event.params.isJackpot
   spin.completedBlockNumber = event.block.number
@@ -858,7 +992,7 @@ export function handleSpinCompleted(event: SpinCompleted): void {
   vrfAnalytics.save()
   
   // Update daily snapshot
-  let dailySnapshot = getOrCreateDailySnapshot(event.block.timestamp)
+  let dailySnapshot = getOrCreateDailySnapshot(event.block.timestamp, event.block.number)
   dailySnapshot.payoutsVolume = dailySnapshot.payoutsVolume.plus(event.params.payout)
   
   // Update biggest win if applicable
@@ -880,7 +1014,7 @@ export function handleSpinCompleted(event: SpinCompleted): void {
   dailySnapshot.save()
   
   // Update hourly snapshot
-  let hourlySnapshot = getOrCreateHourlySnapshot(event.block.timestamp)
+  let hourlySnapshot = getOrCreateHourlySnapshot(event.block.timestamp, event.block.number)
   hourlySnapshot.payoutsVolume = hourlySnapshot.payoutsVolume.plus(event.params.payout)
   
   // Calculate net profit
@@ -947,7 +1081,7 @@ export function handleChipsTransacted(event: ChipsTransacted): void {
   metrics.save()
   
   // Update daily snapshot
-  let dailySnapshot = getOrCreateDailySnapshot(event.block.timestamp)
+  let dailySnapshot = getOrCreateDailySnapshot(event.block.timestamp, event.block.number)
   
   if (event.params.transactionType == "purchase") {
     dailySnapshot.chipsPurchased = dailySnapshot.chipsPurchased.plus(event.params.chipsAmount)
@@ -1034,7 +1168,7 @@ export function handleVRFTransaction(event: VRFTransaction): void {
   vrfAnalytics.save()
   
   // Update daily snapshot with VRF markup
-  let dailySnapshot = getOrCreateDailySnapshot(event.block.timestamp)
+  let dailySnapshot = getOrCreateDailySnapshot(event.block.timestamp, event.block.number)
   dailySnapshot.vrfMarkup = dailySnapshot.vrfMarkup.plus(event.params.markup)
   dailySnapshot.save()
 }
@@ -1173,7 +1307,7 @@ export function handleJackpotHit(event: JackpotHit): void {
   metrics.save()
   
   // Update daily snapshot with jackpot
-  let dailySnapshot = getOrCreateDailySnapshot(event.block.timestamp)
+  let dailySnapshot = getOrCreateDailySnapshot(event.block.timestamp, event.block.number)
   dailySnapshot.jackpotsPaid = dailySnapshot.jackpotsPaid.plus(event.params.amount)
   dailySnapshot.save()
   

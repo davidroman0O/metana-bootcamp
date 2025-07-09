@@ -57,6 +57,7 @@ export const CASINO_DASHBOARD: TypedDocumentNode<CasinoDashboardResult, CasinoDa
     ) {
       id
       date
+      displayDate
       spinsCount
       betsVolume
       payoutsVolume
@@ -128,6 +129,9 @@ export const ACTIVITY_FEED: TypedDocumentNode<ActivityFeedResult, ActivityFeedVa
       payoutTypeName
       isJackpot
       completedTimestamp
+      displayCompletedTimestamp
+      completedTimeAgo
+      completedDate
       reelCombination
       reelCount
       netResult
@@ -151,6 +155,9 @@ export const ACTIVITY_FEED: TypedDocumentNode<ActivityFeedResult, ActivityFeedVa
       payout
       payoutTypeName
       completedTimestamp
+      displayCompletedTimestamp
+      completedTimeAgo
+      completedDate
       betAmount
       netResult
       isJackpot
@@ -209,6 +216,8 @@ export const DAILY_PERFORMANCE: TypedDocumentNode<DailyPerformanceResult, DailyP
     ) {
       id
       date
+      displayDate
+      formattedDate
       spinsCount
       betsVolume
       payoutsVolume
