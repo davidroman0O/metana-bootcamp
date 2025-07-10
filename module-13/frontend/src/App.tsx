@@ -2,12 +2,13 @@ import React, { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Outlet } from 'react-router-dom';
 import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ApolloProvider } from '@apollo/client';
 import { Toaster } from 'react-hot-toast';
 
 // Config
 import { config } from './config/wagmi';
-import { apolloClient } from './graphql/apollo-client';
+
+// Providers
+import { DynamicApolloProvider } from './components/providers/DynamicApolloProvider';
 
 // Contexts
 import { AppModeProvider } from './contexts/AppModeContext';
@@ -49,7 +50,7 @@ function App() {
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
-        <ApolloProvider client={apolloClient}>
+        <DynamicApolloProvider>
           <AppModeProvider>
             <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
               <Toaster
@@ -86,7 +87,7 @@ function App() {
               </Router>
             </div>
           </AppModeProvider>
-        </ApolloProvider>
+        </DynamicApolloProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );

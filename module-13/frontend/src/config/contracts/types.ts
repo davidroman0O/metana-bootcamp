@@ -17,6 +17,7 @@ export interface DeploymentInfo {
     chipsPerETH: string;
     targetChipPriceUSD: string;
   };
+  subgraphUrl?: string;
 }
 
 export interface NetworkDeployment {

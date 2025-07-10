@@ -11,5 +11,6 @@ export const HARDHAT_DEV_DEPLOYMENT: NetworkDeployment = {
     chainId: 31337,
     timestamp: "2025-07-08T21:16:09.734Z",
     deployer: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    subgraphUrl: "http://localhost:8000/subgraphs/name/casino-slot-subgraph",
   }
 };

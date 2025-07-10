@@ -13,5 +13,6 @@ export const SEPOLIA_DEV_DEPLOYMENT: NetworkDeployment = {
     chainId: 11155111,
     timestamp: "2025-07-10T20:48:15.136Z",
     deployer: "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86",
+    subgraphUrl: "https://api.studio.thegraph.com/query/115919/casino-slot/version/latest",
   }
 };
