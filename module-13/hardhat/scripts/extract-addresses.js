@@ -125,6 +125,7 @@ async function generateNetworkEnvFile(configDir, network, env, { casinoSlotAddre
   const exportName = `${network.toUpperCase()}_${env.toUpperCase()}_DEPLOYMENT`;
   
   const chainlinkAddresses = getChainlinkAddresses(deploymentData.network.chainId);
+  const subgraphUrl = getSubgraphUrl(network);
   
   const content = `// ${network.charAt(0).toUpperCase() + network.slice(1)} ${env.charAt(0).toUpperCase() + env.slice(1)} Environment
 // Auto-generated at: ${deploymentData.network.timestamp}
@@ -145,7 +146,8 @@ export const ${exportName}: NetworkDeployment = {
       ethPriceUSDCents: "${deploymentData.exchangeRates.ethPriceUSDCents}",
       chipsPerETH: "${deploymentData.exchangeRates.chipsPerETH}",
       targetChipPriceUSD: "${deploymentData.exchangeRates.targetChipPriceUSD}"
-    },` : ''}
+    },` : ''}${subgraphUrl ? `
+    subgraphUrl: "${subgraphUrl}",` : ''}
   }
 };
 `;
@@ -175,6 +177,7 @@ export interface DeploymentInfo {
     chipsPerETH: string;
     targetChipPriceUSD: string;
   };
+  subgraphUrl?: string;
 }
 
 export interface NetworkDeployment {
@@ -219,6 +222,20 @@ function getChainlinkAddresses(chainId) {
   };
   
   return addresses[chainId];
+}
+
+function getSubgraphUrl(network) {
+  // Map network to subgraph URLs
+  const subgraphUrls = {
+    // For now, we'll use the Studio URL for Sepolia
+    // In the future, this can be updated to use the decentralized network URL format:
+    // 'https://gateway-arbitrum.network.thegraph.com/api/6f40bf1cf75c83a954bbd11d9801f1bf/subgraphs/id/[SUBGRAPH_ID]'
+    sepolia: 'https://gateway.thegraph.com/api/subgraphs/id/Ajiy1KjRsfNpKQ6cwwtdZdDvd1gY1PCrRKFoYhkRbJ2d',
+    hardhat: 'http://localhost:8000/subgraphs/name/casino-slot-subgraph',
+    mainnet: null // Not deployed yet
+  };
+  
+  return subgraphUrls[network];
 }
 
 async function generateABIs(configDir, deploymentData) {

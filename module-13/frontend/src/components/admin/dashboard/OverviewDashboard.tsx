@@ -187,7 +187,7 @@ const OverviewDashboard: React.FC = () => {
           <AlertCircleIcon className="mx-auto mb-4 text-red-400" size={48} />
           <h2 className="text-xl font-semibold text-red-400 mb-2">Error Loading Dashboard</h2>
           <p className="text-gray-300">{formatGraphQLError(dashboardError)}</p>
-          <p className="text-sm text-gray-400 mt-2">Make sure your local Graph node is running</p>
+          <p className="text-sm text-gray-400 mt-2">Make sure your Graph node is running</p>
         </div>
       </div>
     );
