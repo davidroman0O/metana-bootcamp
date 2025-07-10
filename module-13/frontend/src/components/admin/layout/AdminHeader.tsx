@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAccount, useBalance } from 'wagmi';
+import { useAccount, useBalance, useChainId } from 'wagmi';
 import { formatEther } from 'viem';
 import { LogOut as LogOutIcon, Shield as ShieldIcon, Activity as ActivityIcon } from 'lucide-react';
 import { useSystemState } from '../../../hooks/admin/useGraphQLQueries';
@@ -9,17 +9,18 @@ import { checkGraphQLConnection } from '../../../graphql/apollo-client';
 const AdminHeader: React.FC = () => {
   const navigate = useNavigate();
   const { address } = useAccount();
+  const chainId = useChainId();
   const { data: balance } = useBalance({ address });
   const { data: systemData, loading: systemLoading } = useSystemState();
   const [graphQLConnected, setGraphQLConnected] = React.useState<boolean | null>(null);
 
   React.useEffect(() => {
-    checkGraphQLConnection().then(setGraphQLConnected);
+    checkGraphQLConnection(chainId).then(setGraphQLConnected);
     const interval = setInterval(() => {
-      checkGraphQLConnection().then(setGraphQLConnected);
+      checkGraphQLConnection(chainId).then(setGraphQLConnected);
     }, 5000); // Check every 5 seconds
     return () => clearInterval(interval);
-  }, []);
+  }, [chainId]);
 
   const formatAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 
