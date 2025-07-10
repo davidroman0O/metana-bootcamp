@@ -20,6 +20,7 @@ npm run start
 ```
 
 ```
+# testnet
 npx hardhat run scripts/deployment/00-init.js --network sepolia
 npx hardhat run scripts/deployment/01-deploy-payout-tables.js --network sepolia
 npx hardhat run scripts/deployment/02-deploy-casino-slot.js --network sepolia
@@ -28,6 +29,33 @@ npx hardhat run scripts/deployment/04-verify-proxy.js --network sepolia
 ```
 
 helper for direct funding https://remix.ethereum.org/#url=https://docs.chain.link/samples/VRF/v2-5/DirectFundingConsumer.sol&autoCompile=true&lang=en&optimize=false&runs=200&evmVersion=null&version=soljson-v0.8.19+commit.7dd6d404.js
+
+---
+
+I had a weird issue with the deployment for the module-14I kept having:
+
+```
+✖ [hardhat-ledger] Connecting wallet
+   ...retrying in 1s
+✖ [hardhat-ledger] Connecting wallet
+   ...retrying in 2s
+✖ [hardhat-ledger] Connecting wallet
+   ...retrying in 4s
+```
+
+You end up with 
+
+```
+❌ Function failed after 5 attempts. There was an error trying to establish a connection to the Ledger wallet: 
+"dlopen(hardhat/node_modules/node-hid/build/Release/HID.node, 0x0001): tried: 
+'hardhat/node_modules/node-hid/build/Release/HID.node' (slice is not valid mach-o file), 
+'/System/Volumes/Preboot/Cryptexes/OShardhat/node_modules/node-hid/build/Release/HID.node' (no such file), 
+'hardhat/node_modules/node-hid/build/Release/HID.node' (slice is not valid mach-o file)".
+```
+
+The issue is with the node-hid module which is used by the Ledger hardware wallet integration. The error "slice is not valid mach-o file" suggests the native binary was compiled for a different architecture (likely Intel vs Apple Silicon). To fix it, i discovered a command: `npm rebuild node-hid`
+
+Then the deployment worked because rebuilding node-hid fixed the architecture mismatch issue that was preventing the Ledger hardware wallet from connecting properly. The more you know...
 
 ---
 

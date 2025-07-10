@@ -91,7 +91,6 @@ async function main() {
   console.log(`  > Chain ID: ${chainId}`);
   console.log(`  > VRF Wrapper: ${config.vrfWrapper || 'Mock (local)'}`);
   console.log(`  > ETH/USD Price Feed: ${config.ethUsdPriceFeed}`);
-  console.log(`  > 🎯 NATIVE ETH VRF PAYMENT - NO UNISWAP NEEDED!`);
 
   // Get PayoutTables address
   const payoutAddresses = getAddresses(network.name, "payouts");

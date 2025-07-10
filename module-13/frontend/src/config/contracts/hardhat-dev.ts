@@ -1,15 +1,15 @@
 // Hardhat Dev Environment
-// Auto-generated at: 2025-07-07T03:15:01.916Z
+// Auto-generated at: 2025-07-08T21:16:09.734Z
 import type { NetworkDeployment } from './types';
 
 export const HARDHAT_DEV_DEPLOYMENT: NetworkDeployment = {
   addresses: {
-    CASINO_SLOT: "0xEC7cb8C3EBE77BA6d284F13296bb1372A8522c5F",
+    CASINO_SLOT: "0x0B32a3F8f5b7E5d315b9E52E640a49A89d89c820",
   },
   info: {
     network: "hardhat",
     chainId: 31337,
-    timestamp: "2025-07-07T03:15:01.916Z",
+    timestamp: "2025-07-08T21:16:09.734Z",
     deployer: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
   }
 };
