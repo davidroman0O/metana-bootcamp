@@ -18,6 +18,7 @@ export interface DeploymentInfo {
     targetChipPriceUSD: string;
   };
   subgraphUrl?: string;
+  subgraphApiKey?: string;
 }
 
 export interface NetworkDeployment {

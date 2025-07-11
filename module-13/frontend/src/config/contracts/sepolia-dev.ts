@@ -14,5 +14,6 @@ export const SEPOLIA_DEV_DEPLOYMENT: NetworkDeployment = {
     timestamp: "2025-07-10T20:48:15.136Z",
     deployer: "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86",
     subgraphUrl: "https://gateway.thegraph.com/api/subgraphs/id/Ajiy1KjRsfNpKQ6cwwtdZdDvd1gY1PCrRKFoYhkRbJ2d",
+    subgraphApiKey: "6f40bf1cf75c83a954bbd11d9801f1bf",
   }
 };
