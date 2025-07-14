@@ -29,4 +29,23 @@ contract MockVRFCoordinator {
         requestId = requestIdCounter++;
         return requestId;
     }
+    
+    // VRF v2.5 Direct Funding with Native Payment (needed by CasinoSlot)
+    function requestRandomWordsInNative(
+        uint32 _callbackGasLimit,
+        uint16 _requestConfirmations,
+        uint32 _numWords,
+        bytes memory extraArgs
+    ) external payable returns (uint256 requestId) {
+        requestId = requestIdCounter++;
+        return requestId;
+    }
+    
+    function calculateRequestPriceNative(
+        uint32 _callbackGasLimit,
+        uint32 _numWords
+    ) external pure returns (uint256) {
+        // Return a fixed price for testing: 0.001 ETH
+        return 0.001 ether;
+    }
 } 

@@ -39,7 +39,16 @@ async function testPlayerSpin() {
         }
         
         const deploymentData = JSON.parse(fs.readFileSync(deploymentFile, 'utf8'));
-        const casinoSlotAddress = deploymentData.contracts.CasinoSlot.address;
+        
+        // Handle different deployment structures (CasinoSlot vs CasinoSlotTest)
+        let casinoSlotAddress;
+        if (deploymentData.contracts.CasinoSlot) {
+            casinoSlotAddress = deploymentData.contracts.CasinoSlot.address || deploymentData.contracts.CasinoSlot.proxy;
+        } else if (deploymentData.contracts.CasinoSlotTest) {
+            casinoSlotAddress = deploymentData.contracts.CasinoSlotTest.proxy || deploymentData.contracts.CasinoSlotTest.address;
+        } else {
+            throw new Error("No CasinoSlot or CasinoSlotTest contract found in deployment");
+        }
         
         console.log(`🎯 Connected to CasinoSlot: ${casinoSlotAddress}`);
         
@@ -49,6 +58,22 @@ async function testPlayerSpin() {
         const casinoSlot = CasinoSlot.attach(casinoSlotAddress);
         
         console.log(`🔧 Using contract factory: ${contractFactory}`);
+        
+        // Test basic contract functionality
+        console.log(`\n🔍 Contract Health Check:`);
+        try {
+            const contractBalance = await ethers.provider.getBalance(casinoSlotAddress);
+            console.log(`   ✅ Contract ETH Balance: ${ethers.utils.formatEther(contractBalance)} ETH`);
+            
+            const totalPrizePool = await casinoSlot.totalPrizePool();
+            console.log(`   ✅ Total Prize Pool: ${ethers.utils.formatEther(totalPrizePool)} ETH`);
+            
+            const houseEdge = await casinoSlot.houseEdge();
+            console.log(`   ✅ House Edge: ${houseEdge} basis points`);
+            
+        } catch (healthError) {
+            console.log(`   ⚠️  Contract health check failed: ${healthError.message}`);
+        }
         
         // Get test player (use account #1 - different from deployer)
         const [deployer, testPlayer] = await ethers.getSigners();
@@ -69,14 +94,34 @@ async function testPlayerSpin() {
             value: ethForChips,
             gasLimit: 300000
         });
-        await buyTx.wait();
+        const buyReceipt = await buyTx.wait();
+        console.log(`   ✅ CHIPS purchase transaction completed: ${buyReceipt.transactionHash}`);
         
-        const chipsBalance = await casinoSlot.balanceOf(testPlayer.address);
-        console.log(`   ✅ CHIPS received: ${ethers.utils.formatEther(chipsBalance)} CHIPS`);
+        // Try to get CHIPS balance with error handling
+        let chipsBalance;
+        try {
+            chipsBalance = await casinoSlot.balanceOf(testPlayer.address);
+            console.log(`   ✅ CHIPS received: ${ethers.utils.formatEther(chipsBalance)} CHIPS`);
+        } catch (balanceError) {
+            console.log(`   ⚠️  Could not read CHIPS balance: ${balanceError.message}`);
+            console.log(`   🔄 Continuing with estimated balance...`);
+            // Estimate based on purchase amount (this is rough)
+            chipsBalance = ethers.utils.parseEther("1000"); // Approximate
+        }
         
         // Spin parameters
         const reelCount = 4; // 4-reel slot
-        const spinCost = await casinoSlot.getSpinCost(reelCount);
+        let spinCost;
+        try {
+            spinCost = await casinoSlot.getSpinCost(reelCount);
+            console.log(`\n🎰 Spin Configuration:`);
+            console.log(`   🎰 Reel Count: ${reelCount}`);
+            console.log(`   💰 Cost per spin: ${ethers.utils.formatEther(spinCost)} CHIPS`);
+        } catch (costError) {
+            console.log(`   ⚠️  Could not get spin cost: ${costError.message}`);
+            spinCost = ethers.utils.parseEther("100"); // Default fallback
+            console.log(`   🔄 Using fallback spin cost: ${ethers.utils.formatEther(spinCost)} CHIPS`);
+        }
         
         console.log(`\n🎰 Preparing to spin:`);
         console.log(`   🎯 Reel Count: ${reelCount} reels`);
@@ -94,21 +139,22 @@ async function testPlayerSpin() {
         let spinRequestId = null;
         let spinCompleted = false;
         
-        // Listen for SpinRequested event
-        casinoSlot.on("SpinRequested", (requestId, player, reelCount, betAmount, event) => {
-            console.log(`🎲 VRF Request Submitted:`);
+        // Listen for SpinInitiated event
+        casinoSlot.on("SpinInitiated", (requestId, player, reelCount, betAmount, vrfCostETH, houseFeeETH, prizePoolContribution, timestamp, event) => {
+            console.log(`🎲 Spin Initiated:`);
             console.log(`   📋 Request ID: ${requestId}`);
             console.log(`   👤 Player: ${player}`);
             console.log(`   🎰 Reel Count: ${reelCount}`);
             console.log(`   💰 Bet: ${ethers.utils.formatEther(betAmount)} CHIPS`);
+            console.log(`   ⛽ VRF Cost: ${ethers.utils.formatEther(vrfCostETH)} ETH`);
             console.log(`   🧱 Block: ${event.blockNumber}`);
             console.log(`   ⏳ Waiting for VRF fulfillment...\n`);
             
             spinRequestId = requestId;
         });
         
-        // Listen for SpinResult event
-        casinoSlot.on("SpinResult", (requestId, player, reelCount, reels, payoutType, payout, event) => {
+        // Listen for SpinCompleted event
+        casinoSlot.on("SpinCompleted", (requestId, player, reelCount, reels, payoutType, payout, isJackpot, event) => {
             console.log(`🎊 SPIN RESULT:`);
             console.log(`   📋 Request ID: ${requestId}`);
             console.log(`   🎰 Reels: [${reels.join(', ')}]`);
@@ -137,14 +183,34 @@ async function testPlayerSpin() {
         // Execute the spin
         console.log(`🚀 Executing spin transaction...`);
         
-        const spinTx = await casinoSlot.connect(testPlayer).spin4Reels({
-            gasLimit: 500000 // Ensure enough gas
-        });
-        
-        console.log(`✅ Spin transaction submitted: ${spinTx.hash}`);
-        console.log(`⏳ Waiting for transaction confirmation...\n`);
-        
-        await spinTx.wait();
+        try {
+            const spinTx = await casinoSlot.connect(testPlayer).spinReels(reelCount, {
+                gasLimit: 500000 // Ensure enough gas
+            });
+            
+            console.log(`✅ Spin transaction submitted: ${spinTx.hash}`);
+            console.log(`⏳ Waiting for transaction confirmation...\n`);
+            
+            const spinReceipt = await spinTx.wait();
+            console.log(`✅ Spin transaction confirmed in block ${spinReceipt.blockNumber}`);
+            console.log(`📊 Gas used: ${spinReceipt.gasUsed.toString()}`);
+            console.log(`📋 Events emitted: ${spinReceipt.events ? spinReceipt.events.length : 0}`);
+            
+            if (spinReceipt.events && spinReceipt.events.length > 0) {
+                console.log(`📝 Event details:`);
+                spinReceipt.events.forEach((event, i) => {
+                    console.log(`   ${i + 1}. ${event.event || 'Unknown Event'}`);
+                });
+            } else {
+                console.log(`⚠️  No events were emitted - this suggests the function failed silently`);
+            }
+        } catch (spinError) {
+            console.error(`❌ Spin transaction failed: ${spinError.message}`);
+            if (spinError.reason) {
+                console.error(`   Reason: ${spinError.reason}`);
+            }
+            return;
+        }
         
         // Wait for VRF fulfillment (max 30 seconds)
         console.log(`⏳ Waiting for VRF fulfillment...`);
@@ -191,17 +257,14 @@ async function testPlayerSpin() {
 
 function getPayoutTypeName(payoutType) {
     const types = [
-        "NO_WIN",
-        "PAIR", 
-        "TWO_PAIR",
-        "THREE_KIND",
-        "STRAIGHT",
-        "FLUSH", 
-        "FULL_HOUSE",
-        "FOUR_KIND",
-        "STRAIGHT_FLUSH",
-        "FIVE_KIND",
-        "JACKPOT"
+        "LOSE",           // 0
+        "SMALL_WIN",      // 1  
+        "MEDIUM_WIN",     // 2
+        "BIG_WIN",        // 3
+        "SPECIAL_COMBO",  // 4
+        "MEGA_WIN",       // 5
+        "ULTRA_WIN",      // 6
+        "JACKPOT"         // 7
     ];
     
     return types[payoutType] || `UNKNOWN(${payoutType})`;

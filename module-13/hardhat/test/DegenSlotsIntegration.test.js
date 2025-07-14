@@ -17,7 +17,7 @@ describe("CasinoSlot Integration", function () {
         [owner, player1, player2] = await ethers.getSigners();
 
         // Deploy Mock VRF Coordinator 
-        const MockVRFCoordinator = await ethers.getContractFactory("MockVRFCoordinator");
+        const MockVRFCoordinator = await ethers.getContractFactory("contracts/MockVRFCoordinator.sol:MockVRFCoordinator");
         const mockVRFCoordinator = await MockVRFCoordinator.deploy();
         await mockVRFCoordinator.deployed();
 
@@ -41,21 +41,15 @@ describe("CasinoSlot Integration", function () {
         );
         await payoutTables.deployed();
 
-        // Deploy with upgradeable proxy on mainnet fork
+        // Deploy with upgradeable proxy with new 4-parameter constructor
         const CasinoSlotTest = await ethers.getContractFactory("CasinoSlotTest");
         casinoSlot = await upgrades.deployProxy(
             CasinoSlotTest,
             [
-                ethers.BigNumber.from("123456789"), // VRF v2.5 subscription ID (uint256)
-                ETH_USD_PRICE_FEED,
-                LINK_USD_PRICE_FEED,
-                LINK_TOKEN,
-                payoutTables.address,
-                mockVRFCoordinator.address,
-                UNISWAP_V3_ROUTER,
-                WETH_TOKEN,
-                CHAINLINK_KEY_HASH,
-                owner.address
+                ETH_USD_PRICE_FEED, // address ethUsdPriceFeedAddress
+                payoutTables.address, // address payoutTablesAddress
+                mockVRFCoordinator.address, // address wrapperAddress (VRF wrapper)
+                owner.address // address initialOwner
             ],
             { kind: "uups" }
         );
@@ -75,11 +69,11 @@ describe("CasinoSlot Integration", function () {
         it("should calculate payouts using external tables", async function () {
             // Request a 3-reel spin
             await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-            const tx = await casinoSlot.connect(player1).spin3Reels();
+            const tx = await casinoSlot.connect(player1).spinReels(3);
             const receipt = await tx.wait();
             
             // Get the request ID from the event
-            const spinRequestedEvent = receipt.events.find(e => e.event === "SpinRequested");
+            const spinRequestedEvent = receipt.events.find(e => e.event === "SpinInitiated");
             const requestId = spinRequestedEvent.args.requestId;
 
             // Mock the VRF response - this generates [1,5,3] which is a losing combination
@@ -99,10 +93,10 @@ describe("CasinoSlot Integration", function () {
         it("should handle winning combinations correctly", async function () {
             // Request a 3-reel spin
             await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-            const tx = await casinoSlot.connect(player1).spin3Reels();
+            const tx = await casinoSlot.connect(player1).spinReels(3);
             const receipt = await tx.wait();
             
-            const spinRequestedEvent = receipt.events.find(e => e.event === "SpinRequested");
+            const spinRequestedEvent = receipt.events.find(e => e.event === "SpinInitiated");
             const requestId = spinRequestedEvent.args.requestId;
 
             // Use the same randomness as the working 4-reel test: generates winning combo
@@ -122,7 +116,6 @@ describe("CasinoSlot Integration", function () {
 
         it("should support different reel modes with correct costs", async function () {
             await casinoSlot.setTestETHPrice(2000 * 100);
-            await casinoSlot.setTestLINKPrice(14 * 100);
 
             const cost3 = await casinoSlot.getSpinCost(3);
             expect(cost3).to.be.gt(0);
@@ -137,10 +130,10 @@ describe("CasinoSlot Integration", function () {
         it("should handle 4-reel spins correctly", async function () {
             // Request a 4-reel spin
             await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-            const tx = await casinoSlot.connect(player1).spin4Reels();
+            const tx = await casinoSlot.connect(player1).spinReels(4);
             const receipt = await tx.wait();
             
-            const spinRequestedEvent = receipt.events.find(e => e.event === "SpinRequested");
+            const spinRequestedEvent = receipt.events.find(e => e.event === "SpinInitiated");
             const requestId = spinRequestedEvent.args.requestId;
 
             // Mock the VRF response to generate [4,4,4,4] reels (all diamonds)
@@ -159,10 +152,10 @@ describe("CasinoSlot Integration", function () {
         it("should handle losing combinations", async function () {
             // Request a 3-reel spin
             await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-            const tx = await casinoSlot.connect(player1).spin3Reels();
+            const tx = await casinoSlot.connect(player1).spinReels(3);
             const receipt = await tx.wait();
             
-            const spinRequestedEvent = receipt.events.find(e => e.event === "SpinRequested");
+            const spinRequestedEvent = receipt.events.find(e => e.event === "SpinInitiated");
             const requestId = spinRequestedEvent.args.requestId;
 
             // Mock the VRF response with a losing combination (123)

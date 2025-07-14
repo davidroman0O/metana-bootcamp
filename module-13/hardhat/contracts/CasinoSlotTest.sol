@@ -57,7 +57,7 @@ contract CasinoSlotTest is CasinoSlot {
             }
         }
         
-        emit SpinResult(requestId, spin.player, spin.reelCount, reels, payoutType, payout);
+        emit SpinCompleted(requestId, spin.player, spin.reelCount, reels, payoutType, payout, payoutType == IPayoutTables.PayoutType.JACKPOT);
     }
     
     /**
@@ -123,7 +123,7 @@ contract CasinoSlotTest is CasinoSlot {
         // For testing purposes, generate a mock request ID
         requestId = uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao, msg.sender))) % 1000000;
         
-        emit VRFPayment(requestId, price);
+        emit VRFTransaction(requestId, price, price, 0, 2000); // Mock ETH price in USD
         return (requestId, price);
     }
 } 

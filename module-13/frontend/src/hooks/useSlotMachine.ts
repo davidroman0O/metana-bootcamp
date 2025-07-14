@@ -249,7 +249,8 @@ export function useSlotMachine(chainId: number | undefined) {
       await spinSlots({
         address: contractAddress,
         abi: CasinoSlotABI,
-        functionName: 'spin3Reels',
+        functionName: 'spinReels',
+        args: [3], // 3 reels
       });
 
       toast.success('Spin requested!');

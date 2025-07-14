@@ -229,7 +229,7 @@ export function useCasinoContract() {
   useWatchContractEvent({
     address: CASINO_SLOT_ADDRESS,
     abi: CasinoSlotABI,
-    eventName: 'SpinResult',
+    eventName: 'SpinCompleted',
     onLogs: handleSpinResultEvents,
     // Always enable the event listener when connected
     enabled: !!address,
@@ -314,15 +314,15 @@ export function useCasinoContract() {
       return null;
     }
 
-    const functionName = `spin${reelCount}Reels` as const;
     setSpinState({ status: 'pending' });
     try {
-      console.log(`🎮 Sending ${functionName} transaction...`);
+      console.log(`🎮 Sending spinReels transaction with ${reelCount} reels...`);
       
       const hash = await walletClient.writeContract({
         address: CASINO_SLOT_ADDRESS,
         abi: CasinoSlotABI,
-        functionName,
+        functionName: 'spinReels',
+        args: [reelCount],
         // Let wallet handle gas estimation automatically
       });
       setSpinState({ status: 'pending', hash });
@@ -345,9 +345,9 @@ export function useCasinoContract() {
         for (const log of receipt.logs) {
           try {
             const decodedLog = decodeEventLog({ abi: CasinoSlotABI, data: log.data, topics: log.topics });
-            if (decodedLog.eventName === 'SpinRequested') {
+            if (decodedLog.eventName === 'SpinInitiated') {
               const { requestId } = decodedLog.args as any;
-              console.log(`ℹ️ Spin requested with ID: ${requestId}`);
+              console.log(`ℹ️ Spin initiated with ID: ${requestId}`);
               break; // Found it, no need to check other logs
             }
           } catch (e) {

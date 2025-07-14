@@ -69,8 +69,15 @@ async function extractAddresses() {
 }
 
 async function processDeployment(deploymentData, networkName) {
-  // Extract contract addresses
-  const casinoSlotAddress = deploymentData.contracts.CasinoSlot.address;
+  // Extract contract addresses (handle both CasinoSlot and CasinoSlotTest)
+  let casinoSlotAddress;
+  if (deploymentData.contracts.CasinoSlot) {
+    casinoSlotAddress = deploymentData.contracts.CasinoSlot.address;
+  } else if (deploymentData.contracts.CasinoSlotTest) {
+    casinoSlotAddress = deploymentData.contracts.CasinoSlotTest.address;
+  } else {
+    throw new Error("No CasinoSlot or CasinoSlotTest contract found in deployment");
+  }
   console.log(`   CasinoSlot address: ${casinoSlotAddress}`);
 
   // Frontend config directory
@@ -118,6 +125,7 @@ async function generateNetworkEnvFile(configDir, network, env, { casinoSlotAddre
   const exportName = `${network.toUpperCase()}_${env.toUpperCase()}_DEPLOYMENT`;
   
   const chainlinkAddresses = getChainlinkAddresses(deploymentData.network.chainId);
+  const subgraphConfig = getSubgraphConfig(network);
   
   const content = `// ${network.charAt(0).toUpperCase() + network.slice(1)} ${env.charAt(0).toUpperCase() + env.slice(1)} Environment
 // Auto-generated at: ${deploymentData.network.timestamp}
@@ -138,7 +146,9 @@ export const ${exportName}: NetworkDeployment = {
       ethPriceUSDCents: "${deploymentData.exchangeRates.ethPriceUSDCents}",
       chipsPerETH: "${deploymentData.exchangeRates.chipsPerETH}",
       targetChipPriceUSD: "${deploymentData.exchangeRates.targetChipPriceUSD}"
-    },` : ''}
+    },` : ''}${subgraphConfig && subgraphConfig.url ? `
+    subgraphUrl: "${subgraphConfig.url}",` : ''}${subgraphConfig && subgraphConfig.apiKey ? `
+    subgraphApiKey: "${subgraphConfig.apiKey}",` : ''}
   }
 };
 `;
@@ -168,6 +178,8 @@ export interface DeploymentInfo {
     chipsPerETH: string;
     targetChipPriceUSD: string;
   };
+  subgraphUrl?: string;
+  subgraphApiKey?: string;
 }
 
 export interface NetworkDeployment {
@@ -212,6 +224,23 @@ function getChainlinkAddresses(chainId) {
   };
   
   return addresses[chainId];
+}
+
+function getSubgraphConfig(network) {
+  // Map network to subgraph configurations
+  const subgraphConfigs = {
+    sepolia: {
+      url: 'https://gateway.thegraph.com/api/subgraphs/id/Ajiy1KjRsfNpKQ6cwwtdZdDvd1gY1PCrRKFoYhkRbJ2d',
+      apiKey: '6f40bf1cf75c83a954bbd11d9801f1bf'
+    },
+    hardhat: {
+      url: 'http://localhost:8000/subgraphs/name/casino-slot-subgraph',
+      apiKey: null // No API key needed for local
+    },
+    mainnet: null // Not deployed yet
+  };
+  
+  return subgraphConfigs[network];
 }
 
 async function generateABIs(configDir, deploymentData) {

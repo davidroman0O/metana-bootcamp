@@ -2,12 +2,12 @@
   "network": {
     "name": "sepolia",
     "chainId": 11155111,
-    "timestamp": "2025-07-04T04:18:50.560Z"
+    "timestamp": "2025-07-10T20:48:15.136Z"
   },
   "contracts": {
     "CasinoSlot": {
-      "address": "0x8eab795D2fdB63256AEa0510953ef72922D18b72",
-      "implementation": "0xc0f47486A508a6709dFE658C07926137Ddc3f0d7",
+      "address": "0x83dc16BCda3AFb2145b0c971E261fe39f9a6D377",
+      "implementation": "0x06d5D91989B0E8c8988017672A4650Eb203483Df",
       "admin": "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86",
       "constructor": {
         "vrfWrapper": "0x195f15F2d49d693cE265b4fB0fdDbE15b1850Cc1",
@@ -21,5 +21,5 @@
   "uniswapVersion": "v2-custom",
   "swapMethod": "working-v2-swaps",
   "productionMode": true,
-  "lastUpdated": "2025-07-04T04:18:50.560Z"
+  "lastUpdated": "2025-07-10T20:48:15.136Z"
 }

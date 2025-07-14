@@ -67,7 +67,7 @@ contract CasinoSlot is
     uint256 public constant REEL_4_MULTIPLIER = 25000;  // 250% (2.5x more expensive)
     uint256 public constant REEL_5_MULTIPLIER = 75000;  // 750% (7.5x more expensive)
     uint256 public constant REEL_6_MULTIPLIER = 200000; // 2000% (20x more expensive)
-    uint256 public constant REEL_7_MULTIPLIER = 500000; // 5000% (50x more expensive)
+    uint256 public constant REEL_7_MULTIPLIER = 500000; // 5000% (50x more expensive)©
     
     // Game mappings and state
     mapping(uint256 => Spin) public spins;
@@ -76,31 +76,111 @@ contract CasinoSlot is
     mapping(address => uint256) public totalWon;
     mapping(address => uint256) public totalBet;
     
-    // Events
-    event SpinRequested(uint256 indexed requestId, address indexed player, uint8 reelCount, uint256 betAmount);
-    event SpinResult(
-        uint256 indexed requestId, 
-        address indexed player, 
+    // Session tracking
+    mapping(address => uint256) public currentSessionId;
+    mapping(address => uint256) public lastActivityTimestamp;
+    mapping(address => uint256) public sessionSpinCount;
+    mapping(address => uint256) public sessionBetTotal;
+    mapping(address => uint256) public sessionWinTotal;
+    mapping(address => uint256) public sessionStartTime;
+    
+    // Milestone tracking
+    mapping(address => mapping(string => bool)) public milestoneAchieved;
+    
+    // Constants for session management
+    uint256 constant SESSION_TIMEOUT = 1800; // 30 minutes in seconds
+        
+    // Core Game Events
+    event SpinInitiated(
+        uint256 indexed requestId,
+        address indexed player,
         uint8 reelCount,
-        uint256[] reels, 
-        IPayoutTables.PayoutType payoutType, 
-        uint256 payout
+        uint256 betAmount,
+        uint256 vrfCostETH,
+        uint256 houseFeeETH,
+        uint256 prizePoolContribution,
+        uint256 timestamp
     );
-    event WinningsWithdrawn(address indexed player, uint256 amount);
-    // 0: SPIN_CONTRIBUTION, 1: JACKPOT_PAYOUT, 2: ETH_DEPOSIT, 3: VRF_PAYMENT
+    
+    event SpinCompleted(
+        uint256 indexed requestId,
+        address indexed player,
+        uint8 reelCount,
+        uint256[] reels,
+        IPayoutTables.PayoutType payoutType,
+        uint256 payout,
+        bool isJackpot
+    );
+    
+    // Consolidated VRF Event
+    event VRFTransaction(
+        uint256 indexed requestId,
+        uint256 estimatedCost,
+        uint256 actualCost,
+        uint256 markup,
+        uint256 ethPriceUSD
+    );
+    
+    // Player Activity - Only emit when significant changes occur
+    event PlayerActivity(
+        address indexed player,
+        uint256 totalSpins,
+        uint256 totalBet,
+        uint256 totalWon,
+        uint256 sessionSpins,
+        uint256 sessionBet,
+        uint256 sessionWon,
+        string milestone
+    );
+    
+    // Financial Events
     event PrizePoolStateChanged(uint256 newTotalPrizePool, int256 amount, uint8 indexed reason);
+    event ChipsTransacted(
+        address indexed player,
+        string transactionType, // "purchase", "swap", "win", "withdraw"
+        uint256 chipsAmount,
+        uint256 ethValue,
+        uint256 exchangeRate,
+        uint256 ethPriceUSD
+    );
+    
+    // Session Events (kept as-is since they're already efficient)
+    event GameSessionStarted(
+        address indexed player,
+        uint256 indexed sessionId,
+        uint256 timestamp
+    );
+    
+    event GameSessionEnded(
+        address indexed player,
+        uint256 indexed sessionId,
+        uint256 duration,
+        uint256 spinsCount,
+        uint256 totalBet,
+        uint256 totalWon,
+        string endReason
+    );
+    
+    // Jackpot Event (simplified)
+    event JackpotHit(
+        address indexed player,
+        uint256 indexed requestId,
+        uint256 amount,
+        uint256 prizePoolBefore,
+        uint256 prizePoolAfter
+    );
+    
+    // System Events
+    event SystemConfigUpdated(
+        string parameter,
+        uint256 oldValue,
+        uint256 newValue
+    );
+    
     event PayoutTablesUpdated(address indexed newPayoutTables);
-    event ChipsPurchased(address indexed player, uint256 ethAmount, uint256 chipsAmount);
-    event EthWithdrawn(address indexed owner, uint256 amount);
-    event HouseFeeCollected(uint256 indexed requestId, address indexed player, uint256 amount);
-    event PlayerStatsUpdated(address indexed player, uint256 totalSpins, uint256 totalWinnings, uint256 totalBet);
     event ContractInitialized(uint8 version);
-    event WinningsCredited(address indexed player, uint256 amount);
-    event VRFCostUpdated(uint256 newVrfCostUSD);
-    event DynamicPricingUpdated(uint256 baseChipPriceUSD, uint256 vrfCostUSD);
-    event VRFPayment(uint256 indexed requestId, uint256 ethPaid);
-    event VRFMarkupUpdated(uint256 newVrfMarkupBP);
-    event ChipsSwapped(address indexed player, uint256 chipsAmount, uint256 ethValue);
+    event EthWithdrawn(address indexed owner, uint256 amount);
+    event EmergencyWithdrawal(address indexed player, uint256 amount, string reason);
     
      struct Spin {
         address player;
@@ -175,10 +255,14 @@ contract CasinoSlot is
         require(newBaseChipPriceUSD > 0 && newBaseChipPriceUSD <= 10000, "Invalid base price"); // Max $100
         require(newVrfCostUSD > 0 && newVrfCostUSD <= 5000, "Invalid VRF cost"); // Max $50
         
+        uint256 oldBaseChipPriceUSD = baseChipPriceUSD;
+        uint256 oldVrfCostUSD = vrfCostUSD;
+        
         baseChipPriceUSD = newBaseChipPriceUSD;
         vrfCostUSD = newVrfCostUSD;
         
-        emit DynamicPricingUpdated(newBaseChipPriceUSD, newVrfCostUSD);
+        emit SystemConfigUpdated("baseChipPriceUSD", oldBaseChipPriceUSD, newBaseChipPriceUSD);
+        emit SystemConfigUpdated("vrfCostUSD", oldVrfCostUSD, newVrfCostUSD);
     }
     
     /**
@@ -314,6 +398,9 @@ contract CasinoSlot is
     function _executeSpin(uint8 reelCount, uint256 cost) internal returns (uint256 requestId) {
         require(reelCount >= 3 && reelCount <= 7, "Invalid reel count");
         
+        // Check and manage session
+        _checkAndManageSession(msg.sender);
+        
         // Cost volatility check: ensure the provided cost is close to the current on-chain calculated cost
         uint256 currentCost = getSpinCost(reelCount);
         uint256 difference = (cost > currentCost) ? cost - currentCost : currentCost - cost;
@@ -330,7 +417,7 @@ contract CasinoSlot is
         uint256 vrfCostInUSD = _getVRFCostInUSD();
         uint256 ethForVRF = _convertUSDCentsToETH(vrfCostInUSD);
         uint256 ethValue = calculateETHFromCHIPS(cost);
-
+        
         require(ethValue > ethForVRF, "ETH value of CHIPS is less than VRF cost");
         require(address(this).balance >= ethForVRF, "Insufficient ETH for VRF");
         
@@ -357,8 +444,29 @@ contract CasinoSlot is
         // Reset allowance to 0 after spin to force re-approval next time
         _approve(msg.sender, address(this), 0);
 
-        emit HouseFeeCollected(requestId, msg.sender, houseAmount);
-        emit VRFPayment(requestId, vrfPrice);
+        // Get ETH price for events
+        (, int256 ethPriceUSD, , , ) = ethUsdPriceFeed.latestRoundData();
+        
+        // Emit consolidated VRF event
+        emit VRFTransaction(
+            requestId,
+            ethForVRF,
+            vrfPrice,
+            vrfPrice > ethForVRF ? vrfPrice - ethForVRF : 0,
+            uint256(ethPriceUSD)
+        );
+        
+        // Emit consolidated spin initiation event
+        emit SpinInitiated(
+            requestId,
+            msg.sender,
+            reelCount,
+            cost,
+            vrfPrice,
+            houseAmount,
+            prizePoolAmount,
+            block.timestamp
+        );
         
         // Store spin data
         spins[requestId] = Spin({
@@ -373,10 +481,25 @@ contract CasinoSlot is
         });
         
         totalSpins[msg.sender]++;
+        sessionSpinCount[msg.sender]++;
         totalBet[msg.sender] += cost;
-        emit PlayerStatsUpdated(msg.sender, totalSpins[msg.sender], totalWon[msg.sender], totalBet[msg.sender]);
+        sessionBetTotal[msg.sender] += cost;
         
-        emit SpinRequested(requestId, msg.sender, reelCount, cost);
+        // Check milestones and emit player activity if milestone reached
+        string memory milestone = _checkMilestones(msg.sender);
+        if (bytes(milestone).length > 0) {
+            emit PlayerActivity(
+                msg.sender,
+                totalSpins[msg.sender],
+                totalBet[msg.sender],
+                totalWon[msg.sender],
+                sessionSpinCount[msg.sender],
+                sessionBetTotal[msg.sender],
+                sessionWinTotal[msg.sender],
+                milestone
+            );
+        }
+        
         return requestId;
     }
 
@@ -388,7 +511,6 @@ contract CasinoSlot is
      */
     function calculateETHFromCHIPS(uint256 chipsAmount) public view returns (uint256 ethValue) {
         // CHIPS are valued at $0.20 each (baseChipPriceUSD in cents)
-        // MULTIPLY FIRST to maintain precision, then divide
         
         // Get ETH price in USD
         (, int256 ethPriceUSD, , uint256 updatedAt, ) = ethUsdPriceFeed.latestRoundData();
@@ -456,6 +578,76 @@ contract CasinoSlot is
         return (payoutType, payout);
     }
     
+    /**
+     * @dev Check and manage player sessions
+     */
+    function _checkAndManageSession(address player) internal {
+        uint256 timeSinceLastActivity = block.timestamp - lastActivityTimestamp[player];
+        
+        // If new session or timeout
+        if (lastActivityTimestamp[player] == 0 || timeSinceLastActivity > SESSION_TIMEOUT) {
+            // End previous session if exists
+            if (lastActivityTimestamp[player] > 0 && sessionSpinCount[player] > 0) {
+                emit GameSessionEnded(
+                    player,
+                    currentSessionId[player],
+                    block.timestamp - sessionStartTime[player],
+                    sessionSpinCount[player],
+                    sessionBetTotal[player],
+                    sessionWinTotal[player],
+                    "timeout"
+                );
+            }
+            
+            // Start new session
+            currentSessionId[player]++;
+            sessionSpinCount[player] = 0;
+            sessionBetTotal[player] = 0;
+            sessionWinTotal[player] = 0;
+            sessionStartTime[player] = block.timestamp;
+            
+            emit GameSessionStarted(player, currentSessionId[player], block.timestamp);
+        }
+        
+        lastActivityTimestamp[player] = block.timestamp;
+    }
+    
+    /**
+     * @dev Check player milestones and return milestone achieved (if any)
+     */
+    function _checkMilestones(address player) internal returns (string memory) {
+        // First spin milestone
+        if (totalSpins[player] == 1 && !milestoneAchieved[player]["first_spin"]) {
+            milestoneAchieved[player]["first_spin"] = true;
+            return "first_spin";
+        }
+        
+        // 100 spins milestone
+        if (totalSpins[player] == 100 && !milestoneAchieved[player]["100_spins"]) {
+            milestoneAchieved[player]["100_spins"] = true;
+            return "100_spins";
+        }
+        
+        // 1000 spins milestone
+        if (totalSpins[player] == 1000 && !milestoneAchieved[player]["1000_spins"]) {
+            milestoneAchieved[player]["1000_spins"] = true;
+            return "1000_spins";
+        }
+        
+        // Whale status (1000 CHIPS total bet)
+        if (totalBet[player] >= 1000 ether && !milestoneAchieved[player]["whale_status"]) {
+            milestoneAchieved[player]["whale_status"] = true;
+            return "whale_status";
+        }
+        
+        // First win
+        if (totalWon[player] > 0 && !milestoneAchieved[player]["first_win"]) {
+            milestoneAchieved[player]["first_win"] = true;
+            return "first_win";
+        }
+        
+        return ""; // No milestone reached
+    }
 
     
     /**
@@ -488,19 +680,51 @@ contract CasinoSlot is
         
         // Award winnings if any
         if (payout > 0) {
-            emit WinningsCredited(spin.player, payout);
             playerWinnings[spin.player] += payout;
             totalWon[spin.player] += payout;
-            emit PlayerStatsUpdated(spin.player, totalSpins[spin.player], totalWon[spin.player], totalBet[spin.player]);
+            sessionWinTotal[spin.player] += payout;
             
             // For jackpot, reduce the prize pool
             if (payoutType == IPayoutTables.PayoutType.JACKPOT) {
+                uint256 poolBefore = totalPrizePool;
                 totalPrizePool -= payout;
+                
+                emit JackpotHit(
+                    spin.player,
+                    requestId,
+                    payout,
+                    poolBefore,
+                    totalPrizePool
+                );
+                
                 emit PrizePoolStateChanged(totalPrizePool, -int256(payout), 1);
+            }
+            
+            // Emit player activity update for significant wins
+            if (payout >= spin.betAmount * 10) { // Only for 10x+ wins
+                emit PlayerActivity(
+                    spin.player,
+                    totalSpins[spin.player],
+                    totalBet[spin.player],
+                    totalWon[spin.player],
+                    sessionSpinCount[spin.player],
+                    sessionBetTotal[spin.player],
+                    sessionWinTotal[spin.player],
+                    "big_win"
+                );
             }
         }
         
-        emit SpinResult(requestId, spin.player, spin.reelCount, reels, payoutType, payout);
+        // Emit consolidated spin completion event
+        emit SpinCompleted(
+            requestId,
+            spin.player,
+            spin.reelCount,
+            reels,
+            payoutType,
+            payout,
+            payoutType == IPayoutTables.PayoutType.JACKPOT
+        );
     }
     
     /**
@@ -512,10 +736,40 @@ contract CasinoSlot is
         
         playerWinnings[msg.sender] = 0;
         
+        // End current session if active
+        if (sessionSpinCount[msg.sender] > 0) {
+            emit GameSessionEnded(
+                msg.sender,
+                currentSessionId[msg.sender],
+                block.timestamp - sessionStartTime[msg.sender],
+                sessionSpinCount[msg.sender],
+                sessionBetTotal[msg.sender],
+                sessionWinTotal[msg.sender],
+                "withdrawal"
+            );
+            
+            // Reset session stats
+            sessionSpinCount[msg.sender] = 0;
+            sessionBetTotal[msg.sender] = 0;
+            sessionWinTotal[msg.sender] = 0;
+        }
+        
         // Mint winnings as new CHIPS tokens
         _mint(msg.sender, amount);
         
-        emit WinningsWithdrawn(msg.sender, amount);
+        // Get ETH price for transaction event
+        (, int256 ethPriceUSD, , , ) = ethUsdPriceFeed.latestRoundData();
+        uint256 ethValue = calculateETHFromCHIPS(amount);
+        uint256 exchangeRate = ethValue > 0 ? (amount * 1e18) / ethValue : 0;
+        
+        emit ChipsTransacted(
+            msg.sender,
+            "withdraw",
+            amount,
+            ethValue,
+            exchangeRate,
+            uint256(ethPriceUSD)
+        );
     }
     
     /**
@@ -604,7 +858,18 @@ contract CasinoSlot is
         totalPrizePool += msg.value;
         emit PrizePoolStateChanged(totalPrizePool, int256(msg.value), 2);
         
-        emit ChipsPurchased(msg.sender, msg.value, chipsAmount);
+        // Get ETH price for transaction event
+        (, int256 ethPriceUSD, , , ) = ethUsdPriceFeed.latestRoundData();
+        uint256 exchangeRate = (chipsAmount * 1e18) / msg.value;
+        
+        emit ChipsTransacted(
+            msg.sender,
+            "purchase",
+            chipsAmount,
+            msg.value,
+            exchangeRate,
+            uint256(ethPriceUSD)
+        );
     }
     
     /**
@@ -633,7 +898,18 @@ contract CasinoSlot is
         // Transfer ETH to user
         payable(msg.sender).transfer(ethValue);
         
-        emit ChipsSwapped(msg.sender, chipsAmount, ethValue);
+        // Get ETH price for transaction event
+        (, int256 ethPriceUSD, , , ) = ethUsdPriceFeed.latestRoundData();
+        uint256 exchangeRate = (chipsAmount * 1e18) / ethValue;
+        
+        emit ChipsTransacted(
+            msg.sender,
+            "swap",
+            chipsAmount,
+            ethValue,
+            exchangeRate,
+            uint256(ethPriceUSD)
+        );
     }
     
     /**
@@ -747,14 +1023,94 @@ contract CasinoSlot is
         uint256 _vrfCostUSD,
         uint256 _vrfMarkupBP
     ) external onlyOwner {
+        uint32 oldCallbackGasLimit = callbackGasLimit;
+        uint16 oldRequestConfirmations = requestConfirmations;
+        uint32 oldNumWords = numWords;
+        uint256 oldVrfCostUSD = vrfCostUSD;
+        uint256 oldVrfMarkupBP = vrfMarkupBP;
+        
         callbackGasLimit = _callbackGasLimit;
         requestConfirmations = _requestConfirmations;
         numWords = _numWords;
         vrfCostUSD = _vrfCostUSD;
         vrfMarkupBP = _vrfMarkupBP;
         
-        emit VRFCostUpdated(_vrfCostUSD);
-        emit VRFMarkupUpdated(_vrfMarkupBP);
+        emit SystemConfigUpdated("callbackGasLimit", oldCallbackGasLimit, _callbackGasLimit);
+        emit SystemConfigUpdated("requestConfirmations", oldRequestConfirmations, _requestConfirmations);
+        emit SystemConfigUpdated("numWords", oldNumWords, _numWords);
+        emit SystemConfigUpdated("vrfCostUSD", oldVrfCostUSD, _vrfCostUSD);
+        emit SystemConfigUpdated("vrfMarkupBP", oldVrfMarkupBP, _vrfMarkupBP);
+    }
+    
+    /**
+     * @dev Allow player to manually end their session
+     */
+    function endSession() external {
+        require(sessionSpinCount[msg.sender] > 0, "No active session");
+        
+        emit GameSessionEnded(
+            msg.sender,
+            currentSessionId[msg.sender],
+            block.timestamp - sessionStartTime[msg.sender],
+            sessionSpinCount[msg.sender],
+            sessionBetTotal[msg.sender],
+            sessionWinTotal[msg.sender],
+            "manual"
+        );
+        
+        // Reset session stats
+        sessionSpinCount[msg.sender] = 0;
+        sessionBetTotal[msg.sender] = 0;
+        sessionWinTotal[msg.sender] = 0;
+        lastActivityTimestamp[msg.sender] = 0;
+    }
+    
+    /**
+     * @dev Get current session statistics for a player
+     */
+    function getSessionStats(address player) external view returns (
+        uint256 sessionId,
+        uint256 spinCount,
+        uint256 betTotal,
+        uint256 winTotal,
+        uint256 duration,
+        bool isActive
+    ) {
+        sessionId = currentSessionId[player];
+        spinCount = sessionSpinCount[player];
+        betTotal = sessionBetTotal[player];
+        winTotal = sessionWinTotal[player];
+        duration = sessionStartTime[player] > 0 ? block.timestamp - sessionStartTime[player] : 0;
+        isActive = lastActivityTimestamp[player] > 0 && 
+                   (block.timestamp - lastActivityTimestamp[player]) <= SESSION_TIMEOUT;
+    }
+    
+    /**
+     * @dev Emergency withdrawal for players in critical situations (only owner can trigger)
+     */
+    function emergencyWithdrawPlayerFunds(address player, string memory reason) external onlyOwner {
+        uint256 amount = playerWinnings[player];
+        require(amount > 0, "No winnings to withdraw");
+        
+        playerWinnings[player] = 0;
+        
+        // Mint winnings as CHIPS tokens for emergency withdrawal
+        _mint(player, amount);
+        
+        // Get ETH price for transaction event
+        (, int256 ethPriceUSD, , , ) = ethUsdPriceFeed.latestRoundData();
+        uint256 ethValue = calculateETHFromCHIPS(amount);
+        uint256 exchangeRate = ethValue > 0 ? (amount * 1e18) / ethValue : 0;
+        
+        emit EmergencyWithdrawal(player, amount, reason);
+        emit ChipsTransacted(
+            player,
+            "emergency",
+            amount,
+            ethValue,
+            exchangeRate,
+            uint256(ethPriceUSD)
+        );
     }
 } 
 

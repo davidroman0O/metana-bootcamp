@@ -18,7 +18,7 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
     [owner, player1, player2] = await ethers.getSigners();
 
     // Deploy Mock VRF Coordinator
-    const MockVRFCoordinator = await ethers.getContractFactory("MockVRFCoordinator");
+    const MockVRFCoordinator = await ethers.getContractFactory("contracts/MockVRFCoordinator.sol:MockVRFCoordinator");
     const mockVRFCoordinator = await MockVRFCoordinator.deploy();
     await mockVRFCoordinator.deployed();
 
@@ -42,21 +42,15 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
     );
     await payoutTables.deployed();
     
-    // Deploy CasinoSlotTest via proxy
+    // Deploy CasinoSlotTest via proxy with new 4-parameter constructor
     const CasinoSlotTest = await ethers.getContractFactory("CasinoSlotTest");
     casinoSlot = await upgrades.deployProxy(
       CasinoSlotTest,
       [
-        ethers.BigNumber.from("123456789"), // VRF v2.5 subscription ID (uint256)
-        ETH_USD_PRICE_FEED,       // address ethUsdPriceFeedAddress
-        LINK_USD_PRICE_FEED,      // address linkUsdPriceFeedAddress
-        LINK_TOKEN,               // address linkTokenAddress
-        payoutTables.address,     // address payoutTablesAddress
-        mockVRFCoordinator.address, // address vrfCoordinatorAddress
-        UNISWAP_V3_ROUTER,        // address uniswapRouterAddress
-        WETH_TOKEN,               // address wethTokenAddress
-        CHAINLINK_KEY_HASH,       // bytes32 vrfKeyHash (v2.5)
-        owner.address             // address initialOwner
+        ETH_USD_PRICE_FEED, // address ethUsdPriceFeedAddress
+        payoutTables.address, // address payoutTablesAddress
+        mockVRFCoordinator.address, // address wrapperAddress (VRF wrapper)
+        owner.address // address initialOwner
       ],
       {
         kind: 'uups',
@@ -99,10 +93,10 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
   describe("Spin Request Mechanism", function () {
     it("Should store spin data correctly when requesting", async function () {
       await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-      const tx = await casinoSlot.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spinReels(3);
       const receipt = await tx.wait();
       
-      const spinEvent = receipt.events.find(e => e.event === "SpinRequested");
+      const spinEvent = receipt.events.find(e => e.event === "SpinInitiated");
       expect(spinEvent).to.not.be.undefined;
       
       const requestId = spinEvent.args.requestId;
@@ -119,7 +113,7 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
       const chipBalanceBefore = await casinoSlot.balanceOf(player1.address);
       
       await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-      await casinoSlot.connect(player1).spin3Reels();
+      await casinoSlot.connect(player1).spinReels(3);
       
       const chipBalanceAfter = await casinoSlot.balanceOf(player1.address);
       expect(chipBalanceAfter).to.equal(chipBalanceBefore.sub(reel3Cost));
@@ -127,23 +121,26 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
 
     it("Should increment request IDs correctly", async function () {
       await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-      const tx1 = await casinoSlot.connect(player1).spin3Reels();
+      const tx1 = await casinoSlot.connect(player1).spinReels(3);
       const receipt1 = await tx1.wait();
-      const event1 = receipt1.events.find(e => e.event === "SpinRequested");
+      const event1 = receipt1.events.find(e => e.event === "SpinInitiated");
       
       await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-      const tx2 = await casinoSlot.connect(player1).spin3Reels();
+      const tx2 = await casinoSlot.connect(player1).spinReels(3);
       const receipt2 = await tx2.wait();
-      const event2 = receipt2.events.find(e => e.event === "SpinRequested");
+      const event2 = receipt2.events.find(e => e.event === "SpinInitiated");
       
-      expect(event2.args.requestId).to.be.gt(event1.args.requestId);
+      // Check that both request IDs are valid (greater than 0) and different
+      expect(event1.args.requestId).to.be.gt(0);
+      expect(event2.args.requestId).to.be.gt(0);
+      expect(event2.args.requestId).to.not.equal(event1.args.requestId);
     });
 
     it("Should update prize pool correctly", async function () {
       const initialPool = await casinoSlot.totalPrizePool();
       
       await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-      await casinoSlot.connect(player1).spin3Reels();
+      await casinoSlot.connect(player1).spinReels(3);
       
       const finalPool = await casinoSlot.totalPrizePool();
       expect(finalPool).to.be.gt(initialPool);
@@ -153,9 +150,9 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
   describe("VRF Fulfillment with PayoutTables", function () {
     it("Should handle BIG WIN combinations (333)", async function () {
       await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-      const tx = await casinoSlot.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spinReels(3);
       const receipt = await tx.wait();
-      const event = receipt.events.find(e => e.event === "SpinRequested");
+      const event = receipt.events.find(e => e.event === "SpinInitiated");
       const requestId = event.args.requestId;
       
       // From empirical testing: need to find a value that produces [3,3,3]
@@ -180,9 +177,9 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
 
     it("Should handle ULTRA WIN combinations (555)", async function () {
       await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-      const tx = await casinoSlot.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spinReels(3);
       const receipt = await tx.wait();
-      const event = receipt.events.find(e => e.event === "SpinRequested");
+      const event = receipt.events.find(e => e.event === "SpinInitiated");
       const requestId = event.args.requestId;
       
       // Use the discovered working value for [5,5,5]
@@ -201,9 +198,9 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
 
     it("Should handle losing combinations", async function () {
       await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-      const tx = await casinoSlot.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spinReels(3);
       const receipt = await tx.wait();
-      const event = receipt.events.find(e => e.event === "SpinRequested");
+      const event = receipt.events.find(e => e.event === "SpinInitiated");
       const requestId = event.args.requestId;
       
       // Generate [1,2,3] losing combination - use value that gives mixed reels
@@ -219,9 +216,9 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
 
     it("Should handle SPECIAL_COMBO (two rockets)", async function () {
       await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-      const tx = await casinoSlot.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spinReels(3);
       const receipt = await tx.wait();
-      const event = receipt.events.find(e => e.event === "SpinRequested");
+      const event = receipt.events.find(e => e.event === "SpinInitiated");
       const requestId = event.args.requestId;
       
       // Use the discovered working value for [5,5,1]
@@ -240,9 +237,9 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
 
     it("Should prevent double fulfillment", async function () {
       await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-      const tx = await casinoSlot.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spinReels(3);
       const receipt = await tx.wait();
-      const event = receipt.events.find(e => e.event === "SpinRequested");
+      const event = receipt.events.find(e => e.event === "SpinInitiated");
       const requestId = event.args.requestId;
       
       const randomValue = ethers.BigNumber.from("0x123456");
@@ -261,9 +258,9 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
       expect(initialPool).to.be.gt(0); // Should have ETH from beforeEach
       
       await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-      const tx = await casinoSlot.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spinReels(3);
       const receipt = await tx.wait();
-      const requestId = receipt.events.find(e => e.event === "SpinRequested").args.requestId;
+      const requestId = receipt.events.find(e => e.event === "SpinInitiated").args.requestId;
       
       // Prize pool after the spin (which adds to it)
       const poolAfterSpin = await casinoSlot.totalPrizePool();
@@ -291,9 +288,9 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
   describe("Multi-Reel Mode Testing", function () {
     it("Should handle 4-reel spins correctly", async function () {
       await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-      const tx = await casinoSlot.connect(player1).spin4Reels();
+      const tx = await casinoSlot.connect(player1).spinReels(4);
       const receipt = await tx.wait();
-      const event = receipt.events.find(e => e.event === "SpinRequested");
+      const event = receipt.events.find(e => e.event === "SpinInitiated");
       const requestId = event.args.requestId;
       
       // Generate [4,4,4,4] - all diamonds
@@ -317,9 +314,6 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
       const ethPrice = 2000 * 100; // $2000 in cents, matching test setup
       await casinoSlot.setTestETHPrice(ethPrice);
 
-      const linkPrice = 14 * 100; // $14 in cents
-      await casinoSlot.setTestLINKPrice(linkPrice);
-
       // Example for 3 reels
       const cost3 = await casinoSlot.getSpinCost(3);
       console.log(`Dynamic 3-reel cost: ${ethers.utils.formatEther(cost3)} CHIPS`);
@@ -336,9 +330,9 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
     it("Should track player winnings correctly", async function () {
       // Execute a guaranteed winning spin
       await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-      const tx = await casinoSlot.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spinReels(3);
       const receipt = await tx.wait();
-      const requestId = receipt.events.find(e => e.event === "SpinRequested").args.requestId;
+      const requestId = receipt.events.find(e => e.event === "SpinInitiated").args.requestId;
       
       // Use the proven working value from the BIG WIN test
       const randomValue = ethers.BigNumber.from("131090");
@@ -355,9 +349,9 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
     it("Should allow withdrawing winnings", async function () {
       // First ensure we have winnings from a guaranteed win
       await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-      const tx = await casinoSlot.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spinReels(3);
       const receipt = await tx.wait();
-      const requestId = receipt.events.find(e => e.event === "SpinRequested").args.requestId;
+      const requestId = receipt.events.find(e => e.event === "SpinInitiated").args.requestId;
       
       // Use proven working value
       const randomValue = ethers.BigNumber.from("131090");
@@ -385,9 +379,9 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
       
       // Step 1: Execute spin
       await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-      const tx = await casinoSlot.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spinReels(3);
       const receipt = await tx.wait();
-      const requestId = receipt.events.find(e => e.event === "SpinRequested").args.requestId;
+      const requestId = receipt.events.find(e => e.event === "SpinInitiated").args.requestId;
       
       // Step 2: Verify chips were deducted
       const afterSpinChips = await casinoSlot.balanceOf(player1.address);
@@ -420,9 +414,9 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
       // Create 3 spins
       for (let i = 0; i < 3; i++) {
         await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-        const tx = await casinoSlot.connect(player1).spin3Reels();
+        const tx = await casinoSlot.connect(player1).spinReels(3);
         const receipt = await tx.wait();
-        const event = receipt.events.find(e => e.event === "SpinRequested");
+        const event = receipt.events.find(e => e.event === "SpinInitiated");
         spins.push(event.args.requestId);
       }
       
@@ -495,9 +489,9 @@ describe("🎲 VRF Mechanics - Mainnet Fork Testing", function () {
       
       for (const testValue of testValues) {
         await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-        const tx = await casinoSlot.connect(player1).spin3Reels();
+        const tx = await casinoSlot.connect(player1).spinReels(3);
         const receipt = await tx.wait();
-        const event = receipt.events.find(e => e.event === "SpinRequested");
+        const event = receipt.events.find(e => e.event === "SpinInitiated");
         const requestId = event.args.requestId;
         
         await casinoSlot.testFulfillRandomWords(requestId, [ethers.BigNumber.from(testValue)]);

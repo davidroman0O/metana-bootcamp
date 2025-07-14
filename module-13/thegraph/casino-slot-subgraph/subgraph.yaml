@@ -6,62 +6,96 @@ schema:
 dataSources:
   - kind: ethereum
     name: CasinoSlot
-    network: localhost
+    # network: localhost # dev
+    network: sepolia
     source:
-      address: "0x0000000000000000000000000000000000000000"
+      # address: "0x0B32a3F8f5b7E5d315b9E52E640a49A89d89c820" # dev
+      address: "0x83dc16BCda3AFb2145b0c971E261fe39f9a6D377"
       abi: CasinoSlot
-      startBlock: 0
+      # startBlock: 19000017 # dev
+      startBlock: 8736082
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
       entities:
-        - SpinRequested
-        - SpinResult
-        - WinningsWithdrawn
-        - PrizePoolStateChanged
-        - ChipsPurchased
-        - EthWithdrawn
-        - HouseFeeCollected
-        - PlayerStatsUpdated
-        - ContractInitialized
-        - WinningsCredited
-        - PayoutTablesUpdated
-        - Player
-        - DailyStat
+        # Event Entities
+        - SpinInitiated
+        - SpinCompleted
+        - VRFTransaction
+        - PlayerActivityEvent
+        - ChipsTransaction
+        - GameSession
+        - PrizePoolChange
+        - JackpotWin
+        - SystemConfigUpdate
         - Transfer
-        - Paused
-        - Unpaused
+        - Approval
+        # Analytics Entities
+        - Player
+        - Spin
+        - CasinoMetrics
+        - ReelStats
+        - DailySnapshot
+        - HourlySnapshot
+        - VRFAnalytics
+        - LeaderboardEntry
+        - SystemState
       abis:
         - name: CasinoSlot
           file: ./abis/CasinoSlot.json
       eventHandlers:
-        - event: SpinRequested(indexed uint256,indexed address,uint8,uint256)
-          handler: handleSpinRequested
-        - event: SpinResult(indexed uint256,indexed address,uint8,uint256[],uint8,uint256)
-          handler: handleSpinResult
-        - event: WinningsWithdrawn(indexed address,uint256)
-          handler: handleWinningsWithdrawn
+        # Core Game Events (matching actual contract events)
+        - event: SpinInitiated(indexed uint256,indexed address,uint8,uint256,uint256,uint256,uint256,uint256)
+          handler: handleSpinInitiated
+        - event: SpinCompleted(indexed uint256,indexed address,uint8,uint256[],uint8,uint256,bool)
+          handler: handleSpinCompleted
+        - event: VRFTransaction(indexed uint256,uint256,uint256,uint256,uint256)
+          handler: handleVRFTransaction
+          
+        # Player Activity Events
+        - event: PlayerActivity(indexed address,uint256,uint256,uint256,uint256,uint256,uint256,string)
+          handler: handlePlayerActivity
+        - event: GameSessionStarted(indexed address,indexed uint256,uint256)
+          handler: handleGameSessionStarted
+        - event: GameSessionEnded(indexed address,indexed uint256,uint256,uint256,uint256,uint256,string)
+          handler: handleGameSessionEnded
+        - event: JackpotHit(indexed address,indexed uint256,uint256,uint256,uint256)
+          handler: handleJackpotHit
+          
+        # Financial Events
         - event: PrizePoolStateChanged(uint256,int256,indexed uint8)
           handler: handlePrizePoolStateChanged
-        - event: ChipsPurchased(indexed address,uint256,uint256)
-          handler: handleChipsPurchased
-        - event: EthWithdrawn(indexed address,uint256)
-          handler: handleEthWithdrawn
-        - event: HouseFeeCollected(indexed uint256,indexed address,uint256)
-          handler: handleHouseFeeCollected
-        - event: PlayerStatsUpdated(indexed address,uint256,uint256,uint256)
-          handler: handlePlayerStatsUpdated
-        - event: ContractInitialized(uint8)
-          handler: handleContractInitialized
-        - event: WinningsCredited(indexed address,uint256)
-          handler: handleWinningsCredited
+        - event: ChipsTransacted(indexed address,string,uint256,uint256,uint256,uint256)
+          handler: handleChipsTransacted
+        - event: EmergencyWithdrawal(indexed address,uint256,string)
+          handler: handleEmergencyWithdrawal
+          
+        # System Events
+        - event: SystemConfigUpdated(string,uint256,uint256)
+          handler: handleSystemConfigUpdated
         - event: PayoutTablesUpdated(indexed address)
           handler: handlePayoutTablesUpdated
+        - event: ContractInitialized(uint8)
+          handler: handleContractInitialized
+        - event: EthWithdrawn(indexed address,uint256)
+          handler: handleEthWithdrawn
+          
+        # ERC20 Events
         - event: Transfer(indexed address,indexed address,uint256)
           handler: handleTransfer
+        - event: Approval(indexed address,indexed address,uint256)
+          handler: handleApproval
+          
+        # OpenZeppelin Events
+        - event: OwnershipTransferred(indexed address,indexed address)
+          handler: handleOwnershipTransferred
         - event: Paused(address)
           handler: handlePaused
         - event: Unpaused(address)
           handler: handleUnpaused
+        - event: Upgraded(indexed address)
+          handler: handleUpgraded
+        - event: Initialized(uint64)
+          handler: handleInitialized
       file: ./src/casino-slot.ts

@@ -1,7 +1,7 @@
 require("@nomicfoundation/hardhat-verify");
 require("@nomicfoundation/hardhat-ledger");
 require("@nomiclabs/hardhat-ethers");
-require("@nomiclabs/hardhat-waffle");
+// require("@nomiclabs/hardhat-waffle");
 require("@openzeppelin/hardhat-upgrades");
 require("dotenv").config();
 
@@ -49,7 +49,7 @@ module.exports = {
       blockGasLimit: 30000000
     },
     sepolia: {
-      url: "https://eth-sepolia.g.alchemy.com/v2/UlgUe5NUoeezq_0_AxTSKl0qpQQeHSKV",
+      url: "https://eth-sepolia.g.alchemy.com/v2/v83-dLeu2iggxlm9foHin",
       chainId: 11155111, // Sepolia testnet chain ID
       ledgerAccounts: [
         process.env.LEDGER_ACCOUNT

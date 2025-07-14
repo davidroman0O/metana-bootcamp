@@ -30,7 +30,7 @@ describe("🎯 Payout Combinations Testing", function () {
     [owner, player1] = await ethers.getSigners();
 
     // Deploy Mock VRF Coordinator
-    const MockVRFCoordinator = await ethers.getContractFactory("MockVRFCoordinator");
+    const MockVRFCoordinator = await ethers.getContractFactory("contracts/MockVRFCoordinator.sol:MockVRFCoordinator");
     mockVRFCoordinator = await MockVRFCoordinator.deploy();
     await mockVRFCoordinator.deployed();
 
@@ -54,21 +54,15 @@ describe("🎯 Payout Combinations Testing", function () {
     );
     await payoutTables.deployed();
 
-    // Deploy CasinoSlotTest with correct parameters
+    // Deploy CasinoSlotTest with new 4-parameter constructor
     const CasinoSlotTest = await ethers.getContractFactory("CasinoSlotTest");
     casinoSlot = await upgrades.deployProxy(
       CasinoSlotTest,
       [
-        subscriptionId,
-        ETH_USD_PRICE_FEED,
-        LINK_USD_PRICE_FEED,
-        LINK_TOKEN,
-        payoutTables.address,
-        mockVRFCoordinator.address,
-        UNISWAP_V3_ROUTER,
-        WETH_TOKEN,
-        vrfKeyHash,
-        owner.address // Initial owner
+        ETH_USD_PRICE_FEED, // address ethUsdPriceFeedAddress
+        payoutTables.address, // address payoutTablesAddress
+        mockVRFCoordinator.address, // address wrapperAddress (VRF wrapper)
+        owner.address // address initialOwner
       ],
       { kind: "uups" }
     );
@@ -164,9 +158,9 @@ describe("🎯 Payout Combinations Testing", function () {
       
       // Request a spin
       await casinoSlot.connect(player1).approve(casinoSlot.address, ethers.constants.MaxUint256);
-      const tx = await casinoSlot.connect(player1).spin3Reels();
+      const tx = await casinoSlot.connect(player1).spinReels(3);
       const receipt = await tx.wait();
-      const requestId = receipt.events.find(e => e.event === "SpinRequested").args.requestId;
+      const requestId = receipt.events.find(e => e.event === "SpinInitiated").args.requestId;
       
       // Mock VRF response to generate specific combination
       await casinoSlot.testFulfillRandomWords(requestId, [ethers.BigNumber.from("0x03030303")]); // Should generate 444

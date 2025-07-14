@@ -1,7 +1,7 @@
 /**
  * VRF Fulfiller Service for Local Development
  * 
- * This script continuously listens for SpinRequested events and automatically
+ * This script continuously listens for SpinInitiated events and automatically
  * fulfills VRF requests with random numbers, simulating Chainlink VRF behavior.
  * 
  * Runs as a persistent service until manually stopped.
@@ -12,7 +12,7 @@ const hre = require("hardhat");
 
 async function startVRFListenerService() {
     console.log("🎲 Starting VRF Fulfiller Service...");
-    console.log("   👂 Listening for SpinRequested events continuously");
+    console.log("   👂 Listening for SpinInitiated events continuously");
     console.log("   ⚡ Will auto-fulfill VRF requests as they arrive");
     console.log("   🛑 Press Ctrl+C to stop the service\n");
     
@@ -46,8 +46,19 @@ async function startVRFListenerService() {
         }
         
         const deploymentData = JSON.parse(fs.readFileSync(deploymentFile, 'utf8'));
-        const casinoSlotAddress = deploymentData.contracts.CasinoSlot.address;
-        const vrfCoordinatorAddress = deploymentData.contracts.CasinoSlot.constructor.vrfCoordinator;
+        
+        // Handle different deployment structures (CasinoSlot vs CasinoSlotTest)
+        let casinoSlotAddress;
+        if (deploymentData.contracts.CasinoSlot) {
+            casinoSlotAddress = deploymentData.contracts.CasinoSlot.address;
+        } else if (deploymentData.contracts.CasinoSlotTest) {
+            casinoSlotAddress = deploymentData.contracts.CasinoSlotTest.address;
+        } else {
+            throw new Error("No CasinoSlot or CasinoSlotTest contract found in deployment");
+        }
+        
+        // For local development, use MockVRFCoordinator
+        const vrfCoordinatorAddress = deploymentData.contracts.MockVRFCoordinator?.address || "0xaE2abbDE6c9829141675fA0A629a675badbb0d9F";
         
         console.log(`🎰 Monitoring CasinoSlot: ${casinoSlotAddress}`);
         console.log(`📍 VRF Coordinator: ${vrfCoordinatorAddress}`);
@@ -69,18 +80,21 @@ async function startVRFListenerService() {
         
         let requestCount = 0;
         
-        // Set up event listener for SpinRequested events
+        // Set up event listener for SpinInitiated events
         console.log("✅ VRF Fulfiller Service is running!");
         console.log("⏳ Waiting for spin requests...\n");
         
-        casinoSlot.on("SpinRequested", async (requestId, player, reelCount, betAmount, event) => {
+        casinoSlot.on("SpinInitiated", async (requestId, player, reelCount, betAmount, vrfCostETH, houseFeeETH, prizePoolContribution, timestamp, event) => {
             requestCount++;
             
-            console.log(`\n🎰 VRF Request #${requestCount} Detected:`);
+            console.log(`\n🎰 Spin Initiated #${requestCount} Detected:`);
             console.log(`   📋 Request ID: ${requestId}`);
             console.log(`   👤 Player: ${player}`);
             console.log(`   🎰 Reel Count: ${reelCount}`);
             console.log(`   💰 Bet Amount: ${ethers.utils.formatEther(betAmount)} CHIPS`);
+            console.log(`   ⛽ VRF Cost: ${ethers.utils.formatEther(vrfCostETH)} ETH`);
+            console.log(`   🏠 House Fee: ${ethers.utils.formatEther(houseFeeETH)} ETH`);
+            console.log(`   💎 Prize Pool Contribution: ${ethers.utils.formatEther(prizePoolContribution)} ETH`);
             console.log(`   🧱 Block: ${event.blockNumber}`);
             
             try {
@@ -151,12 +165,12 @@ async function startVRFListenerService() {
                   params: [vrfCoordinatorAddress],
                 });
                 
-                // Check for SpinResult event to see the outcome
-                const spinResultFilter = casinoSlot.filters.SpinResult();
-                const spinResultEvents = await casinoSlot.queryFilter(spinResultFilter, receipt.blockNumber, receipt.blockNumber);
+                // Check for SpinCompleted event to see the outcome
+                const spinCompletedFilter = casinoSlot.filters.SpinCompleted();
+                const spinCompletedEvents = await casinoSlot.queryFilter(spinCompletedFilter, receipt.blockNumber, receipt.blockNumber);
                 
-                if (spinResultEvents.length > 0) {
-                    const resultEvent = spinResultEvents[0];
+                if (spinCompletedEvents.length > 0) {
+                    const resultEvent = spinCompletedEvents[0];
                     const { reels, payoutType, payout } = resultEvent.args;
                     
                     console.log(`   🎊 Spin Result:`);
@@ -173,8 +187,8 @@ async function startVRFListenerService() {
             }
         });
         
-        // Set up SpinResult event listener for additional logging
-        casinoSlot.on("SpinResult", (requestId, player, reelCount, reels, payoutType, payout, event) => {
+        // Set up SpinCompleted event listener for additional logging
+        casinoSlot.on("SpinCompleted", (requestId, player, reelCount, reels, payoutType, payout, isJackpot, event) => {
             console.log(`   📊 Spin completed for request ${requestId} - ${getPayoutTypeName(payoutType)}`);
         });
         
@@ -192,9 +206,9 @@ function getPayoutTypeName(payoutType) {
         "SMALL_WIN",      // 1  
         "MEDIUM_WIN",     // 2
         "BIG_WIN",        // 3
-        "MEGA_WIN",       // 4
-        "ULTRA_WIN",      // 5
-        "SPECIAL_COMBO",  // 6
+        "SPECIAL_COMBO",  // 4
+        "MEGA_WIN",       // 5
+        "ULTRA_WIN",      // 6
         "JACKPOT"         // 7
     ];
     

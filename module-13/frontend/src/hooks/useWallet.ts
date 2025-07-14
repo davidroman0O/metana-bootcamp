@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 
 export function useWallet() {
   const { address: account, isConnected, isConnecting, isReconnecting } = useAccount();
-  const { data: balanceData, isLoading: balanceLoading } = useBalance({
+  const { data: balanceData, isLoading: balanceLoading, refetch: refetchBalance } = useBalance({
     address: account,
   });
   const { connect, connectors } = useConnect();
@@ -73,6 +73,7 @@ export function useWallet() {
     // Actions
     connectWallet,
     disconnectWallet,
+    refetchBalance,
     
     // Utils
     formatAddress,
