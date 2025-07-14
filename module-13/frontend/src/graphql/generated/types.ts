@@ -1,6 +1,4 @@
-// Generated types from TheGraph schema
-// This file should be auto-generated from your GraphQL schema
-// For now, we'll define the types manually based on the subgraph schema
+
 
 export interface Player {
   id: string;

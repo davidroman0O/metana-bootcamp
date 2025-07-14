@@ -8,7 +8,7 @@
 ,
   "sepolia": {
     "CasinoSlot": {
-      "address": "0xf3E8C83f889a2935db2a54F5e82d2dDFF536156D",
+      "address": "0x83dc16BCda3AFb2145b0c971E261fe39f9a6D377",
       "startBlock": 0
     }
   }

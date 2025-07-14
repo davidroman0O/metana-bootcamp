@@ -18,7 +18,7 @@ const AdminHeader: React.FC = () => {
     checkGraphQLConnection(chainId).then(setGraphQLConnected);
     const interval = setInterval(() => {
       checkGraphQLConnection(chainId).then(setGraphQLConnected);
-    }, 5000); // Check every 5 seconds
+    }, 5000); // Check every 5 seconds but i should learn to use a more efficient cause i learned that thegraph got rate limits
     return () => clearInterval(interval);
   }, [chainId]);
 
