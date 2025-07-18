@@ -1,3 +1,16 @@
+
+Solved:
+- naive-receiver
+- side-entrance
+- the-rewarder
+- unstoppable
+
+I also added detailed explanations on what happens and how to prevent that. 
+
+I watched few videos of smart contract audits and i saw one talking about how to explain it an exploit so i used the a similar "framework" (i don't remember which video tho).
+
+---
+
 ![](cover.png)
 
 **A set of challenges to hack implementations of DeFi in Ethereum.** Featuring flash loans, oracles, governance, NFTs, lending pools, and more!
