@@ -270,15 +270,38 @@ cd validator_keys_[timestamp]
 
 ### Step 10: Transfer Keys to Server
 
-**Option 1: Via USB to online machine, then SCP**
+After generating keys, you need to transfer them to your validator server. We provide an automated script for this.
+
+**Using the transfer script (Recommended):**
+
 ```bash
-# From online machine with keys
-scp -i $SSH_KEY_PATH -r validator_keys_* validator@$VALIDATOR_IP:~/
+# From your online machine where you have the keys
+cd scripts
+./transfer-validator-keys.sh
 ```
 
-**Option 2: Direct from offline machine (if temporarily connected)**
+This script will:
+- Automatically detect your server IP and SSH key from Terraform
+- Look for validator keys in the `.keys/` directory
+- Create the validator user if it doesn't exist
+- Transfer all keys securely to the server
+- Set proper permissions
+- Copy the import script to the server
+
+**Manual transfer (if needed):**
+
+If you prefer manual transfer or the script fails:
+
 ```bash
-scp -i path/to/ssh/key -r validator_keys_* validator@$VALIDATOR_IP:~/
+# Set your connection details
+export SSH_KEY_PATH=/path/to/terraform/ssh_keys/eth-validator-hoodi-testnet_rsa
+export VALIDATOR_IP=your.server.ip
+
+# Transfer keys
+scp -i $SSH_KEY_PATH -r ../.keys/validator_keys_* root@$VALIDATOR_IP:/home/validator/
+
+# Fix permissions
+ssh -i $SSH_KEY_PATH root@$VALIDATOR_IP "chown -R validator:validator /home/validator/validator_keys_*"
 ```
 
 ## Phase 4: Obtaining Test ETH
@@ -337,7 +360,12 @@ https://hoodi.etherscan.io/address/YOUR_ADDRESS
    - **Standard Process**: [https://hoodi-launchpad.ethereum.org](https://hoodi-launchpad.ethereum.org)
    - **EthStaker Process**: [https://hoodi.launchpad.ethstaker.cc](https://hoodi.launchpad.ethstaker.cc)
 
-2. Connect MetaMask
+2. Follow the process
+   1. It will ask questions
+   2. Connect MetaMas
+   3. Upload deposit data
+   4. Add the network
+   5. Provide a faucet to mine hoddi ETH
 
 3. Add Hoodi network if prompted:
    ```
@@ -348,17 +376,7 @@ https://hoodi.etherscan.io/address/YOUR_ADDRESS
    Block Explorer: https://hoodi.etherscan.io
    ```
 
-### Step 14: Upload Deposit Data
-
-1. Click "Become a Validator"
-2. Read through all warnings
-3. Click "Upload deposit data"
-4. Navigate to your keys directory and select `deposit_data-[timestamp].json`:
-   ```bash
-   # File location on your local machine:
-   module-16/.keys/validator_keys_[timestamp]/deposit_data-[timestamp].json
-   ```
-5. Verify the displayed information:
+4. Verify the displayed information:
    - Amount shows 32 ETH
    - Your validator public key is displayed
    - Withdrawal credentials are correct
