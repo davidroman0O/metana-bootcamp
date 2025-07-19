@@ -1,0 +1,27 @@
+# Copy this file to terraform.tfvars and fill in your values
+
+# Required: Your Hetzner Cloud API token
+# Get it from: https://console.hetzner.cloud/projects/[PROJECT_ID]/security/tokens
+hcloud_token = "your-hetzner-cloud-api-token"
+
+# Project configuration
+project_name = "eth-validator"
+environment  = "hoodi-testnet"
+
+# Server configuration
+server_type     = "cpx41"        # 8 vCPU, 16GB RAM, 240GB SSD
+server_location = "fsn1"         # Falkenstein, Germany (alternatives: nbg1, hel1)
+
+# SSH configuration
+ssh_public_key_path = "~/.ssh/id_rsa.pub"
+allowed_ssh_ips     = ["YOUR.IP.ADDRESS.HERE/32"]  # Replace with your IP address
+
+# Client selection (use minority clients)
+execution_client = "besu"        # Options: besu, nethermind, erigon
+consensus_client = "teku"        # Options: teku, nimbus, lighthouse, lodestar
+
+# Monitoring
+enable_monitoring = true
+
+# Storage
+additional_volume_size = 1000    # 1TB for blockchain data

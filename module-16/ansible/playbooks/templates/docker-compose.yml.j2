@@ -1,0 +1,151 @@
+version: "3.8"
+
+services:
+  execution:
+    container_name: eth-docker-execution-1
+    image: hyperledger/besu:latest
+    restart: unless-stopped
+    stop_grace_period: 3m
+    user: "{{ ansible_user_uid }}:{{ ansible_user_gid }}"
+    volumes:
+      - {{ data_volume_path }}/execution:/var/lib/besu
+      - ./jwt/jwt.hex:/jwt/jwt.hex:ro
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "30303:30303/tcp"
+      - "30303:30303/udp"
+    networks:
+      - eth-docker
+    environment:
+      - LOG4J_CONFIGURATION_FILE=/etc/besu/log4j2.xml
+    command:
+      - --network={{ network }}
+      - --data-path=/var/lib/besu
+      - --rpc-http-enabled=true
+      - --rpc-http-host=0.0.0.0
+      - --rpc-http-port=8545
+      - --rpc-ws-enabled=true
+      - --rpc-ws-host=0.0.0.0
+      - --rpc-ws-port=8546
+      - --host-allowlist=*
+      - --rpc-http-cors-origins=*
+      - --engine-host-allowlist=*
+      - --engine-rpc-enabled=true
+      - --engine-rpc-port=8551
+      - --engine-jwt-secret=/jwt/jwt.hex
+      - --sync-mode=SNAP
+      - --data-storage-format=BONSAI
+      - --nat-method=DOCKER
+      - --metrics-enabled=true
+      - --metrics-host=0.0.0.0
+      - --metrics-port=9545
+
+  consensus:
+    container_name: eth-docker-consensus-1
+    image: consensys/teku:latest
+    restart: unless-stopped
+    stop_grace_period: 3m
+    user: "{{ ansible_user_uid }}:{{ ansible_user_gid }}"
+    depends_on:
+      - execution
+    volumes:
+      - {{ data_volume_path }}/teku:/var/lib/teku
+      - ./jwt/jwt.hex:/jwt/jwt.hex:ro
+      - ./validator-keys:/validator-keys:ro
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "9000:9000/tcp"
+      - "9000:9000/udp"
+    networks:
+      - eth-docker
+    environment:
+      - JAVA_OPTS=-Xmx6g -XX:SoftMaxHeapSize=6g
+      - TEKU_OPTS=-XX:+UseG1GC
+    command:
+      - --network={{ network }}
+      - --data-base-path=/var/lib/teku
+      - --data-storage-mode=PRUNE
+      - --rest-api-enabled=true
+      - --rest-api-docs-enabled=true
+      - --rest-api-host-allowlist=*
+      - --rest-api-interface=0.0.0.0
+      - --rest-api-port=5052
+      - --ee-endpoint=http://execution:8551
+      - --ee-jwt-secret-file=/jwt/jwt.hex
+      - --log-destination=CONSOLE
+      - --metrics-enabled=true
+      - --metrics-host-allowlist=*
+      - --metrics-interface=0.0.0.0
+      - --metrics-port=8008
+      - --p2p-port=9000
+      - --validators-graffiti={{ validator_graffiti | default('Hoodi Validator') }}
+{% if checkpoint_sync_url is defined and checkpoint_sync_url %}
+      - --checkpoint-sync-url={{ checkpoint_sync_url }}
+{% endif %}
+
+{% if enable_monitoring | bool %}
+  grafana:
+    container_name: eth-docker-grafana-1
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    user: "0"
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD={{ grafana_admin_password }}
+      - GF_INSTALL_PLUGINS=
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+    networks:
+      - eth-docker
+
+  prometheus:
+    container_name: eth-docker-prometheus-1
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    user: "0"
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus-data:/prometheus
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.console.libraries=/usr/share/prometheus/console_libraries
+      - --web.console.templates=/usr/share/prometheus/consoles
+    networks:
+      - eth-docker
+
+  node-exporter:
+    container_name: eth-docker-node-exporter-1
+    image: prom/node-exporter:latest
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --collector.filesystem.mount-points-exclude
+      - ^/(sys|proc|dev|host|etc)($$|/)
+    networks:
+      - eth-docker
+{% endif %}
+
+networks:
+  eth-docker:
+    name: eth-docker
+
+volumes:
+{% if enable_monitoring | bool %}
+  grafana-data:
+  prometheus-data:
+{% endif %}

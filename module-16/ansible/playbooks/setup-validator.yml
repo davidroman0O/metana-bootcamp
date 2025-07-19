@@ -1,0 +1,128 @@
+---
+- name: Setup Ethereum Validator Node
+  hosts: validator
+  become: yes
+  tasks:
+    - name: Ensure system is up to date
+      apt:
+        update_cache: yes
+        upgrade: dist
+      register: apt_upgrade
+      retries: 3
+      delay: 10
+      
+    - name: Install required packages
+      apt:
+        name:
+          - docker.io
+          - docker-compose
+          - git
+          - curl
+          - wget
+          - htop
+          - iotop
+          - ncdu
+          - jq
+          - python3-pip
+          - python3-docker
+        state: present
+        
+    - name: Add validator user to docker group
+      user:
+        name: validator
+        groups: docker
+        append: yes
+        
+    - name: Create ethereum directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: validator
+        group: validator
+        mode: '0755'
+      loop:
+        - "{{ ethereum_base_dir }}"
+        - "{{ ethereum_base_dir }}/keys"
+        - "{{ ethereum_base_dir }}/configs"
+        - "{{ ethereum_base_dir }}/jwt"
+        - "{{ data_volume_path }}/execution"
+        - "{{ data_volume_path }}/consensus"
+        - "{{ data_volume_path }}/validator"
+        - "{{ data_volume_path }}/teku"
+        - "{{ data_volume_path }}/teku/validator"
+        - "{{ data_volume_path }}/teku/validator/slashprotection"
+        
+    - name: Clone eth-docker repository
+      become_user: validator
+      git:
+        repo: https://github.com/eth-educators/eth-docker.git
+        dest: "{{ ethereum_base_dir }}/eth-docker"
+        version: main
+        
+    - name: Generate JWT secret
+      become_user: validator
+      shell: |
+        openssl rand -hex 32 > {{ ethereum_base_dir }}/jwt/jwt.hex
+      args:
+        creates: "{{ ethereum_base_dir }}/jwt/jwt.hex"
+        
+    - name: Create eth-docker .env file
+      become_user: validator
+      template:
+        src: eth-docker.env.j2
+        dest: "{{ ethereum_base_dir }}/eth-docker/.env"
+        mode: '0600'
+        
+    - name: Copy JWT secret to eth-docker
+      become_user: validator
+      copy:
+        src: "{{ ethereum_base_dir }}/jwt/jwt.hex"
+        dest: "{{ ethereum_base_dir }}/eth-docker/jwt.hex"
+        remote_src: yes
+        mode: '0644'
+        
+    - name: Configure Docker daemon
+      copy:
+        content: |
+          {
+            "log-driver": "json-file",
+            "log-opts": {
+              "max-size": "10m",
+              "max-file": "3"
+            },
+            "storage-driver": "overlay2"
+          }
+        dest: /etc/docker/daemon.json
+      notify: restart docker
+      
+    - name: Setup monitoring stack
+      include_tasks: monitoring.yml
+      when: enable_monitoring | bool
+      
+    - name: Apply security hardening
+      include_tasks: security.yml
+      when: enable_firewall | bool
+      
+    - name: Setup eth-docker services
+      include_tasks: eth-docker-setup.yml
+      
+  handlers:
+    - name: restart docker
+      systemd:
+        name: docker
+        state: restarted
+        daemon_reload: yes
+        
+    - name: reload ufw
+      ufw:
+        state: reloaded
+    
+    - name: restart fail2ban
+      systemd:
+        name: fail2ban
+        state: restarted
+    
+    - name: restart sshd
+      systemd:
+        name: sshd
+        state: restarted

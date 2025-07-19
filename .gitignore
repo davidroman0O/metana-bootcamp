@@ -35,3 +35,71 @@ module-12/defi/lib
 # I'm on an M1 Mac, so I need to clone the graph-node-master repo to run the graph-node container (build my own image)
 module-13/thegraph/graph-node-master
 module-13/thegraph/casino-slot-subgraph/data
+
+module-16/.bin
+module-16/.keys
+module-16/.old
+module-16/deployment-info*
+module-16/terraform/*.tfstate
+module-16/terraform/*.lock.hcl
+module-16/terraform/ssh_keys
+module-16/terraform/.terraform
+module-16/ansible/validator-config-*
+module-16/terraform/grafana-password.txt
+module-16/.mnemonic
+
+# Ansible files
+*.retry
+*.log
+
+# Vault files
+group_vars/all/vault.yml
+*.vault
+
+# Configuration output files
+validator-config-*.txt
+
+# Temporary files
+*.tmp
+*~
+
+# Terraform files
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+*.auto.tfvars
+
+# SSH keys
+ssh_keys/
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Include tfplan files to ignore the plan output of command: terraform plan -out=tfplan
+*tfplan*
+
+# Crash log files
+crash.log
+crash.*.log
+
+# Exclude all .tfvars files, which are likely to contain sensitive data
+*.tfvars
+*.tfvars.json
+!terraform.tfvars.example
+
+# Ignore CLI configuration files
+.terraformrc
+terraform.rc
+
+# Environment files
+.env
+.env.*
+*.env
+
+# Deployment information files (contain IPs and paths)
+deployment-info-*.txt

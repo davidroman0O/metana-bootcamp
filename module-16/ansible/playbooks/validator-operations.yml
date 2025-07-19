@@ -1,0 +1,122 @@
+---
+- name: Validator Operations
+  hosts: validator
+  become: yes
+  become_user: validator
+  vars:
+    eth_docker_dir: "{{ ethereum_base_dir }}/eth-docker"
+  
+  tasks:
+    - name: Check eth-docker installation
+      stat:
+        path: "{{ eth_docker_dir }}/ethd"
+      register: ethd_installed
+      
+    - name: Fail if eth-docker not installed
+      fail:
+        msg: "eth-docker not found. Please run setup-validator.yml first."
+      when: not ethd_installed.stat.exists
+      
+    - name: Import validator keys
+      block:
+        - name: Check if keys directory exists
+          stat:
+            path: "{{ ethereum_base_dir }}/keys/validator_keys"
+          register: keys_dir
+          
+        - name: Import keys if present
+          shell: |
+            cd {{ eth_docker_dir }}
+            ./ethd keys import {{ ethereum_base_dir }}/keys/validator_keys
+          when: keys_dir.stat.exists
+      tags: ['import-keys']
+      
+    - name: Start validator services
+      shell: |
+        cd {{ eth_docker_dir }}
+        ./ethd start
+      tags: ['start']
+      
+    - name: Stop validator services
+      shell: |
+        cd {{ eth_docker_dir }}
+        ./ethd stop
+      tags: ['stop']
+      
+    - name: View validator logs
+      shell: |
+        cd {{ eth_docker_dir }}
+        ./ethd logs -f validator --tail 100
+      tags: ['logs']
+      
+    - name: Check validator status
+      shell: |
+        cd {{ eth_docker_dir }}
+        docker-compose ps
+        echo "---"
+        echo "Sync status:"
+        docker-compose exec consensus curl -s http://localhost:5052/eth/v1/node/syncing | jq .
+      register: validator_status
+      tags: ['status']
+      
+    - name: Display validator status
+      debug:
+        var: validator_status.stdout_lines
+      tags: ['status']
+      
+    - name: Perform voluntary exit
+      block:
+        - name: Confirm voluntary exit
+          pause:
+            prompt: |
+              WARNING: This will permanently exit your validator!
+              You will stop earning rewards and cannot re-activate.
+              
+              Type 'EXIT' to confirm:
+          register: exit_confirmation
+          
+        - name: Execute voluntary exit
+          shell: |
+            cd {{ eth_docker_dir }}
+            ./ethd cmd run --rm validator \
+              lighthouse account validator exit \
+              --beacon-node http://consensus:5052 \
+              --keystore /var/lib/lighthouse/validators
+          when: exit_confirmation.user_input == "EXIT"
+      tags: ['voluntary-exit', 'never']
+      
+    - name: Backup validator data
+      block:
+        - name: Create backup directory
+          file:
+            path: "{{ ethereum_base_dir }}/backups"
+            state: directory
+            mode: '0700'
+            
+        - name: Backup validator keys and slashing protection
+          shell: |
+            cd {{ eth_docker_dir }}
+            BACKUP_DATE=$(date +%Y%m%d_%H%M%S)
+            
+            # Export slashing protection database
+            ./ethd cmd run --rm validator \
+              lighthouse account validator slashing-protection export \
+              /var/lib/lighthouse/slashing-protection-export.json
+            
+            # Create encrypted backup
+            tar -czf - \
+              -C {{ ethereum_base_dir }} \
+              keys/ \
+              {{ eth_docker_dir }}/slashing-protection-export.json | \
+              openssl enc -aes-256-cbc -salt -pbkdf2 \
+              -out {{ ethereum_base_dir }}/backups/validator-backup-${BACKUP_DATE}.tar.gz.enc
+            
+            echo "Backup created: validator-backup-${BACKUP_DATE}.tar.gz.enc"
+            echo "Store the encryption password safely!"
+      tags: ['backup']
+      
+    - name: Update validator
+      shell: |
+        cd {{ eth_docker_dir }}
+        ./ethd update
+      tags: ['update']

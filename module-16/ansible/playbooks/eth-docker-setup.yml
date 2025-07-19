@@ -1,0 +1,274 @@
+---
+# eth-docker setup tasks
+- name: Create eth-docker directory structure
+  become_user: validator
+  file:
+    path: "{{ ethereum_base_dir }}/eth-docker/{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - jwt
+    - prometheus
+    - grafana/provisioning/datasources
+    - grafana/provisioning/dashboards
+    - grafana/dashboards
+    - validator-keys
+
+- name: Copy JWT secret to eth-docker jwt directory
+  become_user: validator
+  copy:
+    src: "{{ ethereum_base_dir }}/jwt/jwt.hex"
+    dest: "{{ ethereum_base_dir }}/eth-docker/jwt/jwt.hex"
+    remote_src: yes
+    mode: '0644'
+
+- name: Create docker-compose.yml for docker-compose v1
+  become_user: validator
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ ethereum_base_dir }}/eth-docker/docker-compose.yml"
+    mode: '0644'
+
+- name: Create Prometheus configuration
+  become_user: validator
+  copy:
+    content: |
+      global:
+        scrape_interval: 15s
+        evaluation_interval: 15s
+
+      scrape_configs:
+        - job_name: 'besu'
+          static_configs:
+            - targets: ['execution:9545']
+          metrics_path: /metrics
+        
+        - job_name: 'teku'
+          static_configs:
+            - targets: ['consensus:8008']
+          metrics_path: /metrics
+            
+        - job_name: 'node'
+          static_configs:
+            - targets: ['node-exporter:9100']
+    dest: "{{ ethereum_base_dir }}/eth-docker/prometheus/prometheus.yml"
+    mode: '0644'
+
+- name: Create Grafana datasource configuration
+  become_user: validator
+  copy:
+    content: |
+      apiVersion: 1
+
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          access: proxy
+          url: http://prometheus:9090
+          isDefault: true
+          editable: true
+    dest: "{{ ethereum_base_dir }}/eth-docker/grafana/provisioning/datasources/prometheus.yml"
+    mode: '0644'
+
+- name: Create Grafana dashboard provisioner
+  become_user: validator
+  copy:
+    content: |
+      apiVersion: 1
+
+      providers:
+        - name: 'default'
+          orgId: 1
+          folder: ''
+          folderUid: ''
+          type: file
+          disableDeletion: false
+          updateIntervalSeconds: 10
+          allowUiUpdates: true
+          options:
+            path: /var/lib/grafana/dashboards
+    dest: "{{ ethereum_base_dir }}/eth-docker/grafana/provisioning/dashboards/dashboard.yml"
+    mode: '0644'
+
+- name: Download Grafana dashboards
+  become_user: validator
+  get_url:
+    url: "https://grafana.com/api/dashboards/{{ item.id }}/revisions/{{ item.revision }}/download"
+    dest: "{{ ethereum_base_dir }}/eth-docker/grafana/dashboards/{{ item.name }}.json"
+    mode: '0644'
+  loop:
+    - { id: 10273, revision: 3, name: "besu-overview" }        # Besu Overview
+    - { id: 12199, revision: 1, name: "teku-overview" }        # Teku Overview (using revision 1)
+    - { id: 13481, revision: 1, name: "ethereum-validators" }  # Ethereum Validators (using revision 1)
+    - { id: 1860, revision: 37, name: "node-exporter" }        # Node Exporter Full
+    - { id: 16455, revision: 3, name: "besu-full" }            # Besu Full Dashboard
+    - { id: 13457, revision: 2, name: "teku-dashboard" }       # Teku Dashboard
+  ignore_errors: yes
+
+- name: Fix datasource in downloaded dashboards
+  become_user: validator
+  replace:
+    path: "{{ ethereum_base_dir }}/eth-docker/grafana/dashboards/{{ item }}.json"
+    regexp: '\$\{DS_PROMETHEUS\}'
+    replace: 'Prometheus'
+  loop:
+    - besu-overview
+    - teku-overview
+    - ethereum-validators
+    - node-exporter
+    - besu-full
+    - teku-dashboard
+
+- name: Fix permissions for mounted volumes
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: validator
+    group: validator
+    mode: '0755'
+    recurse: yes
+  loop:
+    - "{{ data_volume_path }}/execution"
+    - "{{ data_volume_path }}/consensus"
+    - "{{ data_volume_path }}/validator"
+    - "{{ data_volume_path }}/teku"
+
+- name: Pull Docker images
+  become_user: validator
+  docker_image:
+    name: "{{ item }}"
+    source: pull
+  loop:
+    - "hyperledger/besu:latest"
+    - "consensys/teku:latest"
+    - "grafana/grafana:latest"
+    - "prom/prometheus:latest"
+    - "prom/node-exporter:latest"
+
+- name: Stop any existing containers
+  become_user: validator
+  shell: |
+    cd {{ ethereum_base_dir }}/eth-docker
+    docker-compose down || true
+  ignore_errors: yes
+
+- name: Remove orphaned containers
+  become_user: validator
+  shell: |
+    docker rm -f eth-docker-grafana-1 || true
+    docker rm -f eth-docker-prometheus-1 || true
+    docker rm -f eth-docker-execution-1 || true
+    docker rm -f eth-docker-consensus-1 || true
+    docker rm -f eth-docker-node-exporter-1 || true
+  ignore_errors: yes
+
+- name: Start eth-docker services fresh
+  become_user: validator
+  shell: |
+    cd {{ ethereum_base_dir }}/eth-docker
+    docker-compose up -d --force-recreate
+  environment:
+    COMPOSE_FILE: docker-compose.yml
+
+- name: Wait for services to start
+  pause:
+    seconds: 20
+
+- name: Check service status
+  become_user: validator
+  shell: |
+    cd {{ ethereum_base_dir }}/eth-docker
+    docker-compose ps
+  register: compose_status
+
+- name: Display service status
+  debug:
+    var: compose_status.stdout_lines
+
+- name: Check for Teku errors
+  become_user: validator
+  shell: |
+    cd {{ ethereum_base_dir }}/eth-docker
+    docker-compose logs --tail=50 consensus | grep -iE "error|fatal|failed|exception" || echo "No critical errors found"
+  register: teku_errors
+  ignore_errors: yes
+
+- name: Display Teku status
+  debug:
+    msg: "Teku consensus client status: {{ teku_errors.stdout }}"
+
+- name: Verify Grafana is accessible
+  wait_for:
+    port: 3000
+    host: localhost
+    delay: 5
+    timeout: 60
+  ignore_errors: yes
+
+- name: Run post-setup validation
+  become_user: validator
+  shell: |
+    cd {{ ethereum_base_dir }}/eth-docker
+    echo "=== Service Status ==="
+    docker-compose ps
+    echo ""
+    echo "=== Port Checks ==="
+    ss -tlnp | grep -E ':(3000|9090|30303|9000)' || echo "Some ports may not be listening yet"
+    echo ""
+    echo "=== Container Health ==="
+    {% raw %}
+    docker ps --format "table {{.Names}}\t{{.Status}}" | grep eth-docker
+    {% endraw %}
+  register: validation_output
+
+- name: Display validation results
+  debug:
+    msg: "{{ validation_output.stdout_lines }}"
+
+- name: Check for critical errors in execution client
+  become_user: validator
+  shell: |
+    cd {{ ethereum_base_dir }}/eth-docker
+    docker-compose logs --tail=50 execution | grep -iE "error|fatal|failed|exception" | tail -5 || echo "No critical errors found"
+  register: execution_errors
+  ignore_errors: yes
+
+- name: Check for critical errors in consensus client
+  become_user: validator
+  shell: |
+    cd {{ ethereum_base_dir }}/eth-docker
+    docker-compose logs --tail=50 consensus | grep -iE "error|fatal|failed|exception" | tail -5 || echo "No critical errors found"
+  register: consensus_errors
+  ignore_errors: yes
+
+- name: Create service status summary
+  set_fact:
+    setup_summary: |
+      ========================================
+      ETH-DOCKER SETUP SUMMARY
+      ========================================
+      
+      Services Started: YES
+      Grafana Port (3000): {{ 'OPEN' if validation_output.stdout is search(':3000') else 'WAITING' }}
+      Execution Client: {{ 'RUNNING' if 'eth-docker-execution-1' in validation_output.stdout else 'STOPPED' }}
+      Consensus Client: {{ 'RUNNING' if 'eth-docker-consensus-1' in validation_output.stdout else 'STOPPED' }}
+      
+      Execution Errors: {{ 'NONE' if execution_errors.stdout == 'No critical errors found' else 'CHECK LOGS' }}
+      Consensus Errors: {{ 'NONE' if consensus_errors.stdout == 'No critical errors found' else 'CHECK LOGS' }}
+      
+      ========================================
+
+- name: Display setup summary
+  debug:
+    msg: "{{ setup_summary.split('\n') }}"
+
+- name: Set Grafana admin password via CLI
+  become_user: validator
+  shell: |
+    cd {{ ethereum_base_dir }}/eth-docker
+    # Wait a bit more for Grafana to be fully ready
+    sleep 5
+    # Use grafana-cli to ensure password is set
+    docker exec eth-docker-grafana-1 grafana-cli admin reset-admin-password "{{ grafana_admin_password }}"
+  ignore_errors: yes
+  when: enable_monitoring | bool
