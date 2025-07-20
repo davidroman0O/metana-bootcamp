@@ -36,6 +36,22 @@ This directory contains Ansible playbooks for automating the deployment and mana
    vault_grafana_admin_password: your-secure-password
    ```
 
+## Configuration
+
+### Important: Fee Recipient Format
+
+**⚠️ CRITICAL**: Due to Ansible YAML limitations, the fee recipient address MUST be stored WITHOUT the 0x prefix in `inventory/hosts.yml`:
+
+```yaml
+# CORRECT (without 0x prefix):
+validator_fee_recipient: "92145c8e548A87DFd716b1FD037a5e476a1f2a86"
+
+# INCORRECT (will be converted to decimal):
+validator_fee_recipient: "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86"
+```
+
+The `0x` prefix is automatically added in the Docker Compose templates.
+
 ## Playbooks
 
 ### 1. Setup Validator (`setup-validator.yml`)

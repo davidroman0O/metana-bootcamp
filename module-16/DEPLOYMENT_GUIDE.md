@@ -189,10 +189,31 @@ The configuration script automates all server setup:
 
 ```bash
 cd ../ansible
+
+# IMPORTANT: First update your fee recipient address in inventory/hosts.yml
+# Look for the line: validator_fee_recipient: "0000..."
+# Replace with YOUR Ethereum address WITHOUT the 0x prefix
+# Example: validator_fee_recipient: "92145c8e548A87DFd716b1FD037a5e476a1f2a86"
+
+# Then run the configuration:
 ./configure-validator.sh
+
+# The script will automatically use the fee recipient from inventory/hosts.yml
+# If you want to override it temporarily (WITHOUT 0x prefix):
+FEE_RECIPIENT=YourEthereumAddressHere ./configure-validator.sh
 ```
 
+**⚠️ CRITICAL**: The fee recipient address is MANDATORY as of 2025 for Hoodi testnet. Without it:
+- Teku consensus client will fail to start
+- Your validator cannot participate in the network
+- Block proposal rewards would be burned
+
+**⚠️ IMPORTANT FORMAT**: Due to Ansible YAML limitations, the fee recipient MUST be stored WITHOUT the 0x prefix in inventory/hosts.yml to prevent automatic conversion to decimal.
+
+**Best Practice**: Set your fee recipient in `inventory/hosts.yml` once (without 0x), and it will be used for all deployments
+
 This process:
+- Validates your fee recipient address
 - Detects the server IP from Terraform
 - Installs all required software
 - Sets up eth-docker framework
@@ -214,11 +235,14 @@ $VALIDATOR_IP ansible_user=root ansible_ssh_private_key_file=$SSH_KEY_PATH
 
 [validator:vars]
 grafana_admin_password=YourSecurePasswordHere
+validator_fee_recipient=YourEthereumAddressHere  # MANDATORY! No 0x prefix!
 EOF
 
 # Run playbook
 ansible-playbook -i inventory.ini playbooks/setup-validator.yml
 ```
+
+**Note**: You can also edit `ansible/inventory/hosts.yml` to set your fee recipient permanently (remember: without the 0x prefix).
 
 ## Phase 3: Key Generation
 
@@ -303,6 +327,34 @@ scp -i $SSH_KEY_PATH -r ../.keys/validator_keys_* root@$VALIDATOR_IP:/home/valid
 # Fix permissions
 ssh -i $SSH_KEY_PATH root@$VALIDATOR_IP "chown -R validator:validator /home/validator/validator_keys_*"
 ```
+
+## Understanding Fee Recipients (Important!)
+
+### What is a Fee Recipient?
+
+The fee recipient is an Ethereum address where your validator will receive:
+- **Priority fees** (tips) from transactions when you propose a block
+- **MEV rewards** if MEV-boost is enabled (future feature)
+
+**Key Points**:
+- This is NOT where your staked ETH goes
+- This is NOT your validator withdrawal address
+- This IS where you earn ongoing rewards for proposing blocks
+- You can change this address anytime by updating configuration
+
+### Choosing a Fee Recipient Address
+
+**Best Practices**:
+- Use a secure wallet you control (hardware wallet recommended)
+- Different from your validator keys for security
+- Can be a multi-sig for additional security
+- Test receiving funds on this address first
+
+**Common Mistakes to Avoid**:
+- ❌ Using 0x0000...0000 (burns rewards)
+- ❌ Using an exchange address (may lose funds)
+- ❌ Using someone else's address by mistake
+- ❌ Forgetting to set it (validator won't start)
 
 ## Phase 4: Obtaining Test ETH
 

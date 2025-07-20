@@ -12,7 +12,7 @@ This repository contains a fully automated deployment solution for running an Et
 - **Security-First Design**: Automated OS hardening, firewall configuration, and secure key management
 - **Production-Ready Architecture**: Same patterns can be used for mainnet deployment
 - **Complete Monitoring**: Integrated Prometheus and Grafana with pre-configured dashboards
-- **Multi-Client Support**: Supports Besu/Nethermind (execution) and Teku/Nimbus (consensus)
+- **Multi-Client Support**: Supports both Besu and Nethermind execution clients with Teku consensus
 - **Cost-Optimized**: Deployable on Hetzner Cloud (~$120/month)
 
 ## 🏗️ Architecture
@@ -36,7 +36,7 @@ This repository contains a fully automated deployment solution for running an Et
 - **Configuration**: Ansible 2.9+ with idempotent playbooks
 - **Container Runtime**: Docker & Docker Compose
 - **Ethereum Stack**: eth-docker framework
-- **Execution Client**: Besu (minority client)
+- **Execution Client**: Nethermind (recommended for Hoodi) or Besu
 - **Consensus Client**: Teku (minority client)
 - **Monitoring**: Prometheus + Grafana + Node Exporter
 - **Operating System**: Ubuntu 22.04 LTS
@@ -65,6 +65,11 @@ This repository contains a fully automated deployment solution for running an Et
    - Hetzner API token
    - MetaMask wallet for testnet ETH
 
+3. **Important Information Needed**:
+   - **Fee Recipient Address** (MANDATORY as of 2025) - Your Ethereum address for block rewards
+     - ⚠️ **CRITICAL**: Due to Ansible YAML limitations, store WITHOUT the 0x prefix
+     - Example: `92145c8e548A87DFd716b1FD037a5e476a1f2a86` (not `0x92145c8e...`)
+
 ### Deployment Steps
 
 ```bash
@@ -81,12 +86,17 @@ cd terraform
 
 # 4. Configure server with Ansible (20 minutes)
 cd ../ansible
+# First, update inventory/hosts.yml with your fee recipient address
+# Then run:
 ./configure-validator.sh
 
 # 5. Generate validator keys (OFFLINE - separate secure machine)
 cd ../scripts
 ./generate-keys.sh
 # This uses ethstaker-deposit-cli which supports Hoodi testnet
+
+# 6. Transfer keys to server
+./transfer-validator-keys.sh
 
 # 6. Copy keys to server and start validating
 # See DEPLOYMENT_GUIDE.md for detailed steps
@@ -227,10 +237,7 @@ To completely remove all resources:
 - [eth-docker](https://github.com/eth-educators/eth-docker) team for the excellent framework
 - [EthStaker](https://ethstaker.cc) community for best practices and guidance
 
-## 📄 License
-
-This project is created for educational purposes as part of the Metana bootcamp Module 16 assignment.
-
 ---
 
-**Note**: This solution demonstrates production-ready patterns but is configured for testnet use. Always test thoroughly before deploying to mainnet.
+Validator transaction https://hoodi.beaconcha.in/validator/0x8c3b2f4aad4907b055db99dde21bcd68282a3a93100cb6e4ce0dd0cbd81dc2e84d422dfd3058a98ff56304f2b74ff7c8#deposits
+

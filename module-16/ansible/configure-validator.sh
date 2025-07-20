@@ -11,6 +11,12 @@ RED='\033[0;31m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+# Non-interactive mode support - DEFAULT IS AUTO!
+AUTO_CONFIRM="${AUTO_CONFIRM:-true}"
+DEFAULT_EXECUTION_CLIENT="${EXECUTION_CLIENT:-nethermind}"
+GRAFANA_PASSWORD="${GRAFANA_PASSWORD:-}"
+FEE_RECIPIENT="${FEE_RECIPIENT:-}"
+
 # Script directory
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 cd "$SCRIPT_DIR"
@@ -100,13 +106,96 @@ fi
 
 # Generate secure Grafana password
 echo -e "${GREEN}🔐 Generating secure passwords...${NC}"
-GRAFANA_PASS=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-20)
+if [ -z "$GRAFANA_PASSWORD" ]; then
+    GRAFANA_PASS=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-20)
+else
+    GRAFANA_PASS="$GRAFANA_PASSWORD"
+    echo -e "${YELLOW}Using provided Grafana password${NC}"
+fi
+
+# Execution client selection - DEFAULT IS NETHERMIND!
+if [ -z "$EXECUTION_CLIENT" ]; then
+    EXECUTION_CLIENT="$DEFAULT_EXECUTION_CLIENT"
+    echo -e "${GREEN}Using default execution client: ${YELLOW}${EXECUTION_CLIENT}${NC}"
+else
+    echo -e "${GREEN}Using provided execution client: ${YELLOW}${EXECUTION_CLIENT}${NC}"
+fi
+
+# Fee recipient address for validator rewards - MANDATORY!
+if [ -z "$FEE_RECIPIENT" ]; then
+    # Try to read from inventory/hosts.yml
+    # Handle both quoted and unquoted values
+    # NOTE: Fee recipient in inventory MUST NOT include 0x prefix (Ansible limitation)
+    INVENTORY_FEE_RECIPIENT=$(grep "validator_fee_recipient:" inventory/hosts.yml | grep -v "#" | sed 's/.*validator_fee_recipient: *//' | tr -d '"' | tr -d ' ')
+    
+    if [ -n "$INVENTORY_FEE_RECIPIENT" ] && [ "$INVENTORY_FEE_RECIPIENT" != "0000000000000000000000000000000000000000" ]; then
+        FEE_RECIPIENT="$INVENTORY_FEE_RECIPIENT"
+        echo -e "${GREEN}Using fee recipient from inventory/hosts.yml: ${YELLOW}${FEE_RECIPIENT}${NC}"
+    else
+        echo ""
+        echo -e "${RED}⚠️  IMPORTANT: Fee recipient address is REQUIRED!${NC}"
+        echo -e "${YELLOW}This is where your validator block rewards will be sent.${NC}"
+        echo ""
+        
+        # Interactive mode: prompt for fee recipient
+        if [[ "$AUTO_CONFIRM" != "true" ]]; then
+            echo "Enter your Ethereum address for receiving block rewards:"
+            echo "Example: 742d35Cc6634C0532925a3b844Bc9e7595f8fA66 (without 0x prefix)"
+            read -p "Fee recipient address: " FEE_RECIPIENT
+        else
+            # Auto mode: no valid fee recipient found
+            echo -e "${RED}ERROR: No valid fee recipient found!${NC}"
+            echo ""
+            echo "Please set your fee recipient address using one of these methods:"
+            echo "1. Update inventory/hosts.yml with your address (recommended)"
+            echo "2. Environment variable: FEE_RECIPIENT=YourAddress ./configure-validator.sh"
+            echo "3. Interactive mode: AUTO_CONFIRM=false ./configure-validator.sh"
+            echo ""
+            echo "Current value in inventory/hosts.yml: ${INVENTORY_FEE_RECIPIENT:-not found}"
+            exit 1
+        fi
+    fi
+else
+    echo -e "${GREEN}Using provided fee recipient: ${YELLOW}${FEE_RECIPIENT}${NC}"
+fi
+
+# Validate fee recipient format (without 0x prefix due to Ansible limitation)
+if [[ ! "$FEE_RECIPIENT" =~ ^[a-fA-F0-9]{40}$ ]]; then
+    echo -e "${RED}ERROR: Invalid Ethereum address format!${NC}"
+    echo "Received: '$FEE_RECIPIENT' (length: ${#FEE_RECIPIENT})"
+    echo "Address must be 40 hex characters (without 0x prefix)"
+    echo "Example: 92145c8e548A87DFd716b1FD037a5e476a1f2a86"
+    echo ""
+    echo "NOTE: Due to Ansible YAML limitations, the address MUST be stored"
+    echo "without the 0x prefix in inventory/hosts.yml"
+    exit 1
+fi
+
+# Warn if using burn address (without 0x)
+if [ "$FEE_RECIPIENT" == "0000000000000000000000000000000000000000" ]; then
+    echo -e "${RED}WARNING: Using burn address (all zeros) as fee recipient!${NC}"
+    echo "This will BURN all your block proposal rewards!"
+    if [[ "$AUTO_CONFIRM" != "true" ]]; then
+        read -p "Are you SURE you want to continue? (yes/no): " confirm_burn
+        if [ "$confirm_burn" != "yes" ]; then
+            echo "Configuration cancelled."
+            exit 1
+        fi
+    else
+        echo -e "${RED}Cannot use burn address in auto mode. Exiting.${NC}"
+        exit 1
+    fi
+fi
+
+echo -e "${GREEN}Using fee recipient: ${YELLOW}0x${FEE_RECIPIENT}${NC}"
 
 # Display configuration
 echo ""
 echo -e "${GREEN}📋 Configuration Details${NC}"
 echo "═══════════════════════════════════════"
 echo -e "Validator IP:     ${YELLOW}${VALIDATOR_IP}${NC}"
+echo -e "Execution Client: ${YELLOW}${EXECUTION_CLIENT}${NC}"
+echo -e "Fee Recipient:    ${YELLOW}0x${FEE_RECIPIENT}${NC}"
 echo -e "Grafana User:     ${YELLOW}admin${NC}"
 echo -e "Grafana Password: ${YELLOW}${GRAFANA_PASS}${NC}"
 echo "═══════════════════════════════════════"
@@ -134,12 +223,19 @@ if ! ansible all -i "${VALIDATOR_IP}," -m ping -e "ansible_user=root ansible_ssh
 fi
 echo -e "${GREEN}✅ Connection successful${NC}"
 
-# Confirmation
-echo ""
-read -p "$(echo -e ${YELLOW})Configure validator server? This will take ~20 minutes. (y/N): $(echo -e ${NC})" confirm
-if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-    echo -e "${RED}Configuration cancelled.${NC}"
-    exit 0
+
+# Confirmation - AUTO MODE IS DEFAULT!
+if [[ "$AUTO_CONFIRM" == "true" ]]; then
+    echo ""
+    echo -e "${GREEN}🚀 Auto-mode enabled (default), proceeding with configuration...${NC}"
+    echo -e "${YELLOW}To run interactively, use: AUTO_CONFIRM=false $0${NC}"
+else
+    echo ""
+    read -p "$(echo -e ${YELLOW})Configure validator server with ${EXECUTION_CLIENT}? This will take ~20 minutes. (y/N): $(echo -e ${NC})" confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo -e "${RED}Configuration cancelled.${NC}"
+        exit 0
+    fi
 fi
 
 # Run Ansible playbook
@@ -159,7 +255,7 @@ vault_grafana_admin_password=${GRAFANA_PASS}
 grafana_admin_password=${GRAFANA_PASS}
 
 # Ethereum configuration
-execution_client=besu
+execution_client=${EXECUTION_CLIENT}
 consensus_client=teku
 network=hoodi
 
@@ -179,6 +275,7 @@ ansible_user_uid=1000
 ansible_user_gid=1000
 validator_graffiti="Hoodi Validator"
 checkpoint_sync_url="https://checkpoint-sync.hoodi.ethpandaops.io"
+validator_fee_recipient=${FEE_RECIPIENT}
 EOF
 
 # Run the playbook with progress
@@ -240,6 +337,8 @@ Validator Configuration Information
 ==================================
 Date: $(date)
 Validator IP: ${VALIDATOR_IP}
+Execution Client: ${EXECUTION_CLIENT}
+Fee Recipient: ${FEE_RECIPIENT}
 Grafana Password: ${GRAFANA_PASS}
 
 SSH Access:
