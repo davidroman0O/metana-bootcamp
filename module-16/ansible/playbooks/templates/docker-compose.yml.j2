@@ -73,6 +73,7 @@ services:
     ports:
       - "{{ el_p2p_port | default('30303') }}:{{ el_p2p_port | default('30303') }}/tcp"
       - "{{ el_p2p_port | default('30303') }}:{{ el_p2p_port | default('30303') }}/udp"
+      - "9545:9545"  # Metrics port
     networks:
       - eth-docker
     command:
@@ -130,11 +131,12 @@ services:
     volumes:
       - {{ data_volume_path }}/teku:/var/lib/teku
       - ./jwt/jwt.hex:/jwt/jwt.hex:ro
-      - ./validator-keys:/validator-keys:ro
+      - ./validator-keys:/validator-keys:rw
       - /etc/localtime:/etc/localtime:ro
     ports:
       - "{{ cl_p2p_port | default('9000') }}:{{ cl_p2p_port | default('9000') }}/tcp"
       - "{{ cl_p2p_port | default('9000') }}:{{ cl_p2p_port | default('9000') }}/udp"
+      - "8008:8008"  # Metrics port
     networks:
       - eth-docker
     environment:

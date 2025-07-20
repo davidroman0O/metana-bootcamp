@@ -13,7 +13,22 @@ This directory contains Ansible playbooks for automating the deployment and mana
 
 3. **SSH access** to the validator server
 
-## Initial Setup
+## Quick Start
+
+Use the automated configuration script:
+
+```bash
+# From the ansible directory
+./configure-validator.sh
+
+# The script will automatically:
+# - Detect your server IP from Terraform
+# - Read fee recipient from inventory/hosts.yml
+# - Generate secure Grafana password
+# - Run all playbooks in correct order
+```
+
+## Initial Setup (Manual)
 
 1. **Update inventory** with your server IP:
    ```bash
@@ -51,6 +66,11 @@ validator_fee_recipient: "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86"
 ```
 
 The `0x` prefix is automatically added in the Docker Compose templates.
+
+**Why this matters**: 
+- If you include the 0x prefix, Ansible's YAML parser converts the hex value to decimal
+- This results in errors like "Bytes20 should be 20 bytes, but was 24 bytes"
+- Teku will fail to start without a valid fee recipient address
 
 ## Playbooks
 
@@ -179,6 +199,25 @@ ansible/
    ```bash
    ansible-playbook playbooks/setup-validator.yml -vvv
    ```
+
+### Common Issues
+
+**Fee Recipient Decimal Conversion**
+- **Symptom**: Fee recipient shows as long decimal number (e.g., 833966730207...)
+- **Solution**: Remove 0x prefix from inventory/hosts.yml
+
+**Grafana Dashboard Empty**
+- **Symptom**: No data in Grafana dashboards
+- **Cause**: Metrics ports not exposed
+- **Solution**: Updated templates now expose ports 9545 (Nethermind) and 8008 (Teku)
+
+**Teku Key Import Fails**
+- **Symptom**: "Password file for keystore doesn't exist"
+- **Solution**: Use updated import-validator-keys.sh script that creates password files
+
+**Docker Volume Permissions**
+- **Symptom**: "Read-only file system" errors
+- **Solution**: Updated templates use :rw for validator-keys volume mount
 
 ## Next Steps
 

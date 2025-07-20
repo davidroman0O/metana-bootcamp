@@ -322,7 +322,15 @@ echo ""
 echo "3. Monitor sync progress:"
 echo -e "   ${YELLOW}docker-compose logs -f consensus${NC}"
 echo ""
-echo "4. Generate validator keys (on secure offline machine):"
+echo "4. Transfer validator keys (if you have them):"
+echo -e "   ${YELLOW}cd ../scripts${NC}"
+echo -e "   ${YELLOW}./transfer-validator-keys.sh${NC}"
+echo ""
+echo "5. Import keys on the server:"
+echo -e "   ${YELLOW}cd /home/validator/ethereum/eth-docker${NC}"
+echo -e "   ${YELLOW}./import-validator-keys.sh${NC}"
+echo ""
+echo "   Or generate new keys (on secure offline machine):"
 echo -e "   ${YELLOW}cd ../scripts && ./generate-keys.sh${NC}"
 echo ""
 echo -e "${GREEN}📚 Documentation${NC}"
@@ -351,9 +359,10 @@ Grafana Access:
 
 Next Steps:
 1. Monitor blockchain sync progress
-2. Generate validator keys offline
-3. Get 32 ETH from testnet faucets
-4. Import keys and start validating
+2. Transfer existing validator keys: cd ../scripts && ./transfer-validator-keys.sh
+3. Import keys on server: cd /home/validator/ethereum/eth-docker && ./import-validator-keys.sh
+4. Get 32 ETH from testnet faucets (if not done already)
+5. Monitor validator activation on https://hoodi.beaconcha.in
 EOF
 
 echo -e "${BLUE}Configuration saved to: ${YELLOW}${CONFIG_INFO}${NC}"

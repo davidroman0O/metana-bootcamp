@@ -204,11 +204,11 @@ FEE_RECIPIENT=YourEthereumAddressHere ./configure-validator.sh
 ```
 
 **⚠️ CRITICAL**: The fee recipient address is MANDATORY as of 2025 for Hoodi testnet. Without it:
-- Teku consensus client will fail to start
+- Teku consensus client will fail to start with error: "Invalid configuration. --validators-proposer-default-fee-recipient must be specified"
 - Your validator cannot participate in the network
 - Block proposal rewards would be burned
 
-**⚠️ IMPORTANT FORMAT**: Due to Ansible YAML limitations, the fee recipient MUST be stored WITHOUT the 0x prefix in inventory/hosts.yml to prevent automatic conversion to decimal.
+**⚠️ IMPORTANT FORMAT**: Due to Ansible YAML limitations, the fee recipient MUST be stored WITHOUT the 0x prefix in inventory/hosts.yml to prevent automatic conversion to decimal. If you include the 0x prefix, Ansible will convert it to a decimal number causing a "Bytes20 should be 20 bytes, but was 24 bytes" error.
 
 **Best Practice**: Set your fee recipient in `inventory/hosts.yml` once (without 0x), and it will be used for all deployments
 
@@ -468,15 +468,18 @@ SSH to your server and import keys:
 # Connect to server
 ssh -i $SSH_KEY_PATH validator@$VALIDATOR_IP
 
-# Copy keys to eth-docker
+# Navigate to eth-docker directory
 cd ethereum/eth-docker
-sudo cp -r ~/validator_keys_*/validator_keys/* ./validator-keys/
-sudo chown -R 1000:1000 ./validator-keys/
-sudo chmod 600 ./validator-keys/keystore*
 
-# Import keys into Teku
-docker-compose exec consensus teku validator-client --validator-keys=/validator-keys:/validator-keys
+# Run the import script - it will:
+# - Find your keys in ~/validator_keys_*
+# - Copy them to the validator-keys directory
+# - Create password files for Teku
+# - Set correct permissions
+./import-validator-keys.sh
 ```
+
+**Note**: The import script will prompt for your keystore password and automatically create the required password files for Teku.
 
 ### Step 18: Monitor Sync Progress
 
@@ -623,7 +626,31 @@ docker-compose exec consensus sh -c 'echo "CHECKPOINT_SYNC_URL=https://checkpoin
 docker-compose restart consensus
 ```
 
-**4. High Disk Usage**
+**4. Grafana Dashboards Empty/No Data**
+```bash
+# Check that metrics ports are exposed in docker-compose.yml
+# Should see ports 9545 (Nethermind) and 8008 (Teku)
+docker-compose ps
+
+# If not, ensure docker-compose.yml has correct port mappings
+# The Ansible templates have been updated to include these
+```
+
+**5. Teku Validator Key Import Fails**
+```bash
+# Error: "Password file for keystore doesn't exist"
+# Solution: Use the updated import-validator-keys.sh script
+# It automatically creates password files for each keystore
+```
+
+**6. Fee Recipient Shows as Decimal Number**
+```bash
+# Problem: YAML converts 0x92145... to decimal 833966730207...
+# Solution: Store fee recipient WITHOUT 0x prefix in inventory/hosts.yml
+# The 0x prefix is added automatically in the docker-compose template
+```
+
+**7. High Disk Usage**
 ```bash
 # Check disk usage
 df -h
@@ -637,11 +664,19 @@ sudo rm -rf /mnt/HC_Volume_validator_data/execution/chaindata
 docker-compose start
 ```
 
-**5. Validator Not Attesting**
+**8. Validator Not Attesting**
 - Verify node is fully synced
 - Check validator keys are imported
 - Ensure activation is complete on beaconcha.in
 - Verify system time is accurate
+
+**9. Verify Validator Key Password**
+```bash
+# Use the verify-key-password.sh script to test your password
+cd scripts
+./verify-key-password.sh
+# This will test decryption of your keystore with the password
+```
 
 ## Cleanup Procedures
 

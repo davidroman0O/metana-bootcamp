@@ -103,10 +103,10 @@
     grafana_dashboards_nethermind:
       - { id: 18746, revision: 1, name: "nethermind-node-monitor" }  # Official dashboard
     grafana_dashboards_common:
-      - { id: 12199, revision: 1, name: "teku-overview" }
-      - { id: 13481, revision: 1, name: "ethereum-validators" }
-      - { id: 1860, revision: 37, name: "node-exporter" }
-      - { id: 13457, revision: 2, name: "teku-dashboard" }
+      - { id: 13457, revision: 2, name: "teku-dashboard" }  # Recommended Teku dashboard
+      - { id: 12523, revision: 1, name: "teku-monitor" }  # Alternative Teku monitor
+      - { id: 1860, revision: 37, name: "node-exporter" }  # Comprehensive system metrics
+      - { id: 11074, revision: 1, name: "node-exporter-en" }  # Alternative node exporter
 
 - name: Set dashboards to download
   set_fact:
@@ -128,6 +128,20 @@
     regexp: '\$\{DS_PROMETHEUS\}'
     replace: 'Prometheus'
   loop: "{{ grafana_dashboards }}"
+
+- name: Fix additional datasource variations
+  become_user: validator
+  replace:
+    path: "{{ ethereum_base_dir }}/eth-docker/grafana/dashboards/{{ item.name }}.json"
+    regexp: '{{ item.pattern }}'
+    replace: 'Prometheus'
+  loop:
+    - { name: "teku-dashboard", pattern: '\$\{datasource\}' }
+    - { name: "teku-monitor", pattern: '\$\{datasource\}' }
+    - { name: "nethermind-node-monitor", pattern: '"datasource": ".*?"' }
+    - { name: "node-exporter", pattern: '\$\{DS_PROMETHEUS\}' }
+    - { name: "node-exporter-en", pattern: '\$\{DS_PROMETHEUS\}' }
+  ignore_errors: yes
 
 - name: Fix permissions for mounted volumes
   file:

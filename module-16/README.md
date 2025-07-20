@@ -230,6 +230,35 @@ To completely remove all resources:
 2. **Key Security**: Never share your mnemonic phrase or validator keys
 3. **Monitoring**: Regularly check your validator performance to ensure proper attestations
 4. **Voluntary Exit**: The exit process is permanent and cannot be reversed
+5. **Fee Recipient Format**: Due to Ansible YAML limitations, store WITHOUT 0x prefix in inventory
+6. **Teku Password Files**: Teku requires a `.txt` password file for each keystore
+
+## 🔧 Common Issues and Fixes
+
+### Fee Recipient Decimal Conversion
+**Problem**: Ansible converts hex addresses to decimal numbers
+**Solution**: Store fee recipient WITHOUT `0x` prefix in `inventory/hosts.yml`
+```yaml
+# CORRECT:
+validator_fee_recipient: "92145c8e548A87DFd716b1FD037a5e476a1f2a86"
+# WRONG:
+validator_fee_recipient: "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86"
+```
+
+### Grafana Dashboards Empty
+**Problem**: Metrics ports not exposed in Docker configuration
+**Solution**: Fixed in templates - ports 9545 (Nethermind) and 8008 (Teku) now exposed
+
+### Teku Validator Key Import Fails
+**Problem**: Teku requires password files with `.txt` extension
+**Solution**: Updated `import-validator-keys.sh` script creates password files automatically
+
+### Verify Key Password
+**Tool**: Use `scripts/verify-key-password.sh` to test your password before import
+```bash
+cd scripts
+./verify-key-password.sh
+```
 
 ## 🤝 Acknowledgments
 

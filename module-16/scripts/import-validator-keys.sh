@@ -128,10 +128,26 @@ case "$CONSENSUS_CLIENT" in
     "teku")
         echo -e "${BLUE}Importing keys for Teku...${NC}"
         echo ""
-        echo -e "${YELLOW}You will be prompted for your keystore password${NC}"
+        echo -e "${YELLOW}Teku requires password files for each keystore.${NC}"
+        echo -e "${YELLOW}Enter your keystore password:${NC}"
+        echo -n "Password: "
+        read -s KEYSTORE_PASSWORD
         echo ""
         
+        # Create password files for each keystore
+        echo "Creating password files..."
+        for keystore in validator-keys/keystore-*.json; do
+            if [ -f "$keystore" ]; then
+                basename=$(basename "$keystore" .json)
+                password_file="validator-keys/${basename}.txt"
+                echo "$KEYSTORE_PASSWORD" > "$password_file"
+                chmod 600 "$password_file"
+                echo "✅ Created $password_file"
+            fi
+        done
+        
         # For Teku, we need to restart with the keys mounted
+        echo ""
         echo "Restarting Teku to load validator keys..."
         docker-compose restart consensus
         
