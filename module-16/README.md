@@ -270,3 +270,4 @@ cd scripts
 
 Validator transaction https://hoodi.beaconcha.in/validator/0x8c3b2f4aad4907b055db99dde21bcd68282a3a93100cb6e4ce0dd0cbd81dc2e84d422dfd3058a98ff56304f2b74ff7c8#deposits
 
+Voluntary exit https://hoodi.beaconcha.in/slot/917252#voluntary-exits

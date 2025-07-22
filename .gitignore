@@ -47,6 +47,7 @@ module-16/terraform/.terraform
 module-16/ansible/validator-config-*
 module-16/terraform/grafana-password.txt
 module-16/.mnemonic
+module-16/.exit_records
 
 # Ansible files
 *.retry
