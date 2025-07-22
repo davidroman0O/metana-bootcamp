@@ -72,6 +72,8 @@ The `0x` prefix is automatically added in the Docker Compose templates.
 - This results in errors like "Bytes20 should be 20 bytes, but was 24 bytes"
 - Teku will fail to start without a valid fee recipient address
 
+> FYI I struggled a bit before knowing it was Ansible!!
+
 ## Playbooks
 
 ### 1. Setup Validator (`setup-validator.yml`)
@@ -158,25 +160,6 @@ ssh -L 3000:localhost:3000 validator@<SERVER_IP>
 Then access: http://localhost:3000
 - Username: admin
 - Password: (set in vault.yml)
-
-## Directory Structure
-
-```
-ansible/
-├── ansible.cfg           # Ansible configuration
-├── inventory/
-│   └── hosts.yml        # Inventory file
-├── playbooks/
-│   ├── setup-validator.yml      # Initial setup
-│   ├── validator-operations.yml # Operations
-│   ├── monitoring.yml          # Monitoring setup
-│   ├── security.yml           # Security hardening
-│   └── templates/
-│       └── eth-docker.env.j2  # eth-docker config
-└── group_vars/
-    └── all/
-        └── vault.yml    # Encrypted variables
-```
 
 ## Troubleshooting
 
