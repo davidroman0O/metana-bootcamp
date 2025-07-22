@@ -162,6 +162,7 @@ services:
       - --validators-graffiti={{ validator_graffiti | default('Hoodi Validator') }}
       - --validator-keys=/validator-keys:/validator-keys
       - --validators-proposer-default-fee-recipient=0x{{ validator_fee_recipient | default('0000000000000000000000000000000000000000') }}
+      - --validators-keystore-locking-enabled=false
 {% if checkpoint_sync_url is defined and checkpoint_sync_url %}
       - --checkpoint-sync-url={{ checkpoint_sync_url }}
 {% endif %}
