@@ -1,0 +1,737 @@
+# Complete Ethereum Validator Deployment Guide
+
+This guide provides step-by-step instructions for deploying an Ethereum validator on the Hoodi testnet using our automated infrastructure solution.
+
+## Table of Contents
+
+1. [Prerequisites](#prerequisites)
+2. [Phase 1: Infrastructure Deployment](#phase-1-infrastructure-deployment)
+3. [Phase 2: Server Configuration](#phase-2-server-configuration)
+4. [Phase 3: Key Generation](#phase-3-key-generation)
+5. [Phase 4: Obtaining Test ETH](#phase-4-obtaining-test-eth)
+6. [Phase 5: Making the Deposit](#phase-5-making-the-deposit)
+7. [Phase 6: Starting the Validator](#phase-6-starting-the-validator)
+8. [Phase 7: Monitoring Operations](#phase-7-monitoring-operations)
+9. [Phase 8: Voluntary Exit](#phase-8-voluntary-exit)
+10. [Troubleshooting](#troubleshooting)
+11. [Cleanup Procedures](#cleanup-procedures)
+
+## Prerequisites
+
+### Required Software
+
+Ensure you have the following installed on your local machine:
+
+```bash
+# Check Terraform version (need >= 1.5.0)
+terraform version
+
+# Check Ansible version (need >= 2.9)
+ansible --version
+
+# Check Python version (need >= 3.x)
+python3 --version
+
+# Check if pip is installed
+pip3 --version
+```
+
+### Install Missing Dependencies
+
+**macOS:**
+```bash
+# Install Homebrew if needed
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install Terraform
+brew install terraform
+
+# Install Ansible
+pip3 install ansible
+```
+
+**Linux:**
+```bash
+# Install Terraform
+wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+sudo apt update && sudo apt install terraform
+
+# Install Ansible
+pip3 install ansible
+```
+
+### Hetzner Cloud Setup
+
+1. **Create Account**: Sign up at [https://www.hetzner.com/cloud](https://www.hetzner.com/cloud)
+
+2. **Generate API Token**:
+   - Log into Hetzner Cloud Console
+   - Select your project (or create one)
+   - Go to Security → API Tokens
+   - Click "Generate API Token"
+   - Give it a name (e.g., "eth-validator")
+   - Select "Read & Write" permissions
+   - Copy the token immediately (shown only once!)
+
+3. **Verify Token**:
+   ```bash
+   # Token should be 64 characters
+   echo -n "your-token-here" | wc -c
+   # Should output: 64
+   ```
+
+## Phase 1: Infrastructure Deployment
+
+### Step 1: Clone Repository
+
+```bash
+git clone <repository-url>
+cd metana-bootcamp/module-16
+```
+
+### Step 2: Set Environment Variables
+
+```bash
+# Set your Hetzner API token
+export HETZNER_API_TOKEN="your-token-here"
+
+# Verify it's set
+echo $HETZNER_API_TOKEN | head -c 10
+```
+
+### Step 3: Deploy Infrastructure
+
+The automated deployment script handles everything:
+
+```bash
+cd terraform
+./deploy.sh
+```
+
+The script will:
+1. Auto-detect your public IP for SSH access
+2. Display deployment configuration and costs
+3. Create all infrastructure resources
+4. Generate SSH keys automatically
+5. Save deployment information
+
+**Expected output:**
+```
+╔══════════════════════════════════════════════════════╗
+║        Ethereum Validator Infrastructure Deploy       ║
+╚══════════════════════════════════════════════════════╝
+
+🔍 Detecting your public IP...
+   Your IP: XXX.XXX.XXX.XXX
+
+📋 Deployment Configuration
+═══════════════════════════════════════
+Provider:        Hetzner Cloud
+Server Type:     cpx41
+Location:        Helsinki, Finland (hel1)
+Additional Storage: 1TB
+SSH Access From: XXX.XXX.XXX.XXX/32
+Execution Client: Besu (minority client)
+Consensus Client: Teku (minority client)
+Monitoring:      Enabled (Prometheus + Grafana)
+Network:         Hoodi Testnet
+═══════════════════════════════════════
+
+💰 Estimated Monthly Cost
+═══════════════════════════════════════
+Server (CPX41):  ~€64
+Volume (1TB):    ~€48
+Total:           ~€112/month (~$120)
+═══════════════════════════════════════
+
+Deploy validator infrastructure? (y/N): y
+```
+
+### Step 4: Alternative Deployment Options
+
+If you prefer more control or encounter issues:
+
+**Option 1: Manual Terraform with specific location**
+```bash
+# If you get resource availability errors, try different locations
+./deploy.sh --location nbg1  # Nuremberg, Germany
+./deploy.sh --location fsn1  # Falkenstein, Germany
+./deploy.sh --location ash   # Ashburn, USA
+```
+
+**Option 2: Direct Terraform commands**
+```bash
+terraform init
+terraform plan -var="hcloud_token=$HETZNER_API_TOKEN" \
+               -var="allowed_ssh_ips=[\"$(curl -s ifconfig.me)/32\"]"
+terraform apply -auto-approve
+```
+
+### Step 5: Save Deployment Information
+
+After successful deployment:
+
+```bash
+# Get important outputs
+VALIDATOR_IP=$(terraform output -raw server_ip)
+SSH_KEY_PATH=$(terraform output -raw ssh_private_key_path)
+
+# Test SSH connection
+ssh -i $SSH_KEY_PATH root@$VALIDATOR_IP "echo 'Connection successful!'"
+```
+
+## Phase 2: Server Configuration
+
+### Step 6: Configure Server with Ansible
+
+The configuration script automates all server setup:
+
+```bash
+cd ../ansible
+
+# IMPORTANT: First update your fee recipient address in inventory/hosts.yml
+# Look for the line: validator_fee_recipient: "0000..."
+# Replace with YOUR Ethereum address WITHOUT the 0x prefix
+# Example: validator_fee_recipient: "92145c8e548A87DFd716b1FD037a5e476a1f2a86"
+
+# Then run the configuration:
+./configure-validator.sh
+
+# The script will automatically use the fee recipient from inventory/hosts.yml
+# If you want to override it temporarily (WITHOUT 0x prefix):
+FEE_RECIPIENT=YourEthereumAddressHere ./configure-validator.sh
+```
+
+**⚠️ CRITICAL**: The fee recipient address is MANDATORY as of 2025 for Hoodi testnet. Without it:
+- Teku consensus client will fail to start with error: "Invalid configuration. --validators-proposer-default-fee-recipient must be specified"
+- Your validator cannot participate in the network
+- Block proposal rewards would be burned
+
+**⚠️ IMPORTANT FORMAT**: Due to Ansible YAML limitations, the fee recipient MUST be stored WITHOUT the 0x prefix in inventory/hosts.yml to prevent automatic conversion to decimal. If you include the 0x prefix, Ansible will convert it to a decimal number causing a "Bytes20 should be 20 bytes, but was 24 bytes" error.
+
+**Best Practice**: Set your fee recipient in `inventory/hosts.yml` once (without 0x), and it will be used for all deployments
+
+This process:
+- Validates your fee recipient address
+- Detects the server IP from Terraform
+- Installs all required software
+- Sets up eth-docker framework
+- Configures monitoring stack
+- Applies security hardening
+- Takes approximately 20 minutes
+
+**Save the Grafana password displayed!**
+
+### Step 7: Manual Configuration (if needed)
+
+If the automated script fails, you can run Ansible manually:
+
+```bash
+# Create inventory file
+cat > inventory.ini << EOF
+[validator]
+$VALIDATOR_IP ansible_user=root ansible_ssh_private_key_file=$SSH_KEY_PATH
+
+[validator:vars]
+grafana_admin_password=YourSecurePasswordHere
+validator_fee_recipient=YourEthereumAddressHere  # MANDATORY! No 0x prefix!
+EOF
+
+# Run playbook
+ansible-playbook -i inventory.ini playbooks/setup-validator.yml
+```
+
+**Note**: You can also edit `ansible/inventory/hosts.yml` to set your fee recipient permanently (remember: without the 0x prefix).
+
+## Phase 3: Key Generation
+
+### Step 8: Generate Validator Keys
+
+⚠️ **CRITICAL SECURITY**: Perform this on a secure, OFFLINE computer!
+
+**On a secure offline machine:**
+
+```bash
+# Navigate to scripts directory
+cd scripts
+
+# Run the key generation script
+./generate-keys.sh
+```
+
+The script will:
+1. Create `.bin` and `.keys` directories in the project root if they don't exist
+2. Download the ethstaker-deposit-cli to `.bin` (which supports Hoodi testnet)
+3. Ask for the number of validators (start with 1)
+4. Give you withdrawal address options:
+   - Option 1: Generate new (recommended)
+   - Option 2: Use existing address
+
+Then the interactive CLI will:
+1. Ask for your mnemonic language (press Enter for English)
+2. Prompt you to create a keystore password (remember this!)
+3. Generate and display your 24-word mnemonic phrase
+4. **WRITE DOWN YOUR 24-WORD MNEMONIC PHRASE - THIS IS CRITICAL!**
+5. Ask you to type the mnemonic back to confirm
+6. Create validator keys in `.keys/validator_keys_[timestamp]` directory
+
+**Security checklist:**
+- [ ] Mnemonic phrase written on paper (never digital)
+- [ ] Stored in multiple secure locations
+- [ ] Keystore password recorded securely
+- [ ] No photos or digital copies of mnemonic
+
+### Step 9: Create Encrypted Backup
+
+Still on the offline machine:
+
+```bash
+cd validator_keys_[timestamp]
+./backup_keys.sh
+# Enter encryption password when prompted
+```
+
+### Step 10: Transfer Keys to Server
+
+After generating keys, you need to transfer them to your validator server. We provide an automated script for this.
+
+**Using the transfer script (Recommended):**
+
+```bash
+# From your online machine where you have the keys
+cd scripts
+./transfer-validator-keys.sh
+```
+
+This script will:
+- Automatically detect your server IP and SSH key from Terraform
+- Look for validator keys in the `.keys/` directory
+- Create the validator user if it doesn't exist
+- Transfer all keys securely to the server
+- Set proper permissions
+- Copy the import script to the server
+
+**Manual transfer (if needed):**
+
+If you prefer manual transfer or the script fails:
+
+```bash
+# Set your connection details
+export SSH_KEY_PATH=/path/to/terraform/ssh_keys/eth-validator-hoodi-testnet_rsa
+export VALIDATOR_IP=your.server.ip
+
+# Transfer keys
+scp -i $SSH_KEY_PATH -r ../.keys/validator_keys_* root@$VALIDATOR_IP:/home/validator/
+
+# Fix permissions
+ssh -i $SSH_KEY_PATH root@$VALIDATOR_IP "chown -R validator:validator /home/validator/validator_keys_*"
+```
+
+## Understanding Fee Recipients (Important!)
+
+### What is a Fee Recipient?
+
+The fee recipient is an Ethereum address where your validator will receive:
+- **Priority fees** (tips) from transactions when you propose a block
+- **MEV rewards** if MEV-boost is enabled (future feature)
+
+**Key Points**:
+- This is NOT where your staked ETH goes
+- This is NOT your validator withdrawal address
+- This IS where you earn ongoing rewards for proposing blocks
+- You can change this address anytime by updating configuration
+
+### Choosing a Fee Recipient Address
+
+**Best Practices**:
+- Use a secure wallet you control (hardware wallet recommended)
+- Different from your validator keys for security
+- Can be a multi-sig for additional security
+- Test receiving funds on this address first
+
+**Common Mistakes to Avoid**:
+- ❌ Using 0x0000...0000 (burns rewards)
+- ❌ Using an exchange address (may lose funds)
+- ❌ Using someone else's address by mistake
+- ❌ Forgetting to set it (validator won't start)
+
+## Phase 4: Obtaining Test ETH
+
+### Step 11: Get Hoodi Testnet ETH
+
+You need 32 ETH per validator for the deposit.
+
+**⚠️ IMPORTANT: How Deposits Work**
+- You DON'T need to receive ETH to your validator
+- You need 32 ETH in YOUR wallet (MetaMask or any wallet you control)
+- You'll SEND this ETH to the deposit contract via the launchpad
+- Your validator is identified by its public key, not an ETH address
+
+**Get your validator information for reference:**
+```bash
+# On your local machine where you generated keys
+cd .keys/validator_keys_*
+
+# View your validator public key (for monitoring)
+cat deposit_data-*.json | jq -r '.[0].pubkey'
+
+# View your withdrawal credentials
+cat deposit_data-*.json | jq -r '.[0].withdrawal_credentials'
+```
+
+**Small amounts (0.1-1 ETH) from faucets:**
+
+1. **Primary Hoodi Faucets**:
+   - [Hoodi Faucet](https://hoodifaucet.org) - 0.1 ETH every 24 hours
+   - [EthStaker Hoodi Faucet](https://faucet.hoodi.ethstaker.cc) - For small amounts
+
+2. **Alternative Sources**:
+   - [QuickNode Hoodi Faucet](https://faucet.quicknode.com/ethereum/hoodi)
+   - [Chainstack Hoodi Support](https://chainstack.com/hoodi-testnet)
+
+**For 32 ETH (full validator amount):**
+
+1. Join the [EthStaker Discord](https://discord.gg/ethstaker)
+2. Go to #hoodi-testnet channel
+3. Explain you're running a validator for educational purposes
+4. Request 32 ETH with your address
+
+### Step 12: Verify Balance
+
+Check your balance on the block explorer:
+```
+https://hoodi.etherscan.io/address/YOUR_ADDRESS
+```
+
+## Phase 5: Making the Deposit
+
+### Step 13: Access Hoodi Launchpad
+
+1. Visit the official Hoodi Launchpad:
+   - **Standard Process**: [https://hoodi-launchpad.ethereum.org](https://hoodi-launchpad.ethereum.org)
+   - **EthStaker Process**: [https://hoodi.launchpad.ethstaker.cc](https://hoodi.launchpad.ethstaker.cc)
+
+2. Follow the process
+   1. It will ask questions
+   2. Connect MetaMas
+   3. Upload deposit data
+   4. Add the network
+   5. Provide a faucet to mine hoddi ETH
+
+3. Add Hoodi network if prompted:
+   ```
+   Network Name: Hoodi Testnet
+   RPC URL: https://rpc.hoodi.ethpandaops.io
+   Chain ID: 17071
+   Currency Symbol: ETH
+   Block Explorer: https://hoodi.etherscan.io
+   ```
+
+4. Verify the displayed information:
+   - Amount shows 32 ETH
+   - Your validator public key is displayed
+   - Withdrawal credentials are correct
+   - Network shows Hoodi
+
+### Step 15: Complete Deposit
+
+**What happens during deposit:**
+- You send 32 ETH FROM your MetaMask TO the deposit contract
+- The contract uses your deposit data to register your validator
+- Your validator is identified by its public key (not an ETH address)
+
+1. Ensure you have 32 ETH in your connected MetaMask wallet
+2. Review all information carefully
+3. Click "Submit Deposit"
+4. MetaMask will show:
+   - To: Hoodi Deposit Contract (0x00000000219ab540356cBB839Cbe05303d7705Fa)
+   - Amount: 32 ETH
+5. Confirm the transaction
+6. Save the transaction hash
+7. Wait for confirmation
+
+### Step 16: Monitor Activation
+
+Your validator will be activated after ~16 hours. Monitor status:
+- [https://hoodi.beaconcha.in](https://hoodi.beaconcha.in)
+- Search for your validator public key
+- Status progression: Deposited → Pending → Active
+
+## Phase 6: Starting the Validator
+
+### Step 17: Import Validator Keys
+
+SSH to your server and import keys:
+
+```bash
+# Connect to server
+ssh -i $SSH_KEY_PATH validator@$VALIDATOR_IP
+
+# Navigate to eth-docker directory
+cd ethereum/eth-docker
+
+# Run the import script - it will:
+# - Find your keys in ~/validator_keys_*
+# - Copy them to the validator-keys directory
+# - Create password files for Teku
+# - Set correct permissions
+./import-validator-keys.sh
+```
+
+**Note**: The import script will prompt for your keystore password and automatically create the required password files for Teku.
+
+### Step 18: Monitor Sync Progress
+
+Check that your node is syncing:
+
+```bash
+# Check execution client sync
+docker-compose logs -f execution | grep -i "sync"
+
+# Check consensus client sync
+docker-compose logs -f consensus | grep -i "sync"
+```
+
+Wait for messages indicating sync completion:
+- Execution: "Sync finished"
+- Consensus: "Fully synced"
+
+### Step 19: Verify Validator Status
+
+After importing keys (but before deposit):
+
+```bash
+# Check that Teku loaded your validator keys
+docker-compose logs consensus | grep -i "validator\|key"
+
+# Look for messages like:
+# "Loaded validator" 
+# "public_key=0x..."
+```
+
+Once synced and activated (after deposit and ~16 hour wait):
+
+```bash
+# Check for attestations
+docker-compose logs consensus | grep -i "attestation"
+
+# Should see messages like:
+# "Published attestation"
+# "Attestation produced"
+# "Validator duties received"
+```
+
+To get your validator public key for monitoring:
+```bash
+# On your local machine
+cd scripts
+cat validator_keys_*/deposit_data-*.json | jq -r '.[0].pubkey'
+```
+
+## Phase 7: Monitoring Operations
+
+### Step 20: Access Grafana Dashboards
+
+Create SSH tunnel for secure access:
+
+```bash
+# From your local machine
+ssh -i $SSH_KEY_PATH -L 3000:localhost:3000 validator@$VALIDATOR_IP
+```
+
+Open browser: [http://localhost:3000](http://localhost:3000)
+- Username: `admin`
+- Password: (from Ansible setup)
+
+### Step 21: Key Metrics to Monitor
+
+**Grafana Dashboards:**
+- **Besu Overview**: Peer count (>25), sync status, block height
+- **Teku Overview**: Attestation effectiveness (>95%), validator balance
+- **Node Exporter**: CPU (<80%), Memory (<80%), Disk usage (<80%)
+
+**External Monitoring:**
+1. Add validator to [beaconcha.in](https://hoodi.beaconcha.in)
+2. Enable email/mobile alerts
+3. Monitor attestation performance
+
+### Step 22: Daily Operations
+
+**Check validator health:**
+```bash
+# Quick health check
+ssh -i $SSH_KEY_PATH validator@$VALIDATOR_IP "cd ethereum/eth-docker && docker-compose ps"
+
+# View recent logs
+ssh -i $SSH_KEY_PATH validator@$VALIDATOR_IP "cd ethereum/eth-docker && docker-compose logs --tail=100 consensus"
+```
+
+## Phase 8: Voluntary Exit
+
+### Step 23: Prepare for Exit
+
+Before exiting:
+- [ ] Confirm validator has been active for required period
+- [ ] Document rewards earned
+- [ ] Ensure you have backups of all keys
+- [ ] Understand this is PERMANENT
+
+### Step 24: Perform Voluntary Exit
+
+```bash
+cd scripts
+./voluntary-exit.sh
+```
+
+The script will:
+1. Display warnings about permanence
+2. Show your validators
+3. Ask for confirmation multiple times
+4. Execute the exit command
+5. Save exit confirmation
+
+### Step 25: Monitor Exit Process
+
+- Check explorer for exit status
+- Exit typically processes in 1-2 days
+- Validator stops earning immediately
+- Full withdrawal available after exit completes
+
+## Troubleshooting
+
+### Common Issues and Solutions
+
+**1. SSH Connection Refused**
+```bash
+# Remove old host key
+ssh-keygen -R $VALIDATOR_IP
+
+# Wait 2-3 minutes after deployment
+# Verify your IP hasn't changed
+curl -4 ifconfig.me
+```
+
+**2. Terraform Resource Unavailable**
+```bash
+# Try different location
+terraform destroy -auto-approve
+./deploy.sh --location nbg1
+```
+
+**3. Slow Sync**
+```bash
+# Enable checkpoint sync
+docker-compose exec consensus sh -c 'echo "CHECKPOINT_SYNC_URL=https://checkpoint-sync.hoodi.ethpandaops.io" >> /config/.env'
+docker-compose restart consensus
+```
+
+**4. Grafana Dashboards Empty/No Data**
+```bash
+# Check that metrics ports are exposed in docker-compose.yml
+# Should see ports 9545 (Nethermind) and 8008 (Teku)
+docker-compose ps
+
+# If not, ensure docker-compose.yml has correct port mappings
+# The Ansible templates have been updated to include these
+```
+
+**5. Teku Validator Key Import Fails**
+```bash
+# Error: "Password file for keystore doesn't exist"
+# Solution: Use the updated import-validator-keys.sh script
+# It automatically creates password files for each keystore
+```
+
+**6. Fee Recipient Shows as Decimal Number**
+```bash
+# Problem: YAML converts 0x92145... to decimal 833966730207...
+# Solution: Store fee recipient WITHOUT 0x prefix in inventory/hosts.yml
+# The 0x prefix is added automatically in the docker-compose template
+```
+
+**7. High Disk Usage**
+```bash
+# Check disk usage
+df -h
+
+# Clean Docker artifacts
+docker system prune -a
+
+# If critical, prune old chain data
+docker-compose stop
+sudo rm -rf /mnt/HC_Volume_validator_data/execution/chaindata
+docker-compose start
+```
+
+**8. Validator Not Attesting**
+- Verify node is fully synced
+- Check validator keys are imported
+- Ensure activation is complete on beaconcha.in
+- Verify system time is accurate
+
+**9. Verify Validator Key Password**
+```bash
+# Use the verify-key-password.sh script to test your password
+cd scripts
+./verify-key-password.sh
+# This will test decryption of your keystore with the password
+```
+
+## Cleanup Procedures
+
+### Complete Cleanup
+
+To remove all resources and start fresh:
+
+```bash
+# From project root
+./cleanup.sh
+# Type 'DESTROY' to confirm
+```
+
+### Manual Cleanup (if state lost)
+
+```bash
+# Install hcloud CLI
+brew install hcloud
+
+# Configure
+hcloud context create my-project
+# Enter your API token
+
+# Run manual cleanup
+./manual-cleanup.sh
+```
+
+### Selective Cleanup
+
+```bash
+# Just destroy infrastructure (keep keys)
+cd terraform
+terraform destroy -auto-approve
+
+# Just remove validator keys (keep infrastructure)
+rm -rf scripts/validator_keys_*
+```
+
+## Important Reminders
+
+1. **Security**:
+   - Never share your mnemonic phrase
+   - Keep validator keys backed up securely
+   - Monitor for security updates
+
+2. **Operations**:
+   - Check validator daily
+   - Keep node software updated
+   - Monitor disk space
+
+3. **Exit Planning**:
+   - Plan exit timing carefully
+   - Understand tax implications
+   - Keep records of all operations
+
+---
+
+**Support**: For issues, check the repository issues or seek help in the EthStaker Discord #hoodi-testnet channel.

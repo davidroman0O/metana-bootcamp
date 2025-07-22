@@ -1,0 +1,142 @@
+---
+- name: Configure UFW firewall
+  ufw:
+    rule: "{{ item.rule }}"
+    port: "{{ item.port }}"
+    proto: "{{ item.proto | default('tcp') }}"
+    src: "{{ item.src | default('any') }}"
+  loop:
+    - { rule: 'allow', port: '22', src: "{{ ssh_allowed_ips | join(',') }}" }
+    - { rule: 'allow', port: '30303' }  # Execution P2P
+    - { rule: 'allow', port: '30303', proto: 'udp' }  # Execution P2P discovery
+    - { rule: 'allow', port: '9000' }   # Consensus P2P
+    - { rule: 'allow', port: '9000', proto: 'udp' }   # Consensus P2P discovery
+  notify: reload ufw
+
+- name: Enable UFW
+  ufw:
+    state: enabled
+    policy: deny
+    direction: incoming
+
+- name: Allow outgoing connections
+  ufw:
+    policy: allow
+    direction: outgoing
+
+- name: Configure fail2ban for SSH
+  copy:
+    content: |
+      [sshd]
+      enabled = true
+      port = 22
+      filter = sshd
+      logpath = /var/log/auth.log
+      maxretry = 3
+      bantime = 3600
+      findtime = 600
+    dest: /etc/fail2ban/jail.local
+  notify: restart fail2ban
+
+- name: Harden SSH configuration
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^{{ item.key }}"
+    line: "{{ item.key }} {{ item.value }}"
+    state: present
+  loop:
+    - { key: 'PermitRootLogin', value: 'no' }
+    - { key: 'PasswordAuthentication', value: 'no' }
+    - { key: 'PermitEmptyPasswords', value: 'no' }
+    - { key: 'X11Forwarding', value: 'no' }
+    - { key: 'MaxAuthTries', value: '3' }
+    - { key: 'ClientAliveInterval', value: '300' }
+    - { key: 'ClientAliveCountMax', value: '2' }
+  notify: restart sshd
+
+- name: Configure automatic security updates
+  copy:
+    content: |
+      Unattended-Upgrade::Allowed-Origins {
+          "${distro_id}:${distro_codename}";
+          "${distro_id}:${distro_codename}-security";
+          "${distro_id}ESMApps:${distro_codename}-apps-security";
+          "${distro_id}ESM:${distro_codename}-infra-security";
+      };
+      
+      Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+      Unattended-Upgrade::MinimalSteps "true";
+      Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+      Unattended-Upgrade::Remove-Unused-Dependencies "true";
+      Unattended-Upgrade::Automatic-Reboot "false";
+      Unattended-Upgrade::Automatic-Reboot-Time "03:00";
+    dest: /etc/apt/apt.conf.d/50unattended-upgrades
+
+- name: Enable unattended-upgrades
+  systemd:
+    name: unattended-upgrades
+    enabled: yes
+    state: started
+
+- name: Set kernel parameters for security
+  sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  loop:
+    - { key: 'net.ipv4.tcp_syncookies', value: '1' }
+    - { key: 'net.ipv4.conf.all.rp_filter', value: '1' }
+    - { key: 'net.ipv4.conf.default.rp_filter', value: '1' }
+    - { key: 'net.ipv4.conf.all.accept_source_route', value: '0' }
+    - { key: 'net.ipv4.conf.default.accept_source_route', value: '0' }
+    - { key: 'net.ipv4.conf.all.send_redirects', value: '0' }
+    - { key: 'net.ipv4.conf.default.send_redirects', value: '0' }
+    - { key: 'net.ipv4.conf.all.accept_redirects', value: '0' }
+    - { key: 'net.ipv4.conf.default.accept_redirects', value: '0' }
+    - { key: 'net.ipv4.icmp_echo_ignore_broadcasts', value: '1' }
+    - { key: 'net.ipv4.icmp_ignore_bogus_error_responses', value: '1' }
+    - { key: 'net.ipv4.conf.all.log_martians', value: '1' }
+    - { key: 'net.ipv4.conf.default.log_martians', value: '1' }
+
+- name: Create backup script
+  copy:
+    content: |
+      #!/bin/bash
+      # Ethereum validator backup script
+      
+      BACKUP_DIR="/home/validator/backups"
+      DATE=$(date +%Y%m%d_%H%M%S)
+      
+      # Create backup directory
+      mkdir -p "$BACKUP_DIR"
+      
+      # Backup validator keys (encrypted)
+      if [ -d "/home/validator/ethereum/keys" ]; then
+        tar -czf "$BACKUP_DIR/validator-keys-$DATE.tar.gz.enc" \
+          -C /home/validator/ethereum keys/ | \
+          openssl enc -aes-256-cbc -salt -pbkdf2 -in - -out - \
+          -pass pass:"${BACKUP_PASSWORD:-changeme}"
+      fi
+      
+      # Backup configuration files
+      tar -czf "$BACKUP_DIR/configs-$DATE.tar.gz" \
+        /home/validator/ethereum/eth-docker/.env \
+        /home/validator/ethereum/configs/
+      
+      # Keep only last 7 days of backups
+      find "$BACKUP_DIR" -type f -mtime +7 -delete
+      
+      echo "Backup completed: $DATE"
+    dest: /home/validator/backup.sh
+    owner: validator
+    group: validator
+    mode: '0750'
+
+- name: Create backup cron job
+  cron:
+    name: "Daily validator backup"
+    user: validator
+    hour: "2"
+    minute: "0"
+    job: "/home/validator/backup.sh >> /home/validator/backup.log 2>&1"

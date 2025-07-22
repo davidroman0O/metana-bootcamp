@@ -1,0 +1,143 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+
+packages:
+  - docker.io
+  - docker-compose
+  - git
+  - curl
+  - wget
+  - htop
+  - iotop
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - jq
+
+users:
+  - name: validator
+    groups: [docker, sudo]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+write_files:
+  - path: /etc/sysctl.d/99-ethereum.conf
+    content: |
+      # Ethereum node optimizations
+      net.core.rmem_max = 134217728
+      net.core.wmem_max = 134217728
+      net.ipv4.tcp_rmem = 4096 87380 134217728
+      net.ipv4.tcp_wmem = 4096 65536 134217728
+      vm.swappiness = 10
+      
+  - path: /etc/docker/daemon.json
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": {
+          "max-size": "10m",
+          "max-file": "3"
+        }
+      }
+      
+  - path: /home/validator/setup-validator.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -e
+      
+      echo "Setting up Ethereum validator..."
+      
+      # Create directories
+      mkdir -p /home/validator/{ethereum,monitoring,keys}
+      
+      # Clone eth-docker
+      cd /home/validator
+      git clone https://github.com/eth-educators/eth-docker.git
+      cd eth-docker
+      
+      # Create .env file
+      cat > .env <<EOF
+      COMPOSE_FILE=teku-besu.yml:grafana.yml
+      EC_CLIENT=${execution_client}
+      CC_CLIENT=${consensus_client}
+      NETWORK=hoodi
+      EC_DATA_DIR=/mnt/HC_Volume_validator_data/execution
+      CC_DATA_DIR=/mnt/HC_Volume_validator_data/consensus
+      VALIDATOR_DATA_DIR=/mnt/HC_Volume_validator_data/validator
+      EOF
+      
+      echo "Basic setup complete. Run './ethd config' to continue setup."
+
+runcmd:
+  # Configure firewall
+  - ufw --force enable
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow ssh
+  - ufw allow 30303/tcp
+  - ufw allow 30303/udp
+  - ufw allow 9000/tcp
+  - ufw allow 9000/udp
+  
+  # Configure fail2ban
+  - systemctl enable fail2ban
+  - systemctl start fail2ban
+  
+  # Configure automatic security updates
+  - echo 'Unattended-Upgrade::Automatic-Reboot "false";' >> /etc/apt/apt.conf.d/50unattended-upgrades
+  - systemctl enable unattended-upgrades
+  
+  # Apply sysctl settings
+  - sysctl -p /etc/sysctl.d/99-ethereum.conf
+  
+  # Restart docker with new settings
+  - systemctl restart docker
+  
+  # Format and mount the data volume (if attached)
+  - |
+    if [ -e /dev/sdb ]; then
+      mkfs.ext4 -F /dev/sdb
+      mkdir -p /mnt/HC_Volume_validator_data
+      mount /dev/sdb /mnt/HC_Volume_validator_data
+      echo '/dev/sdb /mnt/HC_Volume_validator_data ext4 defaults,nofail 0 0' >> /etc/fstab
+      chown validator:validator /mnt/HC_Volume_validator_data
+    fi
+  
+  # Run setup script as validator user
+  - su - validator -c "/home/validator/setup-validator.sh"
+  
+  # Create systemd service for monitoring disk space
+  - |
+    cat > /etc/systemd/system/disk-monitor.service <<EOF
+    [Unit]
+    Description=Monitor disk space
+    
+    [Service]
+    Type=oneshot
+    ExecStart=/bin/bash -c 'df -h | grep -E "^/dev/" | awk "{if (\\$5+0 > 80) print \\$0}"'
+    
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+  
+  - |
+    cat > /etc/systemd/system/disk-monitor.timer <<EOF
+    [Unit]
+    Description=Run disk monitor every hour
+    
+    [Timer]
+    OnBootSec=5min
+    OnUnitActiveSec=1h
+    
+    [Install]
+    WantedBy=timers.target
+    EOF
+  
+  - systemctl enable disk-monitor.timer
+  - systemctl start disk-monitor.timer
+
+final_message: "Ethereum validator node initial setup complete!"

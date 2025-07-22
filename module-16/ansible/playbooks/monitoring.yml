@@ -1,0 +1,152 @@
+---
+- name: Setup Prometheus monitoring directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: validator
+    group: validator
+    mode: '0755'
+  loop:
+    - "{{ ethereum_base_dir }}/monitoring"
+    - "{{ ethereum_base_dir }}/monitoring/prometheus"
+    - "{{ ethereum_base_dir }}/monitoring/grafana"
+    - "{{ ethereum_base_dir }}/monitoring/alertmanager"
+
+- name: Create Prometheus configuration
+  copy:
+    content: |
+      global:
+        scrape_interval: 15s
+        evaluation_interval: 15s
+      
+      scrape_configs:
+        - job_name: 'node_exporter'
+          static_configs:
+            - targets: ['node-exporter:9100']
+        
+        - job_name: 'ethereum_execution'
+          static_configs:
+            - targets: ['execution:8008']
+          metrics_path: /metrics
+        
+        - job_name: 'ethereum_consensus'
+          static_configs:
+            - targets: ['consensus:8008']
+          metrics_path: /metrics
+        
+        - job_name: 'ethereum_validator'
+          static_configs:
+            - targets: ['validator:8008']
+          metrics_path: /metrics
+    dest: "{{ ethereum_base_dir }}/monitoring/prometheus/prometheus.yml"
+    owner: validator
+    group: validator
+    mode: '0644'
+
+- name: Create alerting rules
+  copy:
+    content: |
+      groups:
+        - name: validator_alerts
+          interval: 30s
+          rules:
+            - alert: ValidatorOffline
+              expr: up{job="ethereum_validator"} == 0
+              for: 5m
+              labels:
+                severity: critical
+              annotations:
+                summary: "Validator is offline"
+                description: "Validator has been offline for more than 5 minutes"
+            
+            - alert: DiskSpaceLow
+              expr: node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} < 0.1
+              for: 5m
+              labels:
+                severity: warning
+              annotations:
+                summary: "Low disk space"
+                description: "Less than 10% disk space remaining"
+            
+            - alert: HighCPUUsage
+              expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "High CPU usage"
+                description: "CPU usage is above 80% for 10 minutes"
+            
+            - alert: HighMemoryUsage
+              expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.9
+              for: 10m
+              labels:
+                severity: warning
+              annotations:
+                summary: "High memory usage"
+                description: "Memory usage is above 90% for 10 minutes"
+    dest: "{{ ethereum_base_dir }}/monitoring/prometheus/alerts.yml"
+    owner: validator
+    group: validator
+    mode: '0644'
+
+- name: Create Grafana provisioning directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: validator
+    group: validator
+    mode: '0755'
+  loop:
+    - "{{ ethereum_base_dir }}/monitoring/grafana/provisioning"
+    - "{{ ethereum_base_dir }}/monitoring/grafana/provisioning/datasources"
+    - "{{ ethereum_base_dir }}/monitoring/grafana/provisioning/dashboards"
+
+- name: Configure Grafana datasource
+  copy:
+    content: |
+      apiVersion: 1
+      
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          access: proxy
+          url: http://prometheus:9090
+          isDefault: true
+          editable: true
+    dest: "{{ ethereum_base_dir }}/monitoring/grafana/provisioning/datasources/prometheus.yml"
+    owner: validator
+    group: validator
+    mode: '0644'
+
+- name: Create monitoring docker-compose override
+  copy:
+    content: |
+      version: '3.8'
+      
+      services:
+        node-exporter:
+          image: prom/node-exporter:latest
+          container_name: node-exporter
+          restart: unless-stopped
+          volumes:
+            - /proc:/host/proc:ro
+            - /sys:/host/sys:ro
+            - /:/rootfs:ro
+          command:
+            - '--path.procfs=/host/proc'
+            - '--path.rootfs=/rootfs'
+            - '--path.sysfs=/host/sys'
+            - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+          ports:
+            - "127.0.0.1:9100:9100"
+          networks:
+            - eth-docker_default
+      
+      networks:
+        eth-docker_default:
+          external: true
+    dest: "{{ ethereum_base_dir }}/monitoring/docker-compose.monitoring.yml"
+    owner: validator
+    group: validator
+    mode: '0644'

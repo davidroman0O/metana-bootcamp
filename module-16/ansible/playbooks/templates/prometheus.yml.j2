@@ -1,0 +1,22 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - "alerts.yml"
+
+scrape_configs:
+  - job_name: '{{ execution_client }}'
+    static_configs:
+      - targets: ['execution:9545']
+    metrics_path: /metrics
+  
+  - job_name: 'teku'
+    static_configs:
+      - targets: ['consensus:8008']
+    metrics_path: /metrics
+      
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']

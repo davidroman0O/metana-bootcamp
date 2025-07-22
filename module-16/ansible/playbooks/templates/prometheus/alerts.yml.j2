@@ -1,0 +1,174 @@
+groups:
+  - name: validator_alerts
+    interval: 30s
+    rules:
+      # Execution Client Alerts
+      - alert: ExecutionClientDown
+        expr: up{job="{{ execution_client }}"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: execution
+        annotations:
+          summary: "Execution client ({{ execution_client }}) is down"
+          description: "{{ execution_client }} has been down for more than 5 minutes on {{ '{{' }} $labels.instance {{ '}}' }}"
+      
+      - alert: ExecutionClientNotSynced
+        expr: |
+          {% if execution_client == 'nethermind' %}
+          nethermind_sync_peers < 3
+          {% else %}
+          besu_synchronizer_world_state_pending_requests_current > 100
+          {% endif %}
+        for: 15m
+        labels:
+          severity: warning
+          service: execution
+        annotations:
+          summary: "Execution client not fully synced"
+          description: "{{ execution_client }} appears to be having sync issues on {{ '{{' }} $labels.instance {{ '}}' }}"
+      
+      # Consensus Client Alerts
+      - alert: ConsensusClientDown
+        expr: up{job="teku"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: consensus
+        annotations:
+          summary: "Consensus client (Teku) is down"
+          description: "Teku has been down for more than 5 minutes on {{ '{{' }} $labels.instance {{ '}}' }}"
+      
+      - alert: ConsensusClientNotSynced
+        expr: teku_beacon_head_slot - teku_beacon_slot > 100
+        for: 10m
+        labels:
+          severity: warning
+          service: consensus
+        annotations:
+          summary: "Consensus client falling behind"
+          description: "Teku is more than 100 slots behind the chain head on {{ '{{' }} $labels.instance {{ '}}' }}"
+      
+      # Validator Performance Alerts
+      - alert: ValidatorMissedAttestations
+        expr: rate(teku_validator_attestation_published_total[5m]) < 0.9
+        for: 10m
+        labels:
+          severity: warning
+          service: validator
+        annotations:
+          summary: "Validator missing attestations"
+          description: "Validator is missing more than 10% of attestations on {{ '{{' }} $labels.instance {{ '}}' }}"
+      
+      - alert: ValidatorOffline
+        expr: teku_validator_active == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: validator
+        annotations:
+          summary: "Validator appears offline"
+          description: "No active validators detected on {{ '{{' }} $labels.instance {{ '}}' }}"
+      
+      # System Resource Alerts
+      - alert: HighMemoryUsage
+        expr: |
+          (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / 
+          node_memory_MemTotal_bytes > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is above 90% for more than 10 minutes on {{ '{{' }} $labels.instance {{ '}}' }}"
+      
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 15m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is above 85% for more than 15 minutes on {{ '{{' }} $labels.instance {{ '}}' }}"
+      
+      - alert: DiskSpaceLow
+        expr: |
+          node_filesystem_avail_bytes{mountpoint="/",fstype!="tmpfs"} / 
+          node_filesystem_size_bytes{mountpoint="/",fstype!="tmpfs"} < 0.1
+        for: 5m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "Low disk space on root partition"
+          description: "Less than 10% disk space remaining on root partition of {{ '{{' }} $labels.instance {{ '}}' }}"
+      
+      - alert: DataVolumeDiskSpaceLow
+        expr: |
+          node_filesystem_avail_bytes{mountpoint="{{ data_volume_path }}",fstype!="tmpfs"} / 
+          node_filesystem_size_bytes{mountpoint="{{ data_volume_path }}",fstype!="tmpfs"} < 0.15
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "Low disk space on data volume"
+          description: "Less than 15% disk space remaining on data volume of {{ '{{' }} $labels.instance {{ '}}' }}"
+      
+      # Network Connectivity Alerts
+      - alert: LowPeerCount
+        expr: |
+          {% if execution_client == 'nethermind' %}
+          nethermind_sync_peers < 3
+          {% else %}
+          besu_peers_peer_count_current < 3
+          {% endif %}
+        for: 10m
+        labels:
+          severity: warning
+          service: network
+        annotations:
+          summary: "Low peer count on execution client"
+          description: "{{ execution_client }} has less than 3 peers for more than 10 minutes"
+      
+      - alert: ConsensusLowPeerCount
+        expr: teku_networking_peer_connection_active < 10
+        for: 10m
+        labels:
+          severity: warning
+          service: network
+        annotations:
+          summary: "Low peer count on consensus client"
+          description: "Teku has less than 10 peers for more than 10 minutes"
+      
+      # Container Health Alerts
+      - alert: ContainerRestarting
+        expr: |
+          rate(container_last_seen{name=~"eth-docker-.*"}[15m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: docker
+        annotations:
+          summary: "Container restarting frequently"
+          description: "Container {{ '{{' }} $labels.name {{ '}}' }} is restarting frequently"
+      
+      # Hoodi Testnet Specific Alerts
+      - alert: HoodiTestnetIssue
+        expr: |
+          {% if execution_client == 'nethermind' %}
+          nethermind_blocks_invalid_total > 0
+          {% else %}
+          besu_blockchain_chain_head_block_number - besu_synchronizer_chain_head_block_number > 100
+          {% endif %}
+        for: 10m
+        labels:
+          severity: warning
+          service: network
+          network: hoodi
+        annotations:
+          summary: "Potential Hoodi testnet issue detected"
+          description: "Abnormal behavior detected that may indicate Hoodi testnet issues"

@@ -1,0 +1,279 @@
+version: "3.8"
+
+services:
+  execution:
+    container_name: eth-docker-execution-1
+{% if execution_client == 'besu' %}
+    image: hyperledger/besu:{{ besu_docker_tag | default('latest') }}
+    restart: unless-stopped
+    stop_grace_period: 3m
+    user: "{{ ansible_user_uid }}:{{ ansible_user_gid }}"
+    volumes:
+      - {{ data_volume_path }}/execution:/var/lib/besu
+      - ./jwt/jwt.hex:/jwt/jwt.hex:ro
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "{{ el_p2p_port | default('30303') }}:{{ el_p2p_port | default('30303') }}/tcp"
+      - "{{ el_p2p_port | default('30303') }}:{{ el_p2p_port | default('30303') }}/udp"
+    networks:
+      - eth-docker
+    environment:
+      - LOG4J_CONFIGURATION_FILE=/etc/besu/log4j2.xml
+    command:
+      - --network={{ network }}
+      - --data-path=/var/lib/besu
+      - --rpc-http-enabled=true
+      - --rpc-http-host=0.0.0.0
+      - --rpc-http-port=8545
+      - --rpc-ws-enabled=true
+      - --rpc-ws-host=0.0.0.0
+      - --rpc-ws-port=8546
+      - --host-allowlist=*
+      - --rpc-http-cors-origins=*
+      - --engine-host-allowlist=*
+      - --engine-rpc-enabled=true
+      - --engine-rpc-port=8551
+      - --engine-jwt-secret=/jwt/jwt.hex
+      - --sync-mode=SNAP
+      - --data-storage-format=BONSAI
+      - --nat-method=DOCKER
+      - --metrics-enabled=true
+      - --metrics-host=0.0.0.0
+      - --metrics-port=9545
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8545"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '4.0'
+        reservations:
+          memory: 6G
+          cpus: '2.0'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+        compress: "true"
+{% else %}
+    # Nethermind execution client
+    image: nethermind/nethermind:{{ nethermind_docker_tag | default('latest') }}
+    restart: unless-stopped
+    stop_grace_period: 3m
+    volumes:
+      - {{ data_volume_path }}/execution:/data
+      - ./jwt/jwt.hex:/jwt/jwt.hex:ro
+      - ./custom:/nethermind/custom:ro
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "{{ el_p2p_port | default('30303') }}:{{ el_p2p_port | default('30303') }}/tcp"
+      - "{{ el_p2p_port | default('30303') }}:{{ el_p2p_port | default('30303') }}/udp"
+      - "9545:9545"  # Metrics port
+    networks:
+      - eth-docker
+    command:
+      - --config=hoodi
+      - --datadir=/data
+      - --log=INFO
+      - --Network.DiscoveryPort={{ el_p2p_port | default('30303') }}
+      - --Network.P2PPort={{ el_p2p_port | default('30303') }}
+      - --JsonRpc.Enabled=true
+      - --JsonRpc.Host=0.0.0.0
+      - --JsonRpc.Port=8545
+      - --JsonRpc.WebSocketsPort=8546
+      - --JsonRpc.EngineHost=0.0.0.0
+      - --JsonRpc.EnginePort=8551
+      - --JsonRpc.JwtSecretFile=/jwt/jwt.hex
+      - --Sync.FastSync=true
+      - --Sync.SnapSync=true
+      - --Sync.NonValidatorNode=true
+      - --Metrics.Enabled=true
+      - --Metrics.ExposePort=9545
+      - --Metrics.IntervalSeconds=5
+{% endif %}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8545"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '4.0'
+        reservations:
+          memory: 6G
+          cpus: '2.0'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+        compress: "true"
+    labels:
+      - "prometheus-job=execution"
+      - "prometheus-port=9545"
+
+  consensus:
+    container_name: eth-docker-consensus-1
+    image: consensys/teku:{{ teku_docker_tag | default('latest') }}
+    restart: unless-stopped
+    stop_grace_period: 3m
+    user: "{{ ansible_user_uid }}:{{ ansible_user_gid }}"
+    depends_on:
+      - execution
+    volumes:
+      - {{ data_volume_path }}/teku:/var/lib/teku
+      - ./jwt/jwt.hex:/jwt/jwt.hex:ro
+      - ./validator-keys:/validator-keys:rw
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "{{ cl_p2p_port | default('9000') }}:{{ cl_p2p_port | default('9000') }}/tcp"
+      - "{{ cl_p2p_port | default('9000') }}:{{ cl_p2p_port | default('9000') }}/udp"
+      - "8008:8008"  # Metrics port
+    networks:
+      - eth-docker
+    environment:
+      - JAVA_OPTS=-Xmx{{ teku_heap | default('6g') }} -XX:SoftMaxHeapSize={{ teku_heap | default('6g') }}
+      - TEKU_OPTS=-XX:+UseG1GC
+    command:
+      - --network={{ network }}
+      - --data-base-path=/var/lib/teku
+      - --data-storage-mode=PRUNE
+      - --rest-api-enabled=true
+      - --rest-api-docs-enabled=true
+      - --rest-api-host-allowlist=*
+      - --rest-api-interface=0.0.0.0
+      - --rest-api-port=5052
+      - --ee-endpoint=http://execution:8551
+      - --ee-jwt-secret-file=/jwt/jwt.hex
+      - --log-destination=CONSOLE
+      - --metrics-enabled=true
+      - --metrics-host-allowlist=*
+      - --metrics-interface=0.0.0.0
+      - --metrics-port=8008
+      - --p2p-port={{ cl_p2p_port | default('9000') }}
+      - --validators-graffiti={{ validator_graffiti | default('Hoodi Validator') }}
+      - --validator-keys=/validator-keys:/validator-keys
+      - --validators-proposer-default-fee-recipient=0x{{ validator_fee_recipient | default('0000000000000000000000000000000000000000') }}
+      - --validators-keystore-locking-enabled=false
+{% if checkpoint_sync_url is defined and checkpoint_sync_url %}
+      - --checkpoint-sync-url={{ checkpoint_sync_url }}
+{% endif %}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5052/eth/v1/node/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '2.0'
+        reservations:
+          memory: 6G
+          cpus: '1.0'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+        compress: "true"
+    labels:
+      - "prometheus-job=consensus"
+      - "prometheus-port=8008"
+
+{% if enable_monitoring | bool %}
+  grafana:
+    container_name: eth-docker-grafana-1
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    user: "0"
+    ports:
+      - "{{ grafana_port | default('3000') }}:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD={{ grafana_admin_password }}
+      - GF_INSTALL_PLUGINS=
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+    networks:
+      - eth-docker
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+        compress: "true"
+
+  prometheus:
+    container_name: eth-docker-prometheus-1
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    user: "0"
+    ports:
+      - "{{ prometheus_port | default('9090') }}:9090"
+    volumes:
+      - prometheus-data:/prometheus
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.console.libraries=/usr/share/prometheus/console_libraries
+      - --web.console.templates=/usr/share/prometheus/consoles
+    networks:
+      - eth-docker
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+        compress: "true"
+
+  node-exporter:
+    container_name: eth-docker-node-exporter-1
+    image: prom/node-exporter:latest
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --collector.filesystem.mount-points-exclude
+      - ^/(sys|proc|dev|host|etc)($$|/)
+    networks:
+      - eth-docker
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+        compress: "true"
+    labels:
+      - "prometheus-job=node-exporter"
+      - "prometheus-port=9100"
+{% endif %}
+
+networks:
+  eth-docker:
+    name: eth-docker
+
+volumes:
+{% if enable_monitoring | bool %}
+  grafana-data:
+  prometheus-data:
+{% endif %}
