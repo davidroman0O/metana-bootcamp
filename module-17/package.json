@@ -8,6 +8,7 @@
     "test": "hardhat test",
     "test:coverage": "hardhat coverage",
     "test:integration": "hardhat test test/integration/*.test.ts",
+    "test:e2e": "hardhat test test/e2e/GovernanceTasksFlow.test.ts --network localhost",
     "test:gas": "REPORT_GAS=true hardhat test",
     "deploy:local": "hardhat run scripts/localhost/deploy-governance.ts --network localhost",
     "deploy:sepolia": "hardhat run scripts/deploy-governance.ts --network sepolia",

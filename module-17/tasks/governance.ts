@@ -262,13 +262,25 @@ task("gov:execute", "Execute a queued proposal")
     if (!timelockAddress) throw new Error("Timelock not deployed");
     const timelock = await ethers.getContractAt("Timelock", timelockAddress);
     
-    // Calculate the operation ID (same way governor does it)
+    // Calculate the operation ID using timelock's hashOperationBatch
+    // IMPORTANT: GovernorTimelockControl uses a special salt calculation:
+    // salt = bytes20(address(governor)) ^ descriptionHash
     const descriptionHash = ethers.id(description);
-    const operationId = ethers.keccak256(
-      ethers.AbiCoder.defaultAbiCoder().encode(
-        ["address[]", "uint256[]", "bytes[]", "uint256", "bytes32"],
-        [targets, values, calldatas, 0n, descriptionHash]
-      )
+    
+    // Convert governor address to bytes20 then pad to bytes32
+    const governorBytes20 = ethers.zeroPadValue(governorAddress, 20);
+    const governorBytes32 = ethers.zeroPadBytes(governorBytes20, 32);
+    
+    // XOR with description hash
+    const salt = ethers.toBigInt(governorBytes32) ^ ethers.toBigInt(descriptionHash);
+    const saltBytes32 = ethers.zeroPadValue(ethers.toBeHex(salt), 32);
+    
+    const operationId = await timelock.hashOperationBatch(
+      targets,
+      values,
+      calldatas,
+      ethers.ZeroHash, // predecessor (always 0 for governor operations)
+      saltBytes32      // salt = bytes20(governor) ^ descriptionHash
     );
     
     // Check if operation is ready
@@ -850,4 +862,63 @@ task("gov:check-roles", "Check governance roles for all contracts")
     
     console.log(`\n   Executor (0x0...0):`);
     console.log(`     EXECUTOR_ROLE: ${await timelock.hasRole(EXECUTOR_ROLE, ethers.ZeroAddress) ? "✅" : "❌"} (public execution)`);
+  });
+
+task("gov:votes", "Check voting progress for a proposal")
+  .addParam("proposalId", "The proposal ID to check votes for")
+  .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
+    const { ethers } = hre;
+    
+    const governorAddress = getContractAddress("DAOGovernor", hre.network.name);
+    if (!governorAddress) throw new Error("DAOGovernor not deployed");
+    const governor = await ethers.getContractAt("DAOGovernor", governorAddress);
+    
+    const tokenAddress = getContractAddress("GovernanceToken", hre.network.name);
+    if (!tokenAddress) throw new Error("GovernanceToken not deployed");
+    const token = await ethers.getContractAt("GovernanceToken", tokenAddress);
+    
+    console.log(`📊 Checking votes for proposal ${taskArgs.proposalId}...`);
+    
+    try {
+      // Get proposal state
+      const state = await governor.state(taskArgs.proposalId);
+      const states = ["Pending", "Active", "Canceled", "Defeated", "Succeeded", "Queued", "Expired", "Executed"];
+      console.log(`\n📋 Proposal State: ${states[Number(state)]}`);
+      
+      // Get voting data
+      const votes = await governor.proposalVotes(taskArgs.proposalId);
+      console.log(`\n🗳️ Current Votes:`);
+      console.log(`   For: ${ethers.formatEther(votes.forVotes)} votes`);
+      console.log(`   Against: ${ethers.formatEther(votes.againstVotes)} votes`);
+      console.log(`   Abstain: ${ethers.formatEther(votes.abstainVotes)} votes`);
+      
+      const totalVotes = votes.forVotes + votes.againstVotes + votes.abstainVotes;
+      console.log(`   Total: ${ethers.formatEther(totalVotes)} votes`);
+      
+      // Check if user has voted
+      const [signer] = await ethers.getSigners();
+      try {
+        const hasVoted = await governor.hasVoted(taskArgs.proposalId, signer.address);
+        console.log(`\n👤 Your Vote: ${hasVoted ? "✅ Already voted" : "❌ Not voted yet"}`);
+      } catch (error) {
+        // hasVoted might not be available in older versions
+      }
+      
+      // Check quorum
+      const snapshot = await governor.proposalSnapshot(taskArgs.proposalId);
+      const quorum = await governor.quorum(snapshot);
+      const quorumReached = votes.forVotes >= quorum;
+      console.log(`\n📋 Quorum: ${ethers.formatEther(quorum)} (${quorumReached ? "✅ Met" : "❌ Not Met"})`);
+      
+      // If active, show time remaining
+      if (state === 1n) { // Active
+        const deadline = await governor.proposalDeadline(taskArgs.proposalId);
+        const currentBlock = await ethers.provider.getBlockNumber();
+        const blocksRemaining = Number(deadline) - currentBlock;
+        console.log(`\n⏰ Voting ends in: ${blocksRemaining} blocks`);
+      }
+    } catch (error: any) {
+      console.error(`\n❌ Error checking votes: ${error.message}`);
+      throw error;
+    }
   });

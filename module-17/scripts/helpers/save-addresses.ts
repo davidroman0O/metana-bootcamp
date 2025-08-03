@@ -14,7 +14,7 @@ export interface DeploymentAddresses {
 
 export function saveAddresses(addresses: DeploymentAddresses, networkName: string): string {
   // Create addresses directory if it doesn't exist
-  const addressesDir = path.join(__dirname, "../../addresses");
+  const addressesDir = path.join(__dirname, "../addresses");
   if (!fs.existsSync(addressesDir)) {
     fs.mkdirSync(addressesDir, { recursive: true });
   }
@@ -28,7 +28,7 @@ export function saveAddresses(addresses: DeploymentAddresses, networkName: strin
 }
 
 export function loadAddresses(networkName: string): DeploymentAddresses | null {
-  const addressesPath = path.join(__dirname, "../../addresses", `${networkName}.json`);
+  const addressesPath = path.join(__dirname, "../addresses", `${networkName}.json`);
   
   if (!fs.existsSync(addressesPath)) {
     console.log(`❌ No addresses found for network: ${networkName}`);

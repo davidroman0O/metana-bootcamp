@@ -1,0 +1,18 @@
+{
+  "network": "localhost",
+  "deployedAt": "2025-08-03T20:12:02.084Z",
+  "contracts": {
+    "GovernanceToken": "0x720472c8ce72c2A2D711333e064ABD3E6BbEAdd3",
+    "Timelock": "0x5067457698Fd6Fa1C6964e416b3f42713513B3dD",
+    "DAOGovernor": "0x18E317A7D70d8fBf8e6E893616b52390EbBdb629"
+  },
+  "configuration": {
+    "tokenSupply": "10000000.0",
+    "timelockDelay": "300 seconds (5 minutes)",
+    "votingDelay": "1 blocks",
+    "votingPeriod": "20 blocks (~4 minutes)",
+    "proposalThreshold": "1000.0 tokens",
+    "quorum": "4%",
+    "mode": "test"
+  }
+}
