@@ -208,7 +208,7 @@ task("ops:execute", "Execute a scheduled timelock operation")
   });
 
 task("ops:cancel", "Cancel a scheduled timelock operation")
-  .addParam("operationId", "The operation ID to cancel")
+  .addParam("operationid", "The operation ID to cancel")
   .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
     const { ethers } = hre;
     const { signer, isLedger } = await getSignerWithInfo(hre);
@@ -217,14 +217,14 @@ task("ops:cancel", "Cancel a scheduled timelock operation")
     if (!timelockAddress) throw new Error("Timelock not deployed");
     const timelock = await ethers.getContractAt("Timelock", timelockAddress, signer);
     
-    console.log(`\n❌ Cancelling operation ${taskArgs.operationId}...`);
+    console.log(`\n❌ Cancelling operation ${taskArgs.operationid}...`);
     
     try {
       if (isLedger) {
         console.log("\n📱 Please approve the cancel transaction on your Ledger device");
       }
       
-      const tx = await timelock.cancel(taskArgs.operationId);
+      const tx = await timelock.cancel(taskArgs.operationid);
       
       console.log(`\n⏳ Cancel transaction submitted: ${tx.hash}`);
       console.log("   Waiting for confirmation...");
@@ -282,7 +282,27 @@ task("ops:batch-schedule", "Schedule multiple operations as a batch")
     if (!timelockAddress) throw new Error("Timelock not deployed");
     const timelock = await ethers.getContractAt("Timelock", timelockAddress, signer);
     
-    const targets = taskArgs.targets.split(",");
+    // Parse and resolve targets
+    const targetInputs = taskArgs.targets.split(",");
+    const targets = targetInputs.map((target: string) => {
+      const trimmedTarget = target.trim();
+      if (trimmedTarget.toLowerCase() === 'token') {
+        const addr = getContractAddress("GovernanceToken", hre.network.name);
+        if (!addr) throw new Error("GovernanceToken not deployed");
+        return addr;
+      } else if (trimmedTarget.toLowerCase() === 'timelock') {
+        return timelockAddress;
+      } else if (trimmedTarget.toLowerCase() === 'governor') {
+        const addr = getContractAddress("DAOGovernor", hre.network.name);
+        if (!addr) throw new Error("DAOGovernor not deployed");
+        return addr;
+      } else if (ethers.isAddress(trimmedTarget)) {
+        return trimmedTarget;
+      } else {
+        throw new Error(`Invalid target: ${trimmedTarget}. Must be a valid address or 'token'/'timelock'/'governor'`);
+      }
+    });
+    
     const values = taskArgs.values.split(",").map((v: string) => BigInt(v));
     const datas = taskArgs.datas.split(",");
     const salt = ethers.randomBytes(32);

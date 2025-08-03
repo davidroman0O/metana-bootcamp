@@ -1,10 +1,10 @@
 {
   "network": "sepolia",
-  "deployedAt": "2025-08-03T19:08:12.842Z",
+  "deployedAt": "2025-08-03T23:25:01.309Z",
   "contracts": {
-    "GovernanceToken": "0xD1b0cB3e098584326cCAD160196F3B71824729e3",
-    "Timelock": "0x8340b12Eab1cB956A873422897a9F3DcF528639d",
-    "DAOGovernor": "0x409Aa69e148a33073836EFC0FafCA53ad9695828"
+    "GovernanceToken": "0x38001097CaBD109777128eaff91C55729a617e89",
+    "Timelock": "0xa465C34e5591754b7459a73d24FFd9975650a42D",
+    "DAOGovernor": "0x524E3dFd038F73189dCDBfe65395C37b6D0b379d"
   },
   "configuration": {
     "tokenSupply": "1000000",

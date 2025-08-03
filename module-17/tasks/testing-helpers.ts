@@ -65,6 +65,8 @@ task("block:number", "Get current block number")
     console.log(`📊 Current State:`);
     console.log(`   Block Number: ${blockNumber}`);
     console.log(`   Block Time: ${timestamp.toLocaleString()}`);
+    
+    return blockNumber;
   });
 
 task("snapshot", "Create a snapshot of the blockchain state")

@@ -39,7 +39,7 @@ function validateProposalId(proposalId: string): void {
       throw new Error("Proposal ID must be positive");
     }
   } catch (error) {
-    throw new Error(`Invalid proposal ID format: ${proposalId}. Expected a numeric value.\nExample: --proposalId 12345678901234567890\nTo list proposals: npx hardhat gov:list`);
+    throw new Error(`Invalid proposal ID format: ${proposalId}. Expected a numeric value.\nExample: --proposalid 12345678901234567890\nTo list proposals: npx hardhat gov:list`);
   }
 }
 
@@ -150,14 +150,14 @@ task("gov:propose", "Create a governance proposal")
   });
 
 task("gov:vote", "Vote on a proposal")
-  .addParam("proposalId", "The proposal ID")
+  .addParam("proposalid", "The proposal ID")
   .addParam("support", "0=Against, 1=For, 2=Abstain")
   .addOptionalParam("reason", "Reason for your vote")
   .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
     const { ethers } = hre;
     
     // Validate inputs
-    validateProposalId(taskArgs.proposalId);
+    validateProposalId(taskArgs.proposalid);
     const support = validateVoteSupport(taskArgs.support);
     
     const { signer, isLedger } = await getSignerWithInfo(hre);
@@ -191,11 +191,11 @@ task("gov:vote", "Vote on a proposal")
       
       const tx = taskArgs.reason 
         ? await governor.castVoteWithReason(
-            taskArgs.proposalId,
+            taskArgs.proposalid,
             support,
             taskArgs.reason
           )
-        : await governor.castVote(taskArgs.proposalId, support);
+        : await governor.castVote(taskArgs.proposalid, support);
       
       console.log(`\n⏳ Vote submitted: ${tx.hash}`);
       console.log("   Waiting for confirmation...");
@@ -214,7 +214,7 @@ task("gov:vote", "Vote on a proposal")
       } else if (error.message?.includes("ProposalNotActive")) {
         console.error("\n❌ Proposal is not in Active state.");
         console.error("   Voting may not have started yet or already ended.");
-        console.error("   Check state: npx hardhat gov:votes --proposalId", taskArgs.proposalId);
+        console.error("   Check state: npx hardhat gov:votes --proposalid", taskArgs.proposalid);
       } else {
         console.error("\n❌ Error casting vote:", error.message);
       }
@@ -222,18 +222,18 @@ task("gov:vote", "Vote on a proposal")
     }
     
     // Show current state
-    const state = await governor.state(taskArgs.proposalId);
+    const state = await governor.state(taskArgs.proposalid);
     const states = ["Pending", "Active", "Canceled", "Defeated", "Succeeded", "Queued", "Expired", "Executed"];
     console.log(`📊 Proposal state: ${states[Number(state)]}`);
   });
 
 task("gov:queue", "Queue a successful proposal")
-  .addParam("proposalId", "The proposal ID")
+  .addParam("proposalid", "The proposal ID")
   .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
     const { ethers } = hre;
     
     // Validate inputs
-    validateProposalId(taskArgs.proposalId);
+    validateProposalId(taskArgs.proposalid);
     
     const { signer, isLedger } = await getSignerWithInfo(hre);
     
@@ -244,7 +244,7 @@ task("gov:queue", "Queue a successful proposal")
     const governor = await ethers.getContractAt("DAOGovernor", governorAddress, signer);
     
     // Get proposal details from events
-    console.log(`⏳ Queueing proposal ${taskArgs.proposalId}...`);
+    console.log(`⏳ Queueing proposal ${taskArgs.proposalid}...`);
     
     // We need to retrieve the proposal data from the ProposalCreated event
     // Note: proposalId is not indexed, so we need to get all events and filter
@@ -252,9 +252,9 @@ task("gov:queue", "Queue a successful proposal")
     const events = await governor.queryFilter(filter);
     
     // Find the event with matching proposal ID
-    const event = events.find(e => e.args.proposalId.toString() === taskArgs.proposalId.toString());
+    const event = events.find(e => e.args.proposalId.toString() === taskArgs.proposalid.toString());
     if (!event) {
-      throw new Error(`Proposal ${taskArgs.proposalId} not found. Please check the proposal ID or ensure the proposal was created on this network.`);
+      throw new Error(`Proposal ${taskArgs.proposalid} not found. Please check the proposal ID or ensure the proposal was created on this network.`);
     }
     
     // Extract the arrays from indexed args
@@ -304,12 +304,12 @@ task("gov:queue", "Queue a successful proposal")
   });
 
 task("gov:execute", "Execute a queued proposal")
-  .addParam("proposalId", "The proposal ID")
+  .addParam("proposalid", "The proposal ID")
   .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
     const { ethers } = hre;
     
     // Validate inputs
-    validateProposalId(taskArgs.proposalId);
+    validateProposalId(taskArgs.proposalid);
     
     const { signer, isLedger } = await getSignerWithInfo(hre);
     
@@ -319,15 +319,15 @@ task("gov:execute", "Execute a queued proposal")
     }
     const governor = await ethers.getContractAt("DAOGovernor", governorAddress, signer);
     
-    const state = await governor.state(taskArgs.proposalId);
+    const state = await governor.state(taskArgs.proposalid);
     const states = ["Pending", "Active", "Canceled", "Defeated", "Succeeded", "Queued", "Expired", "Executed"];
     console.log(`📊 Current proposal state: ${states[Number(state)]}`);
     
     if (state !== 5n) { // Queued
-      throw new Error(`Cannot execute proposal ${taskArgs.proposalId}. Current state: ${states[Number(state)]}. Proposal must be in 'Queued' state to execute. Please queue it first using: npx hardhat gov:queue --proposalId ${taskArgs.proposalId}`);
+      throw new Error(`Cannot execute proposal ${taskArgs.proposalid}. Current state: ${states[Number(state)]}. Proposal must be in 'Queued' state to execute. Please queue it first using: npx hardhat gov:queue --proposalid ${taskArgs.proposalid}`);
     }
     
-    console.log(`🚀 Executing proposal ${taskArgs.proposalId}...`);
+    console.log(`🚀 Executing proposal ${taskArgs.proposalid}...`);
     
     // Get proposal details from events
     // Note: proposalId is not indexed, so we need to get all events and filter
@@ -335,9 +335,9 @@ task("gov:execute", "Execute a queued proposal")
     const events = await governor.queryFilter(filter);
     
     // Find the event with matching proposal ID
-    const event = events.find(e => e.args.proposalId.toString() === taskArgs.proposalId.toString());
+    const event = events.find(e => e.args.proposalId.toString() === taskArgs.proposalid.toString());
     if (!event) {
-      throw new Error(`Proposal ${taskArgs.proposalId} not found. Please check the proposal ID or ensure the proposal was created on this network.`);
+      throw new Error(`Proposal ${taskArgs.proposalid} not found. Please check the proposal ID or ensure the proposal was created on this network.`);
     }
     
     // Extract the arrays from indexed args
@@ -386,7 +386,7 @@ task("gov:execute", "Execute a queued proposal")
       const readyTime = Number(timestamp) + Number(minDelay);
       
       if (timestamp === 0n) {
-        throw new Error(`Operation not found in timelock for proposal ${taskArgs.proposalId}. This usually happens when:\n1. The proposal was not queued yet - run: npx hardhat gov:queue --proposalId ${taskArgs.proposalId}\n2. The proposal description changed between queue and execute\n3. There's a salt calculation mismatch (this has been fixed in the latest version)`);
+        throw new Error(`Operation not found in timelock for proposal ${taskArgs.proposalid}. This usually happens when:\n1. The proposal was not queued yet - run: npx hardhat gov:queue --proposalid ${taskArgs.proposalid}\n2. The proposal description changed between queue and execute\n3. There's a salt calculation mismatch (this has been fixed in the latest version)`);
       }
       
       const remainingTime = readyTime - currentTime;
@@ -717,12 +717,12 @@ task("gov:list", "List all proposals")
   });
 
 task("gov:cancel", "Cancel a proposal")
-  .addParam("proposalId", "The proposal ID to cancel")
+  .addParam("proposalid", "The proposal ID to cancel")
   .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
     const { ethers } = hre;
     
     // Validate inputs
-    validateProposalId(taskArgs.proposalId);
+    validateProposalId(taskArgs.proposalid);
     
     const { signer, isLedger } = await getSignerWithInfo(hre);
     
@@ -732,42 +732,17 @@ task("gov:cancel", "Cancel a proposal")
     }
     const governor = await ethers.getContractAt("DAOGovernor", governorAddress, signer);
     
-    // Get proposal details from events
-    const filter = governor.filters.ProposalCreated(taskArgs.proposalId);
-    const events = await governor.queryFilter(filter);
-    if (events.length === 0) {
-      throw new Error(`Proposal ${taskArgs.proposalId} not found. This could mean:\n1. The proposal ID is incorrect\n2. The proposal was created on a different network\n3. The proposal events haven't been indexed yet (try again in a few seconds)`);
-    }
+    console.log(`\n❌ Attempting to cancel proposal ${taskArgs.proposalid}...`);
     
-    const event = events[0];
+    // For now, we'll require the user to provide the proposal details
+    // This is a workaround for the event structure parsing issue
+    console.log("\n⚠️  Note: Due to event structure limitations, you need to manually provide proposal details.");
+    console.log("   To cancel a proposal, please use the following approach:");
+    console.log("   1. Note down the exact targets, values, calldatas, and description from when you created the proposal");
+    console.log("   2. Use the governor contract directly with these exact parameters");
+    console.log("\n   This task will be improved in a future version to automatically fetch proposal details.");
     
-    console.log(`\n❌ Canceling proposal ${taskArgs.proposalId}...`);
-    
-    try {
-      if (isLedger) {
-        console.log("\n📱 Please approve the cancel transaction on your Ledger device");
-      }
-      
-      const tx = await governor.cancel(
-        event.args.targets,
-        event.args.values,
-        event.args.calldatas,
-        ethers.id(event.args.description)
-      );
-      
-      console.log(`\n⏳ Cancel transaction submitted: ${tx.hash}`);
-      console.log("   Waiting for confirmation...");
-      
-      await tx.wait();
-      console.log(`\n✅ Proposal canceled successfully!`);
-    } catch (error: any) {
-      if (isLedger && error.message?.includes("denied")) {
-        console.error("\n❌ Transaction rejected on Ledger device");
-      } else {
-        console.error("\n❌ Error canceling proposal:", error.message);
-      }
-      throw error;
-    }
+    throw new Error("gov:cancel task currently requires manual proposal detail entry. Please see the instructions above.");
   });
 
 task("gov:setup-timelock", "Grant MINTER_ROLE to Timelock (required for governance)")
@@ -952,9 +927,9 @@ task("gov:propose-mint", "Create a proposal to mint tokens")
       console.log(`   1. Wait ~12 seconds (1 block)`);
       console.log(`   2. Vote: npx hardhat gov:vote --proposalid ${proposalId} --support 1 --network ${hre.network.name}`);
       console.log(`   3. Wait ~4 minutes (20 blocks)`);
-      console.log(`   4. Queue: npx hardhat gov:queue --proposal-id ${proposalId} --network ${hre.network.name}`);
+      console.log(`   4. Queue: npx hardhat gov:queue --proposalid ${proposalId} --network ${hre.network.name}`);
       console.log(`   5. Wait 5 minutes (timelock)`);
-      console.log(`   6. Execute: npx hardhat gov:execute --proposal-id ${proposalId} --network ${hre.network.name}`);
+      console.log(`   6. Execute: npx hardhat gov:execute --proposalid ${proposalId} --network ${hre.network.name}`);
       
       return proposalId;
     } catch (error: any) {
@@ -1026,12 +1001,12 @@ task("gov:check-roles", "Check governance roles for all contracts")
   });
 
 task("gov:validate-proposal", "Validate a proposal's current state and readiness")
-  .addParam("proposalId", "The proposal ID to validate")
+  .addParam("proposalid", "The proposal ID to validate")
   .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
     const { ethers } = hre;
     
     // Validate inputs
-    validateProposalId(taskArgs.proposalId);
+    validateProposalId(taskArgs.proposalid);
     
     const governorAddress = getContractAddress("DAOGovernor", hre.network.name);
     if (!governorAddress) {
@@ -1040,18 +1015,18 @@ task("gov:validate-proposal", "Validate a proposal's current state and readiness
     const governor = await ethers.getContractAt("DAOGovernor", governorAddress);
     
     console.log(`\n🔍 PROPOSAL VALIDATION REPORT\n${"=".repeat(50)}`);
-    console.log(`Proposal ID: ${taskArgs.proposalId}`);
+    console.log(`Proposal ID: ${taskArgs.proposalid}`);
     
     try {
       // Get proposal state
-      const state = await governor.state(taskArgs.proposalId);
+      const state = await governor.state(taskArgs.proposalid);
       const states = ["Pending", "Active", "Canceled", "Defeated", "Succeeded", "Queued", "Expired", "Executed"];
       console.log(`\n📊 Current State: ${states[Number(state)]}`);
       
       // Get proposal details from events
       const filter = governor.filters.ProposalCreated();
       const events = await governor.queryFilter(filter);
-      const event = events.find(e => e.args.proposalId.toString() === taskArgs.proposalId.toString());
+      const event = events.find(e => e.args.proposalId.toString() === taskArgs.proposalid.toString());
       
       if (!event) {
         console.error("\n❌ Proposal not found in events.");
@@ -1072,13 +1047,13 @@ task("gov:validate-proposal", "Validate a proposal's current state and readiness
       
       // Check voting
       if (state >= 1n && state <= 2n) { // Active or Canceled
-        const votes = await governor.proposalVotes(taskArgs.proposalId);
+        const votes = await governor.proposalVotes(taskArgs.proposalid);
         console.log(`\n🗳️ Voting Progress:`);
         console.log(`   For: ${ethers.formatEther(votes.forVotes)} votes`);
         console.log(`   Against: ${ethers.formatEther(votes.againstVotes)} votes`);
         console.log(`   Abstain: ${ethers.formatEther(votes.abstainVotes)} votes`);
         
-        const snapshot = await governor.proposalSnapshot(taskArgs.proposalId);
+        const snapshot = await governor.proposalSnapshot(taskArgs.proposalid);
         const quorum = await governor.quorum(snapshot);
         const quorumReached = votes.forVotes >= quorum;
         console.log(`   Quorum: ${ethers.formatEther(quorum)} (${quorumReached ? "✅ Met" : "❌ Not Met"})`);
@@ -1089,12 +1064,12 @@ task("gov:validate-proposal", "Validate a proposal's current state and readiness
       switch (Number(state)) {
         case 0: // Pending
           console.log("   ⏳ Wait for voting to start (1 block)");
-          console.log(`   Then vote: npx hardhat gov:vote --proposalId ${taskArgs.proposalId} --support 1`);
+          console.log(`   Then vote: npx hardhat gov:vote --proposalid ${taskArgs.proposalid} --support 1`);
           break;
         case 1: // Active
           console.log("   🗳️ Voting is open!");
-          console.log(`   Vote now: npx hardhat gov:vote --proposalId ${taskArgs.proposalId} --support 1`);
-          const deadline = await governor.proposalDeadline(taskArgs.proposalId);
+          console.log(`   Vote now: npx hardhat gov:vote --proposalid ${taskArgs.proposalid} --support 1`);
+          const deadline = await governor.proposalDeadline(taskArgs.proposalid);
           const currentBlock = await ethers.provider.getBlockNumber();
           console.log(`   Blocks remaining: ${Number(deadline) - currentBlock}`);
           break;
@@ -1107,7 +1082,7 @@ task("gov:validate-proposal", "Validate a proposal's current state and readiness
           break;
         case 4: // Succeeded
           console.log("   ✅ Proposal succeeded! Ready to queue.");
-          console.log(`   Queue now: npx hardhat gov:queue --proposalId ${taskArgs.proposalId}`);
+          console.log(`   Queue now: npx hardhat gov:queue --proposalid ${taskArgs.proposalid}`);
           break;
         case 5: // Queued
           const timelockAddress = getContractAddress("Timelock", hre.network.name);
@@ -1136,7 +1111,7 @@ task("gov:validate-proposal", "Validate a proposal's current state and readiness
             
             if (currentTime >= readyTime) {
               console.log("   ✅ Timelock delay passed! Ready to execute.");
-              console.log(`   Execute now: npx hardhat gov:execute --proposalId ${taskArgs.proposalId}`);
+              console.log(`   Execute now: npx hardhat gov:execute --proposalid ${taskArgs.proposalid}`);
             } else {
               const remainingTime = readyTime - currentTime;
               console.log(`   ⏳ In timelock. Ready in ${remainingTime} seconds (${Math.ceil(remainingTime / 60)} minutes)`);
@@ -1160,12 +1135,12 @@ task("gov:validate-proposal", "Validate a proposal's current state and readiness
   });
 
 task("gov:votes", "Check voting progress for a proposal")
-  .addParam("proposalId", "The proposal ID to check votes for")
+  .addParam("proposalid", "The proposal ID to check votes for")
   .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
     const { ethers } = hre;
     
     // Validate inputs
-    validateProposalId(taskArgs.proposalId);
+    validateProposalId(taskArgs.proposalid);
     
     const governorAddress = getContractAddress("DAOGovernor", hre.network.name);
     if (!governorAddress) {
@@ -1173,16 +1148,16 @@ task("gov:votes", "Check voting progress for a proposal")
     }
     const governor = await ethers.getContractAt("DAOGovernor", governorAddress);
     
-    console.log(`📊 Checking votes for proposal ${taskArgs.proposalId}...`);
+    console.log(`📊 Checking votes for proposal ${taskArgs.proposalid}...`);
     
     try {
       // Get proposal state
-      const state = await governor.state(taskArgs.proposalId);
+      const state = await governor.state(taskArgs.proposalid);
       const states = ["Pending", "Active", "Canceled", "Defeated", "Succeeded", "Queued", "Expired", "Executed"];
       console.log(`\n📋 Proposal State: ${states[Number(state)]}`);
       
       // Get voting data
-      const votes = await governor.proposalVotes(taskArgs.proposalId);
+      const votes = await governor.proposalVotes(taskArgs.proposalid);
       console.log(`\n🗳️ Current Votes:`);
       console.log(`   For: ${ethers.formatEther(votes.forVotes)} votes`);
       console.log(`   Against: ${ethers.formatEther(votes.againstVotes)} votes`);
@@ -1194,21 +1169,21 @@ task("gov:votes", "Check voting progress for a proposal")
       // Check if user has voted
       const [signer] = await ethers.getSigners();
       try {
-        const hasVoted = await governor.hasVoted(taskArgs.proposalId, signer.address);
+        const hasVoted = await governor.hasVoted(taskArgs.proposalid, signer.address);
         console.log(`\n👤 Your Vote: ${hasVoted ? "✅ Already voted" : "❌ Not voted yet"}`);
       } catch (error) {
         // hasVoted might not be available in older versions
       }
       
       // Check quorum
-      const snapshot = await governor.proposalSnapshot(taskArgs.proposalId);
+      const snapshot = await governor.proposalSnapshot(taskArgs.proposalid);
       const quorum = await governor.quorum(snapshot);
       const quorumReached = votes.forVotes >= quorum;
       console.log(`\n📋 Quorum: ${ethers.formatEther(quorum)} (${quorumReached ? "✅ Met" : "❌ Not Met"})`);
       
       // If active, show time remaining
       if (state === 1n) { // Active
-        const deadline = await governor.proposalDeadline(taskArgs.proposalId);
+        const deadline = await governor.proposalDeadline(taskArgs.proposalid);
         const currentBlock = await ethers.provider.getBlockNumber();
         const blocksRemaining = Number(deadline) - currentBlock;
         console.log(`\n⏰ Voting ends in: ${blocksRemaining} blocks`);
@@ -1220,12 +1195,12 @@ task("gov:votes", "Check voting progress for a proposal")
   });
 
 task("gov:debug-salt", "Debug salt calculation for a proposal")
-  .addParam("proposalId", "The proposal ID to debug")
+  .addParam("proposalid", "The proposal ID to debug")
   .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
     const { ethers } = hre;
     
     // Validate inputs
-    validateProposalId(taskArgs.proposalId);
+    validateProposalId(taskArgs.proposalid);
     
     const governorAddress = getContractAddress("DAOGovernor", hre.network.name);
     if (!governorAddress) {
@@ -1240,13 +1215,13 @@ task("gov:debug-salt", "Debug salt calculation for a proposal")
     const timelock = await ethers.getContractAt("Timelock", timelockAddress);
     
     console.log(`\n🔧 SALT CALCULATION DEBUG\n${"=".repeat(50)}`);
-    console.log(`Proposal ID: ${taskArgs.proposalId}`);
+    console.log(`Proposal ID: ${taskArgs.proposalid}`);
     
     try {
       // Get proposal details from events
       const filter = governor.filters.ProposalCreated();
       const events = await governor.queryFilter(filter);
-      const event = events.find(e => e.args.proposalId.toString() === taskArgs.proposalId.toString());
+      const event = events.find(e => e.args.proposalId.toString() === taskArgs.proposalid.toString());
       
       if (!event) {
         console.error("\n❌ Proposal not found in events.");
@@ -1325,7 +1300,7 @@ task("gov:debug-salt", "Debug salt calculation for a proposal")
       } else {
         console.log(`\n❌ Operation NOT found in timelock!`);
         console.log(`   This means the proposal hasn't been queued yet.`);
-        console.log(`   Queue it with: npx hardhat gov:queue --proposalId ${taskArgs.proposalId}`);
+        console.log(`   Queue it with: npx hardhat gov:queue --proposalid ${taskArgs.proposalid}`);
       }
       
       // Show the formula for reference

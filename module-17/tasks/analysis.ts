@@ -3,7 +3,7 @@ import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { getContractAddress } from "../scripts/helpers/save-addresses";
 
 task("analyze:proposal", "Analyze a specific proposal")
-  .addParam("proposalId", "The proposal ID to analyze")
+  .addParam("proposalid", "The proposal ID to analyze")
   .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
     const { ethers } = hre;
     const governorAddress = getContractAddress("DAOGovernor", hre.network.name);
@@ -15,17 +15,17 @@ task("analyze:proposal", "Analyze a specific proposal")
     const token = await ethers.getContractAt("GovernanceToken", tokenAddress);
     
     console.log(`\n📊 PROPOSAL ANALYSIS\n${"=".repeat(50)}`);
-    console.log(`Proposal ID: ${taskArgs.proposalId}`);
+    console.log(`Proposal ID: ${taskArgs.proposalid}`);
     
     // Get proposal state
-    const state = await governor.state(taskArgs.proposalId);
+    const state = await governor.state(taskArgs.proposalid);
     const states = ["Pending", "Active", "Canceled", "Defeated", "Succeeded", "Queued", "Expired", "Executed"];
     console.log(`State: ${states[Number(state)]}`);
     
     // Get proposal details
-    const votes = await governor.proposalVotes(taskArgs.proposalId);
-    const snapshot = await governor.proposalSnapshot(taskArgs.proposalId);
-    const deadline = await governor.proposalDeadline(taskArgs.proposalId);
+    const votes = await governor.proposalVotes(taskArgs.proposalid);
+    const snapshot = await governor.proposalSnapshot(taskArgs.proposalid);
+    const deadline = await governor.proposalDeadline(taskArgs.proposalid);
     
     console.log(`\n📈 Voting Summary:`);
     console.log(`   For: ${ethers.formatEther(votes.forVotes)} votes`);
