@@ -2,30 +2,70 @@ import { task } from "hardhat/config";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { getContractAddress } from "../scripts/helpers/save-addresses";
 
+// Helper function to get signer with proper detection
+async function getSignerWithInfo(hre: HardhatRuntimeEnvironment) {
+  const [signer] = await hre.ethers.getSigners();
+  
+  // Check if we're using Ledger based on the network config
+  const networkConfig = hre.network.config as any;
+  const isLedger = networkConfig.ledgerAccounts && networkConfig.ledgerAccounts.length > 0;
+  
+  if (isLedger) {
+    console.log("🔐 Using Ledger Hardware Wallet");
+    console.log("   Account:", signer.address);
+    console.log("   Please review and approve transactions on your device");
+  } else {
+    console.log("🔑 Using software wallet");
+    console.log("   Account:", signer.address);
+  }
+  
+  return { signer, isLedger };
+}
+
 task("token:mint", "Mint new tokens")
   .addParam("to", "Recipient address")
   .addParam("amount", "Amount of tokens (in ETH units)")
   .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
     const { ethers } = hre;
+    const { signer, isLedger } = await getSignerWithInfo(hre);
+    
     const tokenAddress = getContractAddress("GovernanceToken", hre.network.name);
     if (!tokenAddress) throw new Error("GovernanceToken not deployed");
-    const token = await ethers.getContractAt("GovernanceToken", tokenAddress);
+    const token = await ethers.getContractAt("GovernanceToken", tokenAddress, signer);
     
     const amount = ethers.parseEther(taskArgs.amount);
     
-    console.log(`🪙 Minting ${taskArgs.amount} tokens to ${taskArgs.to}...`);
-    const tx = await token.mint(taskArgs.to, amount);
-    await tx.wait();
+    console.log(`\n🪙 Minting ${taskArgs.amount} tokens to ${taskArgs.to}...`);
+    
+    try {
+      if (isLedger) {
+        console.log("\n📱 Please approve the mint transaction on your Ledger device");
+      }
+      
+      const tx = await token.mint(taskArgs.to, amount);
+      
+      console.log(`\n⏳ Mint transaction submitted: ${tx.hash}`);
+      console.log("   Waiting for confirmation...");
+      
+      await tx.wait();
     
     const balance = await token.balanceOf(taskArgs.to);
-    console.log(`✅ Minting complete!`);
-    console.log(`📊 New balance: ${ethers.formatEther(balance)} tokens`);
-    
-    // Check if they need to delegate
-    const votes = await token.getVotes(taskArgs.to);
-    if (votes === 0n) {
-      console.log(`\n⚠️  Note: ${taskArgs.to} has not delegated their voting power yet.`);
-      console.log(`   They need to delegate (even to themselves) to participate in governance.`);
+      console.log(`\n✅ Minting complete!`);
+      console.log(`📊 New balance: ${ethers.formatEther(balance)} tokens`);
+      
+      // Check if they need to delegate
+      const votes = await token.getVotes(taskArgs.to);
+      if (votes === 0n) {
+        console.log(`\n⚠️  Note: ${taskArgs.to} has not delegated their voting power yet.`);
+        console.log(`   They need to delegate (even to themselves) to participate in governance.`);
+      }
+    } catch (error: any) {
+      if (isLedger && error.message?.includes("denied")) {
+        console.error("\n❌ Transaction rejected on Ledger device");
+      } else {
+        console.error("\n❌ Error minting tokens:", error.message);
+      }
+      throw error;
     }
   });
 
@@ -147,10 +187,11 @@ task("token:transfer", "Transfer tokens to another address")
   .addParam("amount", "Amount of tokens (in ETH units)")
   .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
     const { ethers } = hre;
+    const { signer, isLedger } = await getSignerWithInfo(hre);
+    
     const tokenAddress = getContractAddress("GovernanceToken", hre.network.name);
     if (!tokenAddress) throw new Error("GovernanceToken not deployed");
-    const token = await ethers.getContractAt("GovernanceToken", tokenAddress);
-    const [signer] = await ethers.getSigners();
+    const token = await ethers.getContractAt("GovernanceToken", tokenAddress, signer);
     
     const amount = ethers.parseEther(taskArgs.amount);
     const balanceBefore = await token.balanceOf(signer.address);
@@ -159,16 +200,34 @@ task("token:transfer", "Transfer tokens to another address")
       throw new Error(`Insufficient balance. You have ${ethers.formatEther(balanceBefore)} tokens`);
     }
     
-    console.log(`💸 Transferring ${taskArgs.amount} tokens to ${taskArgs.to}...`);
-    const tx = await token.transfer(taskArgs.to, amount);
-    await tx.wait();
+    console.log(`\n💸 Transferring ${taskArgs.amount} tokens to ${taskArgs.to}...`);
     
-    const balanceAfter = await token.balanceOf(signer.address);
-    const recipientBalance = await token.balanceOf(taskArgs.to);
-    
-    console.log(`✅ Transfer complete!`);
-    console.log(`📊 Your new balance: ${ethers.formatEther(balanceAfter)} tokens`);
-    console.log(`📊 Recipient balance: ${ethers.formatEther(recipientBalance)} tokens`);
+    try {
+      if (isLedger) {
+        console.log("\n📱 Please approve the transfer transaction on your Ledger device");
+      }
+      
+      const tx = await token.transfer(taskArgs.to, amount);
+      
+      console.log(`\n⏳ Transfer transaction submitted: ${tx.hash}`);
+      console.log("   Waiting for confirmation...");
+      
+      await tx.wait();
+      
+      const balanceAfter = await token.balanceOf(signer.address);
+      const recipientBalance = await token.balanceOf(taskArgs.to);
+      
+      console.log(`\n✅ Transfer complete!`);
+      console.log(`📊 Your new balance: ${ethers.formatEther(balanceAfter)} tokens`);
+      console.log(`📊 Recipient balance: ${ethers.formatEther(recipientBalance)} tokens`);
+    } catch (error: any) {
+      if (isLedger && error.message?.includes("denied")) {
+        console.error("\n❌ Transaction rejected on Ledger device");
+      } else {
+        console.error("\n❌ Error transferring tokens:", error.message);
+      }
+      throw error;
+    }
   });
 
 task("token:balance", "Check token balance of an address")

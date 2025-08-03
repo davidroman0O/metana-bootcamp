@@ -2,6 +2,26 @@ import { task } from "hardhat/config";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { getContractAddress } from "../scripts/helpers/save-addresses";
 
+// Helper function to get signer with proper detection
+async function getSignerWithInfo(hre: HardhatRuntimeEnvironment) {
+  const [signer] = await hre.ethers.getSigners();
+  
+  // Check if we're using Ledger based on the network config
+  const networkConfig = hre.network.config as any;
+  const isLedger = networkConfig.ledgerAccounts && networkConfig.ledgerAccounts.length > 0;
+  
+  if (isLedger) {
+    console.log("🔐 Using Ledger Hardware Wallet");
+    console.log("   Account:", signer.address);
+    console.log("   Please review and approve transactions on your device");
+  } else {
+    console.log("🔑 Using software wallet");
+    console.log("   Account:", signer.address);
+  }
+  
+  return { signer, isLedger };
+}
+
 task("encode:mint", "Encode a mint function call")
   .addParam("to", "Recipient address")
   .addParam("amount", "Amount of tokens to mint")
@@ -39,31 +59,57 @@ task("encode:transfer", "Encode a transfer function call")
   });
 
 task("ops:schedule", "Schedule a timelock operation")
-  .addParam("target", "Target contract address")
+  .addParam("target", "Target contract (address or 'token'/'timelock'/'governor')")
   .addParam("value", "ETH value in wei", "0")
   .addParam("data", "Encoded function call")
   .addParam("delay", "Delay in seconds (minimum from timelock)")
   .addOptionalParam("salt", "Optional salt for operation ID")
   .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
     const { ethers } = hre;
+    const { signer, isLedger } = await getSignerWithInfo(hre);
+    
     const timelockAddress = getContractAddress("Timelock", hre.network.name);
     if (!timelockAddress) throw new Error("Timelock not deployed");
-    const timelock = await ethers.getContractAt("Timelock", timelockAddress);
+    const timelock = await ethers.getContractAt("Timelock", timelockAddress, signer);
+    
+    // Resolve target address
+    let targetAddress = taskArgs.target;
+    if (taskArgs.target.toLowerCase() === 'token') {
+      targetAddress = getContractAddress("GovernanceToken", hre.network.name);
+      if (!targetAddress) throw new Error("GovernanceToken not deployed");
+    } else if (taskArgs.target.toLowerCase() === 'timelock') {
+      targetAddress = timelockAddress;
+    } else if (taskArgs.target.toLowerCase() === 'governor') {
+      targetAddress = getContractAddress("DAOGovernor", hre.network.name);
+      if (!targetAddress) throw new Error("DAOGovernor not deployed");
+    } else if (!ethers.isAddress(taskArgs.target)) {
+      throw new Error("Target must be a valid address or 'token'/'timelock'/'governor'");
+    }
     
     const salt = taskArgs.salt || ethers.randomBytes(32);
     const predecessor = ethers.ZeroHash;
     
-    console.log(`⏰ Scheduling timelock operation...`);
-    const tx = await timelock.schedule(
-      taskArgs.target,
-      taskArgs.value,
-      taskArgs.data,
-      predecessor,
-      salt,
-      taskArgs.delay
-    );
+    console.log(`\n⏰ Scheduling timelock operation...`);
+    console.log(`   Target: ${targetAddress}`);
     
-    const receipt = await tx.wait();
+    try {
+      if (isLedger) {
+        console.log("\n📱 Please approve the schedule transaction on your Ledger device");
+      }
+      
+      const tx = await timelock.schedule(
+        targetAddress,
+        taskArgs.value,
+        taskArgs.data,
+        predecessor,
+        salt,
+        taskArgs.delay
+      );
+      
+      console.log(`\n⏳ Schedule transaction submitted: ${tx.hash}`);
+      console.log("   Waiting for confirmation...");
+      
+      const receipt = await tx.wait();
     const event = receipt?.logs
       .map((log: any) => timelock.interface.parseLog(log))
       .find((log: any) => log?.name === "CallScheduled");
@@ -71,29 +117,53 @@ task("ops:schedule", "Schedule a timelock operation")
     const operationId = event?.args?.id;
     const readyTime = new Date(Date.now() + parseInt(taskArgs.delay) * 1000);
     
-    console.log(`✅ Operation scheduled!`);
-    console.log(`📋 Operation ID: ${operationId}`);
-    console.log(`⏰ Ready at: ${readyTime.toLocaleString()}`);
-    
-    return { operationId, salt };
+      console.log(`\n✅ Operation scheduled!`);
+      console.log(`📋 Operation ID: ${operationId}`);
+      console.log(`⏰ Ready at: ${readyTime.toLocaleString()}`);
+      
+      return { operationId, salt };
+    } catch (error: any) {
+      if (isLedger && error.message?.includes("denied")) {
+        console.error("\n❌ Transaction rejected on Ledger device");
+      } else {
+        console.error("\n❌ Error scheduling operation:", error.message);
+      }
+      throw error;
+    }
   });
 
 task("ops:execute", "Execute a scheduled timelock operation")
-  .addParam("target", "Target contract address")
+  .addParam("target", "Target contract (address or 'token'/'timelock'/'governor')")
   .addParam("value", "ETH value in wei", "0")
   .addParam("data", "Encoded function call")
   .addParam("salt", "Salt used when scheduling")
   .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
     const { ethers } = hre;
+    const { signer, isLedger } = await getSignerWithInfo(hre);
+    
     const timelockAddress = getContractAddress("Timelock", hre.network.name);
     if (!timelockAddress) throw new Error("Timelock not deployed");
-    const timelock = await ethers.getContractAt("Timelock", timelockAddress);
+    const timelock = await ethers.getContractAt("Timelock", timelockAddress, signer);
+    
+    // Resolve target address
+    let targetAddress = taskArgs.target;
+    if (taskArgs.target.toLowerCase() === 'token') {
+      targetAddress = getContractAddress("GovernanceToken", hre.network.name);
+      if (!targetAddress) throw new Error("GovernanceToken not deployed");
+    } else if (taskArgs.target.toLowerCase() === 'timelock') {
+      targetAddress = timelockAddress;
+    } else if (taskArgs.target.toLowerCase() === 'governor') {
+      targetAddress = getContractAddress("DAOGovernor", hre.network.name);
+      if (!targetAddress) throw new Error("DAOGovernor not deployed");
+    } else if (!ethers.isAddress(taskArgs.target)) {
+      throw new Error("Target must be a valid address or 'token'/'timelock'/'governor'");
+    }
     
     const predecessor = ethers.ZeroHash;
     
     // Check if operation is ready
     const operationId = await timelock.hashOperation(
-      taskArgs.target,
+      targetAddress,
       taskArgs.value,
       taskArgs.data,
       predecessor,
@@ -105,33 +175,70 @@ task("ops:execute", "Execute a scheduled timelock operation")
       throw new Error("Operation not ready for execution");
     }
     
-    console.log(`🚀 Executing timelock operation...`);
-    const tx = await timelock.execute(
-      taskArgs.target,
-      taskArgs.value,
-      taskArgs.data,
-      predecessor,
-      taskArgs.salt
-    );
+    console.log(`\n🚀 Executing timelock operation...`);
+    console.log(`   Target: ${targetAddress}`);
     
-    await tx.wait();
-    console.log(`✅ Operation executed successfully!`);
-    console.log(`📋 Operation ID: ${operationId}`);
+    try {
+      if (isLedger) {
+        console.log("\n📱 Please approve the execution transaction on your Ledger device");
+      }
+      
+      const tx = await timelock.execute(
+        targetAddress,
+        taskArgs.value,
+        taskArgs.data,
+        predecessor,
+        taskArgs.salt
+      );
+      
+      console.log(`\n⏳ Execution transaction submitted: ${tx.hash}`);
+      console.log("   Waiting for confirmation...");
+      
+      await tx.wait();
+      console.log(`\n✅ Operation executed successfully!`);
+      console.log(`📋 Operation ID: ${operationId}`);
+    } catch (error: any) {
+      if (isLedger && error.message?.includes("denied")) {
+        console.error("\n❌ Transaction rejected on Ledger device");
+      } else {
+        console.error("\n❌ Error executing operation:", error.message);
+      }
+      throw error;
+    }
   });
 
 task("ops:cancel", "Cancel a scheduled timelock operation")
   .addParam("operationId", "The operation ID to cancel")
   .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
     const { ethers } = hre;
+    const { signer, isLedger } = await getSignerWithInfo(hre);
+    
     const timelockAddress = getContractAddress("Timelock", hre.network.name);
     if (!timelockAddress) throw new Error("Timelock not deployed");
-    const timelock = await ethers.getContractAt("Timelock", timelockAddress);
+    const timelock = await ethers.getContractAt("Timelock", timelockAddress, signer);
     
-    console.log(`❌ Cancelling operation ${taskArgs.operationId}...`);
-    const tx = await timelock.cancel(taskArgs.operationId);
-    await tx.wait();
+    console.log(`\n❌ Cancelling operation ${taskArgs.operationId}...`);
     
-    console.log(`✅ Operation cancelled!`);
+    try {
+      if (isLedger) {
+        console.log("\n📱 Please approve the cancel transaction on your Ledger device");
+      }
+      
+      const tx = await timelock.cancel(taskArgs.operationId);
+      
+      console.log(`\n⏳ Cancel transaction submitted: ${tx.hash}`);
+      console.log("   Waiting for confirmation...");
+      
+      await tx.wait();
+      console.log(`\n✅ Operation cancelled!`);
+    } catch (error: any) {
+      if (isLedger && error.message?.includes("denied")) {
+        console.error("\n❌ Transaction rejected on Ledger device");
+      } else {
+        console.error("\n❌ Error cancelling operation:", error.message);
+      }
+      throw error;
+    }
   });
 
 task("ops:status", "Check status of timelock operations")
@@ -169,9 +276,11 @@ task("ops:batch-schedule", "Schedule multiple operations as a batch")
   .addParam("delay", "Delay in seconds")
   .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
     const { ethers } = hre;
+    const { signer, isLedger } = await getSignerWithInfo(hre);
+    
     const timelockAddress = getContractAddress("Timelock", hre.network.name);
     if (!timelockAddress) throw new Error("Timelock not deployed");
-    const timelock = await ethers.getContractAt("Timelock", timelockAddress);
+    const timelock = await ethers.getContractAt("Timelock", timelockAddress, signer);
     
     const targets = taskArgs.targets.split(",");
     const values = taskArgs.values.split(",").map((v: string) => BigInt(v));
@@ -183,22 +292,39 @@ task("ops:batch-schedule", "Schedule multiple operations as a batch")
       throw new Error("Targets, values, and datas must have the same length");
     }
     
-    console.log(`⏰ Scheduling batch operation with ${targets.length} actions...`);
-    const tx = await timelock.scheduleBatch(
-      targets,
-      values,
-      datas,
-      predecessor,
-      salt,
-      taskArgs.delay
-    );
+    console.log(`\n⏰ Scheduling batch operation with ${targets.length} actions...`);
     
-    await tx.wait();
-    console.log(`✅ Batch operation scheduled!`);
-    console.log(`📋 Salt: ${ethers.hexlify(salt)}`);
-    
-    const readyTime = new Date(Date.now() + parseInt(taskArgs.delay) * 1000);
-    console.log(`⏰ Ready at: ${readyTime.toLocaleString()}`);
+    try {
+      if (isLedger) {
+        console.log("\n📱 Please approve the batch schedule transaction on your Ledger device");
+      }
+      
+      const tx = await timelock.scheduleBatch(
+        targets,
+        values,
+        datas,
+        predecessor,
+        salt,
+        taskArgs.delay
+      );
+      
+      console.log(`\n⏳ Batch schedule transaction submitted: ${tx.hash}`);
+      console.log("   Waiting for confirmation...");
+      
+      await tx.wait();
+      console.log(`\n✅ Batch operation scheduled!`);
+      console.log(`📋 Salt: ${ethers.hexlify(salt)}`);
+      
+      const readyTime = new Date(Date.now() + parseInt(taskArgs.delay) * 1000);
+      console.log(`⏰ Ready at: ${readyTime.toLocaleString()}`);
+    } catch (error: any) {
+      if (isLedger && error.message?.includes("denied")) {
+        console.error("\n❌ Transaction rejected on Ledger device");
+      } else {
+        console.error("\n❌ Error scheduling batch:", error.message);
+      }
+      throw error;
+    }
   });
 
 task("ops:role-info", "Get role member information")
@@ -258,9 +384,11 @@ task("ops:grant-role", "Grant a role to an address")
   .addParam("account", "Address to grant role to")
   .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
     const { ethers } = hre;
+    const { signer, isLedger } = await getSignerWithInfo(hre);
+    
     const timelockAddress = getContractAddress("Timelock", hre.network.name);
     if (!timelockAddress) throw new Error("Timelock not deployed");
-    const timelock = await ethers.getContractAt("Timelock", timelockAddress);
+    const timelock = await ethers.getContractAt("Timelock", timelockAddress, signer);
     
     let roleHash: string;
     switch (taskArgs.role.toLowerCase()) {
@@ -277,18 +405,36 @@ task("ops:grant-role", "Grant a role to an address")
         throw new Error("Invalid role. Use: proposer, executor, or canceller");
     }
     
-    console.log(`🔑 Granting ${taskArgs.role} role to ${taskArgs.account}...`);
-    const tx = await timelock.grantRole(roleHash, taskArgs.account);
-    const receipt = await tx.wait();
+    console.log(`\n🔑 Granting ${taskArgs.role} role to ${taskArgs.account}...`);
     
-    const event = receipt?.logs
-      .map((log: any) => timelock.interface.parseLog(log))
-      .find((log: any) => log?.name === "RoleGranted");
-    
-    if (event) {
-      console.log(`✅ Role granted successfully!`);
-      console.log(`   Role: ${taskArgs.role} (${roleHash})`);
-      console.log(`   Account: ${taskArgs.account}`);
-      console.log(`   Granted by: ${event.args.sender}`);
+    try {
+      if (isLedger) {
+        console.log("\n📱 Please approve the grant role transaction on your Ledger device");
+      }
+      
+      const tx = await timelock.grantRole(roleHash, taskArgs.account);
+      
+      console.log(`\n⏳ Grant role transaction submitted: ${tx.hash}`);
+      console.log("   Waiting for confirmation...");
+      
+      const receipt = await tx.wait();
+      
+      const event = receipt?.logs
+        .map((log: any) => timelock.interface.parseLog(log))
+        .find((log: any) => log?.name === "RoleGranted");
+      
+      if (event) {
+        console.log(`\n✅ Role granted successfully!`);
+        console.log(`   Role: ${taskArgs.role} (${roleHash})`);
+        console.log(`   Account: ${taskArgs.account}`);
+        console.log(`   Granted by: ${event.args.sender}`);
+      }
+    } catch (error: any) {
+      if (isLedger && error.message?.includes("denied")) {
+        console.error("\n❌ Transaction rejected on Ledger device");
+      } else {
+        console.error("\n❌ Error granting role:", error.message);
+      }
+      throw error;
     }
   });

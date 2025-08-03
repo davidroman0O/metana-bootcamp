@@ -1,17 +1,17 @@
 {
   "network": "sepolia",
-  "deployedAt": "2025-08-03T17:29:12.771Z",
+  "deployedAt": "2025-08-03T19:08:12.842Z",
   "contracts": {
-    "GovernanceToken": "0x26D6dD4814fC9aCAf4cBBa8bE6F592a2b41a9E4a",
-    "Timelock": "0x0C996b78e2b56Ada4d814e16ab120B2142471bD3",
-    "DAOGovernor": "0xE7a122dAd622aD498B11DB9382d792ca8f877BbF"
+    "GovernanceToken": "0xD1b0cB3e098584326cCAD160196F3B71824729e3",
+    "Timelock": "0x8340b12Eab1cB956A873422897a9F3DcF528639d",
+    "DAOGovernor": "0x409Aa69e148a33073836EFC0FafCA53ad9695828"
   },
   "configuration": {
     "tokenSupply": "1000000",
-    "timelockDelay": "3600 seconds",
-    "votingDelay": "6545 blocks",
-    "votingPeriod": "45818 blocks",
-    "proposalThreshold": "1.0 tokens",
+    "timelockDelay": "300 seconds",
+    "votingDelay": "1 blocks",
+    "votingPeriod": "20 blocks",
+    "proposalThreshold": "1000.0 tokens",
     "quorum": "4%"
   }
 }

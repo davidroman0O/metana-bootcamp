@@ -1,12 +1,19 @@
 const hre = require("hardhat");
 const fs = require("fs");
 const path = require("path");
+const { getGovernanceParams, formatParams } = require("../../config/governance-params");
 
 async function main() {
   console.log("===========================================");
   console.log("Deploying Governance Contracts to Sepolia");
   console.log("Using Ledger Hardware Wallet");
   console.log("===========================================\n");
+  
+  // Get governance parameters
+  const params = getGovernanceParams();
+  console.log("📋 Governance Parameters:");
+  console.log(formatParams(params));
+  console.log();
   
   // Get Ledger signer
   const [deployer] = await hre.ethers.getSigners();
@@ -40,7 +47,7 @@ async function main() {
   console.log("\n⏰ Deploying Timelock...");
   console.log("Please review and approve on your Ledger device");
   
-  const minDelay = 3600; // 1 hour
+  const minDelay = params.timelockDelay; // From config
   const proposers = [deployer.address]; // Initial proposer
   const executors = [hre.ethers.ZeroAddress]; // Anyone can execute
   
@@ -60,9 +67,9 @@ async function main() {
   const governor = await Governor.deploy(
     await token.getAddress(),
     await timelock.getAddress(),
-    6545,   // 1 day voting delay (in blocks)
-    45818,  // 1 week voting period (in blocks)
-    hre.ethers.parseEther("1") // 1 token proposal threshold
+    params.votingDelay,   // From config
+    params.votingPeriod,  // From config
+    params.proposalThreshold // From config
   );
   await governor.waitForDeployment();
   
@@ -113,15 +120,15 @@ async function main() {
       DAOGovernor: {
         address: await governor.getAddress(),
         transactionHash: (await governor.deploymentTransaction()).hash,
-        votingDelay: "6545 blocks (~1 day)",
-        votingPeriod: "45818 blocks (~1 week)",
-        proposalThreshold: "1 token",
+        votingDelay: `${params.votingDelay} blocks`,
+        votingPeriod: `${params.votingPeriod} blocks`,
+        proposalThreshold: `${hre.ethers.formatEther(params.proposalThreshold)} tokens`,
       }
     },
     configuration: {
       tokenSupply: "1000000 tokens",
-      timelockDelay: "1 hour",
-      quorum: "4%",
+      timelockDelay: `${minDelay} seconds (${minDelay / 60} minutes)`,
+      quorum: `${params.quorumPercentage}%`,
     }
   };
   
@@ -142,10 +149,10 @@ async function main() {
     configuration: {
       tokenSupply: "1000000",
       timelockDelay: `${minDelay} seconds`,
-      votingDelay: `6545 blocks`,
-      votingPeriod: `45818 blocks`,
-      proposalThreshold: `${hre.ethers.formatEther(hre.ethers.parseEther("1"))} tokens`,
-      quorum: `4%`
+      votingDelay: `${params.votingDelay} blocks`,
+      votingPeriod: `${params.votingPeriod} blocks`,
+      proposalThreshold: `${hre.ethers.formatEther(params.proposalThreshold)} tokens`,
+      quorum: `${params.quorumPercentage}%`
     }
   };
   
