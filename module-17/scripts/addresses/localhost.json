@@ -1,10 +1,10 @@
 {
   "network": "localhost",
-  "deployedAt": "2025-08-03T20:12:02.084Z",
+  "deployedAt": "2025-08-03T20:47:49.926Z",
   "contracts": {
-    "GovernanceToken": "0x720472c8ce72c2A2D711333e064ABD3E6BbEAdd3",
-    "Timelock": "0x5067457698Fd6Fa1C6964e416b3f42713513B3dD",
-    "DAOGovernor": "0x18E317A7D70d8fBf8e6E893616b52390EbBdb629"
+    "GovernanceToken": "0x8A93d247134d91e0de6f96547cB0204e5BE8e5D8",
+    "Timelock": "0xF32D39ff9f6Aa7a7A64d7a4F00a54826Ef791a55",
+    "DAOGovernor": "0xd6e1afe5cA8D00A2EFC01B89997abE2De47fdfAf"
   },
   "configuration": {
     "tokenSupply": "10000000.0",
