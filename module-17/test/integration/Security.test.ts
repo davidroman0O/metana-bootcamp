@@ -1,9 +1,16 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { loadFixture, time, mine } from "@nomicfoundation/hardhat-toolbox/network-helpers";
+import { TEST_PARAMS } from "../../config/governance-params";
 // import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
 describe("Governance Security Tests", function () {
+  function ensureMinTokens(amount: bigint): bigint {
+    // Ensure users have enough tokens to propose
+    const threshold = BigInt(TEST_PARAMS.proposalThreshold);
+    return amount > threshold ? amount : threshold + ethers.parseEther("10000");
+  }
+  
   async function deployGovernanceFixture() {
     const [deployer, alice, bob, attacker, whale] = await ethers.getSigners();
     
@@ -13,14 +20,14 @@ describe("Governance Security Tests", function () {
     
     // Mint and distribute tokens
     await token.mint(whale.address, ethers.parseEther("5000000"));     // 5M to whale (50%)
-    await token.mint(alice.address, ethers.parseEther("2000000"));    // 2M to alice (20%)
-    await token.mint(bob.address, ethers.parseEther("2000000"));      // 2M to bob (20%)
-    await token.mint(attacker.address, ethers.parseEther("1000000")); // 1M to attacker (10%)
+    await token.mint(alice.address, ensureMinTokens(ethers.parseEther("2000000")));    // 2M to alice (20%)
+    await token.mint(bob.address, ensureMinTokens(ethers.parseEther("2000000")));      // 2M to bob (20%)
+    await token.mint(attacker.address, ensureMinTokens(ethers.parseEther("1000000"))); // 1M to attacker (10%)
     
     // Deploy timelock
     const Timelock = await ethers.getContractFactory("Timelock");
     const timelock = await Timelock.deploy(
-      3600, // 1 hour delay
+      TEST_PARAMS.timelockDelay, // 5 minutes for testing
       [],
       [ethers.ZeroAddress],
       deployer.address
@@ -31,9 +38,9 @@ describe("Governance Security Tests", function () {
     const governor = await Governor.deploy(
       await token.getAddress(),
       await timelock.getAddress(),
-      1, // 1 block voting delay
-      50, // 50 blocks voting period
-      ethers.parseEther("100000") // 1% proposal threshold
+      TEST_PARAMS.votingDelay, // 1 block
+      TEST_PARAMS.votingPeriod, // 20 blocks
+      TEST_PARAMS.proposalThreshold // 1000 tokens
     );
     
     // Setup roles
@@ -75,7 +82,7 @@ describe("Governance Security Tests", function () {
         .find(log => log?.name === "ProposalCreated")
         ?.args.proposalId;
       
-      await mine(2);
+      await mine(TEST_PARAMS.votingDelay + 1);
       
       // First vote
       await governor.connect(alice).castVote(proposalId, 1);
@@ -103,13 +110,13 @@ describe("Governance Security Tests", function () {
         .find(log => log?.name === "ProposalCreated")
         ?.args.proposalId;
       
-      await mine(2);
+      await mine(TEST_PARAMS.votingDelay + 1);
       
       // Alice votes on time
       await governor.connect(alice).castVote(proposalId, 1);
       
       // Wait past voting period
-      await mine(51);
+      await mine(TEST_PARAMS.votingPeriod + 1);
       
       // Bob tries to vote late
       await expect(
@@ -139,13 +146,13 @@ describe("Governance Security Tests", function () {
         .find(log => log?.name === "ProposalCreated")
         ?.args.proposalId;
       
-      await mine(2);
+      await mine(TEST_PARAMS.votingDelay + 1);
       
       // Vote against
       await governor.connect(alice).castVote(proposalId, 0);
       await governor.connect(bob).castVote(proposalId, 0);
       
-      await mine(50);
+      await mine(TEST_PARAMS.votingPeriod);
       
       // Proposal is defeated
       expect(await governor.state(proposalId)).to.equal(3);
@@ -182,12 +189,12 @@ describe("Governance Security Tests", function () {
         .find(log => log?.name === "ProposalCreated")
         ?.args.proposalId;
       
-      await mine(2);
+      await mine(TEST_PARAMS.votingDelay + 1);
       
       // Even if attacker votes for it
       await governor.connect(attacker).castVote(proposalId, 1);
       
-      await mine(50);
+      await mine(TEST_PARAMS.votingPeriod);
       
       // Proposal actually succeeds because attacker has 1M tokens (> 400k quorum)
       expect(await governor.state(proposalId)).to.equal(4); // Succeeded
@@ -219,7 +226,7 @@ describe("Governance Security Tests", function () {
       // Get snapshot block
       const snapshotBlock = await governor.proposalSnapshot(proposalId);
       
-      await mine(2);
+      await mine(TEST_PARAMS.votingDelay + 1);
       
       // After voting starts, bob transfers tokens to attacker
       await token.connect(bob).transfer(attacker.address, ethers.parseEther("1000000"));
@@ -263,29 +270,31 @@ describe("Governance Security Tests", function () {
         .find(log => log?.name === "ProposalCreated")
         ?.args.proposalId;
       
-      await mine(2);
+      await mine(TEST_PARAMS.votingDelay + 1);
       await governor.connect(alice).castVote(proposalId, 1);
       await governor.connect(bob).castVote(proposalId, 1);
-      await mine(50);
+      await mine(TEST_PARAMS.votingPeriod);
       
       // Queue
       await governor.queue(targets, values, calldatas, ethers.id(description));
       
-      // Try to execute immediately
-      await expect(
-        governor.execute(targets, values, calldatas, ethers.id(description))
-      ).to.be.reverted; // Timelock will revert
-      
-      // Wait partial delay
-      await time.increase(1800); // 30 minutes
-      
-      // Still can't execute
-      await expect(
-        governor.execute(targets, values, calldatas, ethers.id(description))
-      ).to.be.reverted; // Still not enough delay
-      
-      // Wait full delay
-      await time.increase(1801); // Total > 1 hour
+      if (TEST_PARAMS.timelockDelay > 0) {
+        // Try to execute immediately
+        await expect(
+          governor.execute(targets, values, calldatas, ethers.id(description))
+        ).to.be.reverted; // Timelock will revert
+        
+        // Wait partial delay
+        await time.increase(Math.floor(TEST_PARAMS.timelockDelay / 2)); // Half the delay
+        
+        // Still can't execute
+        await expect(
+          governor.execute(targets, values, calldatas, ethers.id(description))
+        ).to.be.reverted; // Still not enough delay
+        
+        // Wait full delay
+        await time.increase(Math.ceil(TEST_PARAMS.timelockDelay / 2) + 1); // Total > delay
+      }
       
       // Now can execute
       await governor.execute(targets, values, calldatas, ethers.id(description));
@@ -309,7 +318,7 @@ describe("Governance Security Tests", function () {
           data,
           predecessor,
           salt,
-          3600
+          TEST_PARAMS.timelockDelay
         )
       ).to.be.revertedWithCustomError(timelock, "AccessControlUnauthorizedAccount");
     });
@@ -333,12 +342,12 @@ describe("Governance Security Tests", function () {
         .find(log => log?.name === "ProposalCreated")
         ?.args.proposalId;
       
-      await mine(2);
+      await mine(TEST_PARAMS.votingDelay + 1);
       
       // Only whale votes
       await governor.connect(whale).castVote(proposalId, 1);
       
-      await mine(50);
+      await mine(TEST_PARAMS.votingPeriod);
       
       // Check if proposal passed
       const state = await governor.state(proposalId);
@@ -367,7 +376,7 @@ describe("Governance Security Tests", function () {
         .find(log => log?.name === "ProposalCreated")
         ?.args.proposalId;
       
-      await mine(2);
+      await mine(TEST_PARAMS.votingDelay + 1);
       
       // Whale votes for
       await governor.connect(whale).castVote(proposalId, 1); // 5M for
@@ -376,7 +385,7 @@ describe("Governance Security Tests", function () {
       await governor.connect(alice).castVote(proposalId, 0); // 2M against
       await governor.connect(bob).castVote(proposalId, 0);   // 2M against
       
-      await mine(50);
+      await mine(TEST_PARAMS.votingPeriod);
       
       // Check result
       const votes = await governor.proposalVotes(proposalId);
@@ -414,16 +423,16 @@ describe("Governance Security Tests", function () {
         .find(log => log?.name === "ProposalCreated")
         ?.args.proposalId;
       
-      await mine(2);
+      await mine(TEST_PARAMS.votingDelay + 1);
       
       // Even if it somehow passed
       await governor.connect(alice).castVote(proposalId, 1);
       await governor.connect(bob).castVote(proposalId, 1);
       await governor.connect(attacker).castVote(proposalId, 1);
       
-      await mine(50);
+      await mine(TEST_PARAMS.votingPeriod);
       await governor.queue(targets, values, calldatas, ethers.id(description));
-      await time.increase(3601);
+      await time.increase(TEST_PARAMS.timelockDelay + 1);
       
       // Execute should succeed since updateDelay exists and timelock has the necessary role
       await governor.execute(targets, values, calldatas, ethers.id(description));

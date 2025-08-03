@@ -1,0 +1,29 @@
+{
+  "network": "sepolia",
+  "chainId": 11155111,
+  "deployer": "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86",
+  "deploymentDate": "2025-08-03T16:44:13.453Z",
+  "contracts": {
+    "GovernanceToken": {
+      "address": "0x1DC120c5057708021437e4902d443068DD6B50d9",
+      "transactionHash": "0x7ed7210118dded833259290b6f04f00d73628c0b5b94e90a77dfb2a5150c21e1"
+    },
+    "Timelock": {
+      "address": "0xe06C99f5E13631ec23dA06BD9B8BA1388584Ca85",
+      "transactionHash": "0x6292ab10168c64ba7b2309d0c0dc49ab84fa3379789d6659660aa03323a774b5",
+      "minDelay": 3600
+    },
+    "DAOGovernor": {
+      "address": "0xAd6FEeE84369F4A5072DE934292F4Da3c4D5082f",
+      "transactionHash": "0xae8136f9e59605cc0ff22e3ef87ed41ca99abcba14cf1ca4b02757497b211e74",
+      "votingDelay": "6545 blocks (~1 day)",
+      "votingPeriod": "45818 blocks (~1 week)",
+      "proposalThreshold": "1 token"
+    }
+  },
+  "configuration": {
+    "tokenSupply": "1000000 tokens",
+    "timelockDelay": "1 hour",
+    "quorum": "4%"
+  }
+}

@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { loadFixture, time } from "@nomicfoundation/hardhat-toolbox/network-helpers";
+import { TEST_PARAMS } from "../../config/governance-params";
 
 describe("GovernanceToken", function () {
   // Fixture for test setup
@@ -191,7 +192,7 @@ describe("GovernanceToken", function () {
       const { token, owner, alice } = await loadFixture(deployTokenFixture);
       
       const amount = ethers.parseEther("100");
-      const deadline = (await time.latest()) + 3600; // 1 hour
+      const deadline = (await time.latest()) + Math.max(60, TEST_PARAMS.timelockDelay); // At least 60 seconds in future
       
       // Create permit signature
       const domain = {

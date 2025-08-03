@@ -40,12 +40,12 @@ contract DAOGovernor is
     )
         Governor("DAO Governor")
         GovernorSettings(
-            uint48(_votingDelay),     // 1 day
-            uint32(_votingPeriod),    // 1 week
-            _proposalThreshold // 1000 tokens
+            uint48(_votingDelay),     // configurable (test: 1 block, prod: 1 block)
+            uint32(_votingPeriod),    // configurable (test: 20 blocks, prod: 50400 blocks)
+            _proposalThreshold        // configurable (test: 1000 tokens, prod: 100k tokens)
         )
         GovernorVotes(_token)
-        GovernorVotesQuorumFraction(4) // 4% quorum
+        GovernorVotesQuorumFraction(4) // 4% quorum (consider making this configurable too)
         GovernorTimelockControl(_timelock)
     {}
     

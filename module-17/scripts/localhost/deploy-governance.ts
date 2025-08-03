@@ -1,9 +1,16 @@
 import { ethers, run, network } from "hardhat";
 import * as fs from "fs";
 import * as path from "path";
+import { getGovernanceParams, formatParams } from "../../config/governance-params";
 
 async function main() {
   console.log("🏛️ Deploying Governance System...\n");
+
+  // Get governance parameters based on environment
+  const params = getGovernanceParams();
+  console.log("📋 Governance Parameters:");
+  console.log(formatParams(params));
+  console.log();
 
   const [deployer] = await ethers.getSigners();
   console.log("Deploying contracts with account:", deployer.address);
@@ -26,9 +33,8 @@ async function main() {
   // Deploy Timelock
   console.log("\n📋 Deploying Timelock...");
   const Timelock = await ethers.getContractFactory("Timelock");
-  const minDelay = 2 * 24 * 60 * 60; // 2 days
   const timelock = await Timelock.deploy(
-    minDelay,
+    params.timelockDelay,
     [], // proposers (will be governor)
     [ethers.ZeroAddress], // executors (anyone can execute)
     deployer.address // admin (will renounce after setup)
@@ -36,7 +42,7 @@ async function main() {
   await timelock.waitForDeployment();
   const timelockAddress = await timelock.getAddress();
   console.log("✅ Timelock deployed to:", timelockAddress);
-  console.log("   Min Delay:", minDelay / 3600, "hours");
+  console.log("   Min Delay:", params.timelockDelay, "seconds (", params.timelockDelay / 60, "minutes)");
 
   // Deploy Governor
   console.log("\n📋 Deploying DAOGovernor...");
@@ -44,16 +50,16 @@ async function main() {
   const governor = await Governor.deploy(
     tokenAddress,
     timelockAddress,
-    1, // 1 block voting delay
-    50400, // ~1 week voting period (assuming 12s blocks)
-    ethers.parseEther("100000") // 1% proposal threshold
+    params.votingDelay,
+    params.votingPeriod,
+    params.proposalThreshold
   );
   await governor.waitForDeployment();
   const governorAddress = await governor.getAddress();
   console.log("✅ DAOGovernor deployed to:", governorAddress);
-  console.log("   Voting Delay:", 1, "blocks");
-  console.log("   Voting Period:", 50400, "blocks (~1 week)");
-  console.log("   Proposal Threshold:", "100,000 tokens (1%)");
+  console.log("   Voting Delay:", params.votingDelay, "blocks (~", params.votingDelay * 12, "seconds)");
+  console.log("   Voting Period:", params.votingPeriod, "blocks (~", Math.round(params.votingPeriod * 12 / 60), "minutes)");
+  console.log("   Proposal Threshold:", ethers.formatEther(params.proposalThreshold), "tokens");
 
   // Setup roles
   console.log("\n🔧 Setting up roles...");
@@ -89,11 +95,12 @@ async function main() {
     },
     configuration: {
       tokenSupply: ethers.formatEther(initialSupply),
-      timelockDelay: `${minDelay} seconds (${minDelay / 3600} hours)`,
-      votingDelay: "1 blocks",
-      votingPeriod: "50400 blocks (~1 week)",
-      proposalThreshold: "100000 tokens (1%)",
-      quorum: "4%"
+      timelockDelay: `${params.timelockDelay} seconds (${params.timelockDelay / 60} minutes)`,
+      votingDelay: `${params.votingDelay} blocks`,
+      votingPeriod: `${params.votingPeriod} blocks (~${Math.round(params.votingPeriod * 12 / 60)} minutes)`,
+      proposalThreshold: `${ethers.formatEther(params.proposalThreshold)} tokens`,
+      quorum: `${params.quorumPercentage}%`,
+      mode: process.env.GOVERNANCE_MODE || 'test'
     }
   };
 
@@ -135,7 +142,7 @@ async function main() {
       await run("verify:verify", {
         address: timelockAddress,
         constructorArguments: [
-          minDelay,
+          params.timelockDelay,
           [],
           [ethers.ZeroAddress],
           deployer.address
@@ -149,9 +156,9 @@ async function main() {
         constructorArguments: [
           tokenAddress,
           timelockAddress,
-          1,
-          50400,
-          ethers.parseEther("100000")
+          params.votingDelay,
+          params.votingPeriod,
+          params.proposalThreshold
         ],
       });
 

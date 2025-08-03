@@ -1,6 +1,7 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { loadFixture } = require("@nomicfoundation/hardhat-network-helpers");
+const { TEST_PARAMS } = require("../config/governance-params");
 
 describe("Governance Comparison: On-chain vs Off-chain", function () {
   // Fixture to deploy contracts
@@ -13,7 +14,7 @@ describe("Governance Comparison: On-chain vs Off-chain", function () {
     await token.waitForDeployment();
 
     // Deploy Timelock
-    const minDelay = 3600; // 1 hour
+    const minDelay = TEST_PARAMS.timelockDelay;
     const proposers = []; // Will be set later
     const executors = [ethers.ZeroAddress]; // Anyone can execute
     const admin = deployer.address;

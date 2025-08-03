@@ -1,6 +1,7 @@
 import { ethers } from "hardhat";
 import type { GovernanceToken, DAOGovernor, Timelock } from "../../typechain-types";
 import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+import { TEST_PARAMS } from "../../config/governance-params";
 
 export interface GovernanceFixture {
   token: GovernanceToken;
@@ -28,7 +29,7 @@ export async function deployGovernanceFixture(): Promise<GovernanceFixture> {
   // Deploy timelock
   const Timelock = await ethers.getContractFactory("Timelock");
   const timelock = await Timelock.deploy(
-    3600, // 1 hour delay
+    TEST_PARAMS.timelockDelay, // 5 minutes for testing
     [], // proposers (will be governor)
     [ethers.ZeroAddress], // executors (anyone can execute)
     deployer.address // admin
@@ -40,9 +41,9 @@ export async function deployGovernanceFixture(): Promise<GovernanceFixture> {
   const governor = await Governor.deploy(
     await token.getAddress(),
     await timelock.getAddress(),
-    1, // 1 block voting delay
-    50, // 50 blocks voting period
-    ethers.parseEther("100000") // 1% proposal threshold
+    TEST_PARAMS.votingDelay, // 1 block
+    TEST_PARAMS.votingPeriod, // 20 blocks (~4 minutes)
+    TEST_PARAMS.proposalThreshold // 1000 tokens
   );
   await governor.waitForDeployment();
   
@@ -107,7 +108,7 @@ export async function deployMinimalGovernanceFixture(): Promise<{
   // Deploy timelock
   const Timelock = await ethers.getContractFactory("Timelock");
   const timelock = await Timelock.deploy(
-    3600,
+    TEST_PARAMS.timelockDelay,
     [],
     [ethers.ZeroAddress],
     deployer.address
@@ -119,9 +120,9 @@ export async function deployMinimalGovernanceFixture(): Promise<{
   const governor = await Governor.deploy(
     await token.getAddress(),
     await timelock.getAddress(),
-    1,
-    50,
-    ethers.parseEther("100000")
+    TEST_PARAMS.votingDelay,
+    TEST_PARAMS.votingPeriod,
+    TEST_PARAMS.proposalThreshold
   );
   await governor.waitForDeployment();
   
