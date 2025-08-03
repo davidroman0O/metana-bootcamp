@@ -4,7 +4,7 @@ const fs = require("fs");
 require("dotenv").config();
 
 // Configuration
-const SNAPSHOT_HUB = "https://hub.snapshot.org";
+const SNAPSHOT_HUB = "https://testnet.hub.snapshot.org"; // Testnet hub for Sepolia
 
 async function castVote() {
   console.log("===========================================");

@@ -11,9 +11,9 @@ if (!SNAPSHOT_SPACE) {
   process.exit(1);
 }
 
-// Snapshot hub URL - this is the same for all networks (mainnet, testnet, etc.)
-// Snapshot.org uses the network ID in the proposal to determine which chain to use
-const SNAPSHOT_HUB = "https://hub.snapshot.org";
+// Snapshot hub URL for testnet
+// For Sepolia and other testnets, use the testnet hub
+const SNAPSHOT_HUB = "https://testnet.hub.snapshot.org";
 
 // IMPORTANT: This script uses the SAME GovernanceToken that was deployed for on-chain governance
 // The token serves dual purpose: on-chain governance (OpenZeppelin Governor) AND off-chain voting (Snapshot)
@@ -38,15 +38,12 @@ async function createSnapshotProposal() {
   // Load token address from deployment
   let tokenAddress;
   try {
-    // Try to load from our deployment files
-    if (fs.existsSync("deployment-sepolia.json")) {
-      const deployment = JSON.parse(fs.readFileSync("deployment-sepolia.json", "utf8"));
-      tokenAddress = deployment.contracts.GovernanceToken.address;
-    } else if (fs.existsSync("addresses/sepolia.json")) {
+    // Load from addresses directory
+    if (fs.existsSync("addresses/sepolia.json")) {
       const addresses = JSON.parse(fs.readFileSync("addresses/sepolia.json", "utf8"));
       tokenAddress = addresses.contracts.GovernanceToken;
     } else {
-      console.error("❌ No deployment file found. Deploy contracts first!");
+      console.error("❌ No deployment file found at addresses/sepolia.json. Deploy contracts first!");
       process.exit(1);
     }
   } catch (error) {
@@ -111,7 +108,7 @@ This demonstrates the key difference from on-chain governance where only current
     console.log("✅ Proposal created successfully!");
     console.log("Proposal ID:", receipt.id);
     console.log("IPFS hash:", receipt.ipfs);
-    console.log(`\nView on Snapshot: https://snapshot.org/#/${SNAPSHOT_SPACE}/proposal/${receipt.id}`);
+    console.log(`\nView on Testnet Snapshot: https://testnet.snapshot.box/#/${SNAPSHOT_SPACE}/proposal/${receipt.id}`);
 
     // Save proposal data for later use
     const proposalInfo = {
