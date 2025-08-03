@@ -1,5 +1,6 @@
 const hre = require("hardhat");
 const fs = require("fs");
+const path = require("path");
 
 async function main() {
   console.log("===========================================");
@@ -124,21 +125,42 @@ async function main() {
     }
   };
   
-  // Save to file
+  // Save to addresses directory in the expected format
+  const addressesDir = path.join(__dirname, "../../addresses");
+  if (!fs.existsSync(addressesDir)) {
+    fs.mkdirSync(addressesDir, { recursive: true });
+  }
+  
+  const addressesInfo = {
+    network: "sepolia",
+    deployedAt: new Date().toISOString(),
+    contracts: {
+      GovernanceToken: await token.getAddress(),
+      Timelock: await timelock.getAddress(),
+      DAOGovernor: await governor.getAddress()
+    },
+    configuration: {
+      tokenSupply: "1000000",
+      timelockDelay: `${minDelay} seconds`,
+      votingDelay: `6545 blocks`,
+      votingPeriod: `45818 blocks`,
+      proposalThreshold: `${hre.ethers.formatEther(hre.ethers.parseEther("1"))} tokens`,
+      quorum: `4%`
+    }
+  };
+  
   fs.writeFileSync(
-    "deployment-sepolia.json",
-    JSON.stringify(deploymentInfo, null, 2)
+    path.join(addressesDir, "sepolia.json"),
+    JSON.stringify(addressesInfo, null, 2)
   );
   
   console.log("\n===========================================");
   console.log("🎉 Deployment Complete!");
   console.log("===========================================");
-  console.log("\n📄 Deployment saved to: deployment-sepolia.json");
+  console.log("\n📄 Deployment saved to: addresses/sepolia.json");
   console.log("\n📋 Next Steps:");
   console.log("1. Verify contracts on Etherscan:");
-  console.log(`   npx hardhat verify --network sepolia ${await token.getAddress()} "${deployer.address}"`);
-  console.log(`   npx hardhat verify --network sepolia ${await timelock.getAddress()} ${minDelay} ["${deployer.address}"] ["${hre.ethers.ZeroAddress}"] "${deployer.address}"`);
-  console.log(`   npx hardhat verify --network sepolia ${await governor.getAddress()} "${await token.getAddress()}" "${await timelock.getAddress()}" 6545 45818 "${hre.ethers.parseEther("1")}"`);
+  console.log("   npx hardhat run scripts/sepolia/verify-contracts.js --network sepolia");
   console.log("\n2. Create Snapshot space with token address:", await token.getAddress());
   console.log("\n3. Test governance flow with test proposals");
   

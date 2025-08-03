@@ -8,28 +8,31 @@ async function main() {
   console.log("===========================================\n");
 
   // Load deployment info
-  const deploymentPath = path.join(__dirname, "../../deployment-sepolia.json");
+  const deploymentPath = path.join(__dirname, "../../addresses/sepolia.json");
   if (!fs.existsSync(deploymentPath)) {
-    console.error("❌ deployment-sepolia.json not found!");
+    console.error("❌ addresses/sepolia.json not found!");
     console.error("Please run the deployment script first.");
     process.exit(1);
   }
 
   const deployment = JSON.parse(fs.readFileSync(deploymentPath, "utf8"));
   console.log("📄 Loaded deployment from:", deploymentPath);
-  console.log("📅 Deployment date:", deployment.deploymentDate);
-  console.log("👤 Deployer:", deployment.deployer, "\n");
+  console.log("📅 Deployment date:", deployment.deployedAt);
+  
+  // Get deployer from etherscan (since we don't store it in the simplified format)
+  const deployer = process.env.LEDGER_ACCOUNT || "0x92145c8e548A87DFd716b1FD037a5e476a1f2a86";
+  console.log("👤 Deployer:", deployer, "\n");
 
   // Verify each contract
   const results = [];
 
   // 1. Verify GovernanceToken
   console.log("1️⃣  Verifying GovernanceToken...");
-  console.log("   Address:", deployment.contracts.GovernanceToken.address);
+  console.log("   Address:", deployment.contracts.GovernanceToken);
   try {
     await hre.run("verify:verify", {
-      address: deployment.contracts.GovernanceToken.address,
-      constructorArguments: [deployment.deployer],
+      address: deployment.contracts.GovernanceToken,
+      constructorArguments: [deployer],
     });
     console.log("   ✅ GovernanceToken verified!\n");
     results.push({ contract: "GovernanceToken", status: "success" });
@@ -45,15 +48,15 @@ async function main() {
 
   // 2. Verify Timelock
   console.log("2️⃣  Verifying Timelock...");
-  console.log("   Address:", deployment.contracts.Timelock.address);
+  console.log("   Address:", deployment.contracts.Timelock);
   try {
     await hre.run("verify:verify", {
-      address: deployment.contracts.Timelock.address,
+      address: deployment.contracts.Timelock,
       constructorArguments: [
-        deployment.contracts.Timelock.minDelay,
-        [deployment.deployer], // proposers
+        3600, // minDelay - 1 hour
+        [deployer], // proposers
         [hre.ethers.ZeroAddress], // executors (anyone)
-        deployment.deployer // admin
+        deployer // admin
       ],
     });
     console.log("   ✅ Timelock verified!\n");
@@ -70,13 +73,13 @@ async function main() {
 
   // 3. Verify DAOGovernor
   console.log("3️⃣  Verifying DAOGovernor...");
-  console.log("   Address:", deployment.contracts.DAOGovernor.address);
+  console.log("   Address:", deployment.contracts.DAOGovernor);
   try {
     await hre.run("verify:verify", {
-      address: deployment.contracts.DAOGovernor.address,
+      address: deployment.contracts.DAOGovernor,
       constructorArguments: [
-        deployment.contracts.GovernanceToken.address,
-        deployment.contracts.Timelock.address,
+        deployment.contracts.GovernanceToken,
+        deployment.contracts.Timelock,
         6545, // votingDelay
         45818, // votingPeriod
         hre.ethers.parseEther("1") // proposalThreshold
@@ -104,9 +107,9 @@ async function main() {
   });
 
   console.log("\n🔗 View contracts on Sepolia Etherscan:");
-  console.log(`   GovernanceToken: https://sepolia.etherscan.io/address/${deployment.contracts.GovernanceToken.address}`);
-  console.log(`   Timelock: https://sepolia.etherscan.io/address/${deployment.contracts.Timelock.address}`);
-  console.log(`   DAOGovernor: https://sepolia.etherscan.io/address/${deployment.contracts.DAOGovernor.address}`);
+  console.log(`   GovernanceToken: https://sepolia.etherscan.io/address/${deployment.contracts.GovernanceToken}`);
+  console.log(`   Timelock: https://sepolia.etherscan.io/address/${deployment.contracts.Timelock}`);
+  console.log(`   DAOGovernor: https://sepolia.etherscan.io/address/${deployment.contracts.DAOGovernor}`);
 }
 
 main()
