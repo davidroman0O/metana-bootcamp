@@ -26,10 +26,10 @@ INFURA_API_KEY=your_infura_key
 ETHERSCAN_API_KEY=your_etherscan_key
 
 # For Snapshot
-SNAPSHOT_SPACE=s-tn:0xarkaw.eth  # Your testnet space
+SNAPSHOT_SPACE=s-tn:0xarkaw.eth
 
 # Ledger
-LEDGER_ACCOUNT=0  # First account
+LEDGER_ACCOUNT=0x....
 ```
 
 ### 3. Run Tests
@@ -240,10 +240,10 @@ cat addresses/sepolia.json
 ## Architecture
 
 ```
-User → GovernanceToken → DAOGovernor → Timelock → Execute
+User -> GovernanceToken -> DAOGovernor -> Timelock -> Execute
          (voting power)   (proposals)   (delay)    (action)
 
-Snapshot → Manual Execution
+Snapshot -> Manual Execution
 (gasless)   (by admin/multisig)
 ```
 
