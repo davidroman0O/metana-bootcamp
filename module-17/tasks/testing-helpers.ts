@@ -25,7 +25,7 @@ task("time:increase", "Increase blockchain time")
     console.log(`⏰ Increasing time by ${seconds} seconds...`);
     
     await hre.network.provider.send("evm_increaseTime", [seconds]);
-    await hre.network.provider.send("evm_mine"); // Mine a block to apply the time change
+    await hre.network.provider.send("evm_mine"); // Mine a block to apply the time change - just a ahck
     
     const block = await hre.ethers.provider.getBlock("latest");
     const newTime = new Date((block?.timestamp || 0) * 1000);

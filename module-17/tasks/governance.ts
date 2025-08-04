@@ -357,7 +357,7 @@ task("gov:execute", "Execute a queued proposal")
     const timelock = await ethers.getContractAt("Timelock", timelockAddress);
     
     // Calculate the operation ID using timelock's hashOperationBatch
-    // IMPORTANT: GovernorTimelockControl uses a special salt calculation:
+    // IMPORTANT: GovernorTimelockControl uses a "special" salt calculation:
     // salt = bytes20(address(governor)) ^ descriptionHash
     const descriptionHash = ethers.id(description);
     
@@ -716,34 +716,6 @@ task("gov:list", "List all proposals")
     console.log(`\nTotal proposals found: ${events.length}`);
   });
 
-task("gov:cancel", "Cancel a proposal")
-  .addParam("proposalid", "The proposal ID to cancel")
-  .setAction(async (taskArgs, hre: HardhatRuntimeEnvironment) => {
-    const { ethers } = hre;
-    
-    // Validate inputs
-    validateProposalId(taskArgs.proposalid);
-    
-    const { signer, isLedger } = await getSignerWithInfo(hre);
-    
-    const governorAddress = getContractAddress("DAOGovernor", hre.network.name);
-    if (!governorAddress) {
-      throw new Error("DAOGovernor not deployed. Please run deployment script first: npx hardhat run scripts/deploy-governance.ts");
-    }
-    const governor = await ethers.getContractAt("DAOGovernor", governorAddress, signer);
-    
-    console.log(`\n❌ Attempting to cancel proposal ${taskArgs.proposalid}...`);
-    
-    // For now, we'll require the user to provide the proposal details
-    // This is a workaround for the event structure parsing issue
-    console.log("\n⚠️  Note: Due to event structure limitations, you need to manually provide proposal details.");
-    console.log("   To cancel a proposal, please use the following approach:");
-    console.log("   1. Note down the exact targets, values, calldatas, and description from when you created the proposal");
-    console.log("   2. Use the governor contract directly with these exact parameters");
-    console.log("\n   This task will be improved in a future version to automatically fetch proposal details.");
-    
-    throw new Error("gov:cancel task currently requires manual proposal detail entry. Please see the instructions above.");
-  });
 
 task("gov:setup-timelock", "Grant MINTER_ROLE to Timelock (required for governance)")
   .setAction(async (_, hre: HardhatRuntimeEnvironment) => {

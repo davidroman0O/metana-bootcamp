@@ -6,6 +6,8 @@ import { TEST_PARAMS } from "../../config/governance-params";
 import * as fs from "fs";
 import * as path from "path";
 
+// Basic how ot make it work
+
 describe("E2E Governance Flow Using Hardhat Tasks", function () {
   // Increase timeout for task-based tests
   this.timeout(300000); // 5 minutes

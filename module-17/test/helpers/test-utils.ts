@@ -14,8 +14,6 @@ export function shouldRunVotingDelayTests(): boolean {
   return TEST_PARAMS.votingDelay > 0;
 }
 
-// Removed shouldRunMultiProposalTests - tests now adapt to any voting period
-
 export function getTestSafeVotingBlocks(): number {
   // Returns a safe number of blocks to mine during voting that won't exceed the period
   return Math.max(1, Math.floor(TEST_PARAMS.votingPeriod / 4));

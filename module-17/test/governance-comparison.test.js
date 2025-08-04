@@ -208,61 +208,6 @@ describe("Governance Comparison: On-chain vs Off-chain", function () {
       expect(voteReceipt.gasUsed).to.be.lt(100000); // Vote should be < 100k gas
     });
 
-    it("Should demonstrate off-chain zero gas voting", async function () {
-      console.log("\n      Snapshot voting costs:");
-      console.log("      - Proposal creation: 0 gas (signed message)");
-      console.log("      - Each vote: 0 gas (signed message)");
-      console.log("      - 1000 voters: 0 gas");
-      console.log("      - Only execution bridging requires gas (~100k)");
-
-      // This is conceptual - actual Snapshot voting happens off-chain
-      const snapshotCosts = {
-        proposalCreation: 0,
-        voting: 0,
-        totalFor1000Voters: 0,
-        executionBridge: 100000 // Approximate gas for SafeSnap execution
-      };
-
-      expect(snapshotCosts.voting).to.equal(0);
-      expect(snapshotCosts.totalFor1000Voters).to.equal(0);
-    });
-  });
-
-  describe("Security Model Differences", function () {
-    it("Should demonstrate flash loan vulnerability in on-chain voting", async function () {
-      const { token, governor, alice } = await loadFixture(deployGovernanceFixture);
-
-      // In a real flash loan attack:
-      // 1. Borrow huge amount of tokens
-      // 2. Vote on proposal
-      // 3. Return tokens in same transaction
-
-      console.log("\n      On-chain governance flash loan vulnerability:");
-      console.log("      1. Attacker borrows 1M tokens via flash loan");
-      console.log("      2. Attacker votes with borrowed tokens");
-      console.log("      3. Attacker returns tokens in same transaction");
-      console.log("      Result: Proposal outcome manipulated with zero cost");
-
-      // Snapshot prevents this:
-      console.log("\n      Snapshot protection:");
-      console.log("      - Voting power determined at proposal creation block");
-      console.log("      - Flash loans can't affect historical balances");
-      console.log("      - Vote buying must happen before proposal creation");
-    });
-
-    it("Should explain privacy differences", async function () {
-      console.log("\n      Privacy comparison:");
-      console.log("\n      On-chain voting:");
-      console.log("      - All votes are public immediately");
-      console.log("      - Can influence other voters (bandwagon effect)");
-      console.log("      - Whale votes visible and can sway outcomes");
-
-      console.log("\n      Snapshot with Shutter:");
-      console.log("      - Votes encrypted during voting period");
-      console.log("      - Results revealed only after voting ends");
-      console.log("      - Prevents vote manipulation and copying");
-      console.log("      - True voter preference discovery");
-    });
   });
 
   describe("Accessibility Comparison", function () {

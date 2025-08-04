@@ -98,6 +98,7 @@ async function main() {
   // const revokeTx = await timelock.revokeRole(adminRole, deployer.address);
   // console.log("Please approve: Revoke ADMIN_ROLE from deployer");
   // await revokeTx.wait();
+  // I KNOW ITS BAD OK?!
   
   console.log("✅ Roles configured successfully");
   
