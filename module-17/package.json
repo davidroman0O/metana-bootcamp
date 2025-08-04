@@ -1,0 +1,62 @@
+{
+  "name": "secure-erc20-voting-system",
+  "version": "1.0.0",
+  "description": "Secure ERC20-based snapshot voting system with OpenZeppelin Governor",
+  "main": "index.js",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "test:coverage": "hardhat coverage",
+    "test:integration": "hardhat test test/integration/*.test.ts",
+    "test:e2e": "hardhat test test/e2e/GovernanceTasksFlow.test.ts --network localhost",
+    "test:gas": "REPORT_GAS=true hardhat test",
+    "deploy:local": "hardhat run scripts/localhost/deploy-governance.ts --network localhost",
+    "deploy:sepolia": "hardhat run scripts/deploy-governance.ts --network sepolia",
+    "test:quick": "GOVERNANCE_MODE=test hardhat run scripts/helpers/quick-test-governance.ts --network localhost",
+    "deploy:snapshot": "hardhat run scripts/deploy-snapshot-token.ts",
+    "verify": "hardhat run scripts/verify.ts",
+    "verify:sepolia": "hardhat run scripts/verify.ts --network sepolia",
+    "clean": "hardhat clean",
+    "node": "hardhat node",
+    "format": "prettier --write 'contracts/**/*.sol' 'scripts/**/*.ts' 'test/**/*.ts'"
+  },
+  "keywords": [
+    "governance",
+    "dao",
+    "voting",
+    "erc20",
+    "snapshot",
+    "openzeppelin"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
+    "@nomicfoundation/hardhat-ethers": "^3.0.0",
+    "@nomicfoundation/hardhat-ledger": "^1.2.0",
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@nomicfoundation/hardhat-verify": "^2.0.0",
+    "@openzeppelin/hardhat-upgrades": "^3.0.0",
+    "@typechain/ethers-v6": "^0.5.0",
+    "@typechain/hardhat": "^9.0.0",
+    "@types/chai": "^4.2.0",
+    "@types/mocha": ">=9.1.0",
+    "@types/node": ">=16.0.0",
+    "chai": "^4.2.0",
+    "ethers": "^6.4.0",
+    "hardhat": "^2.19.0",
+    "hardhat-gas-reporter": "^1.0.8",
+    "prettier": "^3.0.0",
+    "prettier-plugin-solidity": "^1.2.0",
+    "solidity-coverage": "^0.8.0",
+    "ts-node": ">=8.0.0",
+    "typechain": "^8.3.0",
+    "typescript": ">=4.5.0"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.0",
+    "@snapshot-labs/snapshot.js": "^0.14.6",
+    "dotenv": "^16.3.1"
+  }
+}

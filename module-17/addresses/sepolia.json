@@ -1,0 +1,17 @@
+{
+  "network": "sepolia",
+  "deployedAt": "2025-08-03T23:25:01.309Z",
+  "contracts": {
+    "GovernanceToken": "0x38001097CaBD109777128eaff91C55729a617e89",
+    "Timelock": "0xa465C34e5591754b7459a73d24FFd9975650a42D",
+    "DAOGovernor": "0x524E3dFd038F73189dCDBfe65395C37b6D0b379d"
+  },
+  "configuration": {
+    "tokenSupply": "1000000",
+    "timelockDelay": "300 seconds",
+    "votingDelay": "1 blocks",
+    "votingPeriod": "20 blocks",
+    "proposalThreshold": "1000.0 tokens",
+    "quorum": "4%"
+  }
+}
